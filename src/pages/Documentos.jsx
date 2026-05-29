@@ -97,18 +97,24 @@ export default function Documentos() {
           // Extrai campos do tipo {{campo}} ou [campo] do conteúdo do template de texto
           const placeholdersCurly = t.conteudo?.match(/{{(.*?)}}/g) || [];
           const placeholdersSquare = t.conteudo?.match(/\[(.*?)\]/g) || [];
-          const allPlaceholders = [...new Set([...placeholdersCurly, ...placeholdersSquare])];
+          const allPlaceholdersRaw = [...new Set([...placeholdersCurly, ...placeholdersSquare])];
           
-          const fields = allPlaceholders.map(p => {
+          const seen = new Set();
+          const fields = [];
+          
+          allPlaceholdersRaw.forEach(p => {
             const isCurly = p.startsWith('{{');
             const name = isCurly ? p.replace(/{{|}}/g, '').trim() : p.replace(/\[|\]/g, '').trim();
-            // Tenta mapear automaticamente alguns nomes comuns
-            let mappedTo = '';
-            if (name.toLowerCase() === 'empresa') mappedTo = 'empresa_razao';
-            if (name.toLowerCase() === 'nome') mappedTo = 'funcionario_nome';
-            if (name.toLowerCase() === 'cpf') mappedTo = 'funcionario_cpf';
+            const nameLower = name.toLowerCase();
             
-            return { name, mappedTo };
+            if (!seen.has(nameLower)) {
+              seen.add(nameLower);
+              let mappedTo = '';
+              if (nameLower === 'empresa') mappedTo = 'empresa_razao';
+              if (nameLower === 'nome') mappedTo = 'funcionario_nome';
+              if (nameLower === 'cpf') mappedTo = 'funcionario_cpf';
+              fields.push({ name, mappedTo });
+            }
           });
           
           return { ...t, type: 'text', name: t.nome, fields };
