@@ -241,61 +241,98 @@ export class PDFGenerator {
     cursorY = height - margin - 120;
 
     // 2. Inserir Conteúdo (Texto)
+    // Limpa todas as tags HTML EXCETO <b>, <strong>, </b>, </strong> para mantermos negritos sob medida
     const cleanContent = content
-      .replace(/<[^>]*>/g, '') 
+      .replace(/<(?!b\b|strong\b|\/b\b|\/strong\b)[^>]*>/g, '')
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
       .replace(/&nbsp;/g, ' ')
-      .replace(/[^\x20-\x7E\xA0-\xFF\n]/g, ''); 
+      .replace(/[^\x20-\x7E\xA0-\xFF\n<>\/a-zA-Z]/g, ''); 
     
     const rawLines = cleanContent.split('\n');
     const maxWidth = width - (margin * 2);
 
     for (const rawLine of rawLines) {
-      if (cursorY < margin + 150) { 
-        // No single page mode, we don't add pages, but we could add a check if needed.
-        // For now, we follow user request for single page.
-      }
-      
-      const isTitle = rawLine.startsWith('AO ') || rawLine.startsWith('Ref.:') || (rawLine.toUpperCase() === rawLine && rawLine.length > 5);
+      // Regra de títulos inteiros em negrito (ex: AO CLIENTE, seções inteiras em maiúsculas sem tags)
+      const isTitle = (rawLine.toUpperCase() === rawLine && rawLine.length > 5 && !rawLine.includes('<') && !rawLine.startsWith('REF.:'));
       const isHeaderSection = rawLine.trim().endsWith(':') && rawLine.length < 50;
-      const activeFont = (isTitle || isHeaderSection) ? fontBold : font;
+      const defaultLineBold = isTitle || isHeaderSection;
       const activeSize = isTitle ? fontSize + 0.5 : fontSize;
 
-      const words = rawLine.trim().split(' ');
-      if (words.length === 0 || rawLine.trim() === '') {
+      // Tokenização inteligente de palavras preservando a formatação de negrito no meio da linha
+      const wordsWithFormat = [];
+      let boldActive = false;
+      
+      // Quebra a linha por tags de negrito
+      const parts = rawLine.split(/(<\/?[b|strong]>)/gi);
+      for (const part of parts) {
+        if (!part) continue;
+        const partLower = part.toLowerCase();
+        if (partLower === '<b>' || partLower === '<strong>') {
+          boldActive = true;
+        } else if (partLower === '</b>' || partLower === '</strong>') {
+          boldActive = false;
+        } else {
+          // Quebra em palavras preservando espaços
+          const words = part.split(/(\s+)/);
+          for (const word of words) {
+            if (word) {
+              wordsWithFormat.push({ text: word, isBold: boldActive || defaultLineBold });
+            }
+          }
+        }
+      }
+
+      if (wordsWithFormat.length === 0) {
         cursorY -= fontSize * 1.2;
         continue;
       }
 
-      let currentLine = '';
-      for (const word of words) {
-        const testLine = currentLine ? `${currentLine} ${word}` : word;
-        const testWidth = activeFont.widthOfTextAtSize(testLine, activeSize);
-        
-        if (testWidth > maxWidth && currentLine) {
-          page.drawText(currentLine, {
-            x: margin,
-            y: cursorY,
-            size: activeSize,
-            font: activeFont,
-            color: rgb(0.05, 0.05, 0.05),
-          });
+      let currentLineWords = [];
+      let currentLineWidth = 0;
+
+      for (const wordObj of wordsWithFormat) {
+        const activeFont = wordObj.isBold ? fontBold : font;
+        const wordWidth = activeFont.widthOfTextAtSize(wordObj.text, activeSize);
+
+        if (currentLineWidth + wordWidth > maxWidth && currentLineWords.length > 0) {
+          // Desenha a linha acumulada na tela, palavra por palavra com a respectiva fonte
+          let drawX = margin;
+          for (const w of currentLineWords) {
+            const f = w.isBold ? fontBold : font;
+            page.drawText(w.text, {
+              x: drawX,
+              y: cursorY,
+              size: activeSize,
+              font: f,
+              color: rgb(0.05, 0.05, 0.05),
+            });
+            drawX += f.widthOfTextAtSize(w.text, activeSize);
+          }
+          
           cursorY -= activeSize * 1.5;
-          currentLine = word;
+          currentLineWords = [wordObj];
+          currentLineWidth = wordWidth;
         } else {
-          currentLine = testLine;
+          currentLineWords.push(wordObj);
+          currentLineWidth += wordWidth;
         }
       }
-      
-      if (currentLine) {
-        page.drawText(currentLine, {
-          x: margin,
-          y: cursorY,
-          size: activeSize,
-          font: activeFont,
-          color: rgb(0.05, 0.05, 0.05),
-        });
+
+      // Desenha as palavras restantes da linha
+      if (currentLineWords.length > 0) {
+        let drawX = margin;
+        for (const w of currentLineWords) {
+          const f = w.isBold ? fontBold : font;
+          page.drawText(w.text, {
+            x: drawX,
+            y: cursorY,
+            size: activeSize,
+            font: f,
+            color: rgb(0.05, 0.05, 0.05),
+          });
+          drawX += f.widthOfTextAtSize(w.text, activeSize);
+        }
         cursorY -= activeSize * (isTitle ? 2.0 : 1.8);
       }
     }
@@ -305,13 +342,23 @@ export class PDFGenerator {
     const stampRespImg = await embedImage(assets.carimbo_responsavel_url);
     
     if (stampImg || stampRespImg) {
-      // Se o texto chegou muito perto do rodapé, move os carimbos para uma nova página
-      if (cursorY < 250) { 
+      // Se o texto chegou perto do rodapé, move os carimbos para uma nova página
+      if (cursorY < 180) { 
         page = pdfDoc.addPage([595.28, 841.89]);
         cursorY = height - margin;
       }
 
-      const baseStampY = 120; 
+      // Calcula o Y dinamicamente para o carimbo ficar colado ao final do texto (margem de assinatura)
+      let maxImgHeight = 80;
+      if (stampRespImg) maxImgHeight = Math.max(maxImgHeight, stampRespImg.scale(0.55).height);
+      if (stampImg) maxImgHeight = Math.max(maxImgHeight, stampImg.scale(0.55).height);
+
+      let baseStampY = cursorY - maxImgHeight + 40;
+      
+      // Margem mínima de segurança para não chocar com o rodapé físico da folha
+      if (baseStampY < 75) {
+        baseStampY = 75;
+      }
 
       if (stampRespImg) {
         const dims = stampRespImg.scale(0.55); // Ajustado para não ser gigante
@@ -332,6 +379,9 @@ export class PDFGenerator {
           height: dims.height,
         });
       }
+      
+      // Atualiza o cursorY para ficar abaixo dos carimbos (caso tenhamos mais elementos)
+      cursorY = baseStampY;
     }
 
     // 4. Rodapé Dinâmico
