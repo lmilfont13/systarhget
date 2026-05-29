@@ -699,7 +699,8 @@ export default function Documentos() {
 
               {/* Status and detected branding */}
               {selectedFuncionario && activeFuncionario && (
-                <div className="mt-2 flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                <div className="mt-2 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                  {/* Selo da Agência */}
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm border ${
                     activeFuncionario.dados_extras?.['Empresa']?.toUpperCase().includes('POP') 
                       ? 'bg-sky-50 text-sky-700 border-sky-200' 
@@ -710,12 +711,21 @@ export default function Documentos() {
                     }`}></span>
                     {activeFuncionario.dados_extras?.['Empresa']?.toUpperCase().includes('POP') ? 'POP TRADE' : 'SPAR BRASIL'}
                   </span>
+
+                  {/* Selo da Empresa Cliente / CDC */}
+                  {(activeFuncionario.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario.dados_extras?.NC || activeFuncionario.dados_extras?.CDC || activeFuncionario.dados_extras?.Cdc || activeFuncionario.dados_extras?.['Cdc Superior']) && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm border bg-indigo-50 text-indigo-700 border-indigo-200 animate-in zoom-in-95 duration-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                      CLIENTE: {String(activeFuncionario.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario.dados_extras?.NC || activeFuncionario.dados_extras?.CDC || activeFuncionario.dados_extras?.Cdc || activeFuncionario.dados_extras?.['Cdc Superior']).toUpperCase()}
+                    </span>
+                  )}
+                  
                   {!(formData['cdc'] || formData['CDC'] || formData['Cdc']) && (
                     <div className="flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100">
                       <Info className="w-3 h-3 text-amber-500" /> CDC não localizado
                     </div>
                   )}
-                  <span className="text-[10px] text-slate-400 font-medium italic">Empresa detectada automaticamente</span>
+                  <span className="text-[10px] text-slate-400 font-medium italic">Detectado automaticamente</span>
                 </div>
               )}
             </div>

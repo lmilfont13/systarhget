@@ -808,6 +808,31 @@ export default function PortalPromotor() {
                     })}
                   </select>
                 </div>
+
+                {/* Status and detected branding */}
+                {selectedFuncionario && activeFuncionario && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                    {/* Selo da Agência */}
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm border ${
+                      activeFuncionario.dados_extras?.['Empresa']?.toUpperCase().includes('POP') 
+                        ? 'bg-sky-50 text-sky-700 border-sky-200' 
+                        : 'bg-blue-50 text-blue-700 border-blue-200'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        activeFuncionario.dados_extras?.['Empresa']?.toUpperCase().includes('POP') ? 'bg-sky-400' : 'bg-blue-500'
+                      }`}></span>
+                      {activeFuncionario.dados_extras?.['Empresa']?.toUpperCase().includes('POP') ? 'POP TRADE' : 'SPAR BRASIL'}
+                    </span>
+
+                    {/* Selo da Empresa Cliente / CDC */}
+                    {(activeFuncionario.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario.dados_extras?.NC || activeFuncionario.dados_extras?.CDC || activeFuncionario.dados_extras?.Cdc || activeFuncionario.dados_extras?.['Cdc Superior']) && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm border bg-indigo-50 text-indigo-700 border-indigo-200 animate-in zoom-in-95 duration-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                        CLIENTE: {String(activeFuncionario.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario.dados_extras?.NC || activeFuncionario.dados_extras?.CDC || activeFuncionario.dados_extras?.Cdc || activeFuncionario.dados_extras?.['Cdc Superior']).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Formulário e Pré-visualização */}
