@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { FileEdit, CheckCircle2, Loader2, FileText, Eye, Info, Search, Lock, MessageSquare, Copy, Download, X } from 'lucide-react';
+import { FileEdit, CheckCircle2, Loader2, FileText, Eye, Info, Search, Lock, MessageSquare, Copy, Download, X , Wand2} from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { PDFGenerator } from '../pdf/PDFGenerator';
@@ -39,7 +39,7 @@ export default function Documentos() {
   const [empresas, setEmpresas] = useState([]);
   
   const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [selectedFuncionario, setSelectedFuncionario] = useState('');
+  const [selectedFuncionarios, setSelectedFuncionarios] = useState([]);
   const [selectedEmpresa, setSelectedEmpresa] = useState('');
   
   const [formData, setFormData] = useState({});
@@ -55,6 +55,8 @@ export default function Documentos() {
 
   // Estados para o compartilhamento de PDF e histórico
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importText, setImportText] = useState('');
   const [generatedCartaId, setGeneratedCartaId] = useState(null);
   const [generatedCartaName, setGeneratedCartaName] = useState('');
   const [generatedBlobUrl, setGeneratedBlobUrl] = useState(null);
@@ -167,18 +169,18 @@ export default function Documentos() {
   };
 
   const activeTemplate = templates.find(t => String(t.id) === String(selectedTemplate));
-  const activeFuncionario = funcionarios.find(f => String(f.id) === String(selectedFuncionario));
+  const activeFuncionario = selectedFuncionarios.length > 0 ? funcionarios.find(f => String(f.id) === String(selectedFuncionarios[0])) : null;
   const activeEmpresa = empresas.find(e => String(e.id) === String(selectedEmpresa));
 
   // Sincroniza a empresa automaticamente quando o funcionário é selecionado
   useEffect(() => {
-    if (selectedFuncionario && funcionarios.length > 0) {
-      const func = funcionarios.find(f => String(f.id) === String(selectedFuncionario));
+    if (selectedFuncionarios.length > 0 && funcionarios.length > 0) {
+      const func = funcionarios.find(f => String(f.id) === String(selectedFuncionarios[0]));
       if (func && func.empresa_id) {
         setSelectedEmpresa(String(func.empresa_id));
       }
     }
-  }, [selectedFuncionario, funcionarios]);
+  }, [selectedFuncionarios, funcionarios]);
 
   // Auto-preencher dados quando o template, funcionário ou empresa mudar
   useEffect(() => {
@@ -193,13 +195,13 @@ export default function Documentos() {
         let targetEmpId = selectedEmpresa;
 
         if (empNome.includes('POP')) {
-          const pop = empresas.find(e => e.nome.toUpperCase().includes('POP'));
+          const pop = empresas.find(e => (e.nome || '').toUpperCase().includes('POP'));
           if (pop && String(selectedEmpresa) !== String(pop.id)) {
             targetEmpId = pop.id;
             setSelectedEmpresa(pop.id);
           }
         } else if (empNome.includes('SPAR')) {
-          const spar = empresas.find(e => e.nome.toUpperCase().includes('SPAR'));
+          const spar = empresas.find(e => (e.nome || '').toUpperCase().includes('SPAR'));
           if (spar && String(selectedEmpresa) !== String(spar.id)) {
             targetEmpId = spar.id;
             setSelectedEmpresa(spar.id);
@@ -210,7 +212,7 @@ export default function Documentos() {
 
         activeTemplate.fields?.forEach(field => {
           if (!field || !field.name) return;
-          const fieldNameLower = field.name.toLowerCase();
+          const fieldNameLower = (field.name || '').toLowerCase();
           
           if (field.mappedTo) {
             switch (field.mappedTo) {
@@ -293,14 +295,14 @@ export default function Documentos() {
         console.error('Erro no auto-fill:', err);
       }
     }
-  }, [selectedTemplate, selectedFuncionario, selectedEmpresa, optaContinuar]);
+  }, [selectedTemplate, selectedFuncionarios, selectedEmpresa, optaContinuar]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleGenerate = async (e) => {
+    const handleGenerate = async (e) => {
     e.preventDefault();
     if (!selectedTemplate) {
       toast.error('Selecione um template primeiro.');
@@ -310,22 +312,16 @@ export default function Documentos() {
     setIsGenerating(true);
     
     try {
-      let blob;
-      
       const empresa = empresas.find(e => String(e.id) === String(selectedEmpresa));
       
-      // Helper ultra-robusto para converter URL em Base64
       const getBase64 = async (url) => {
         if (!url) return null;
         if (url.startsWith('data:')) return url;
-
         try {
-          // Se for uma URL do Supabase, tenta baixar via SDK (mais seguro para CORS)
           if (url.includes('.supabase.co/storage/v1/object/public/')) {
             const parts = url.split('/public/')[1].split('/');
             const bucket = parts[0];
             const filePath = parts.slice(1).join('/');
-            
             const { data, error } = await supabase.storage.from(bucket).download(filePath);
             if (!error && data) {
               return new Promise((resolve) => {
@@ -335,8 +331,6 @@ export default function Documentos() {
               });
             }
           }
-
-          // Fallback para fetch normal
           const res = await fetch(url);
           const blob = await res.blob();
           return new Promise((resolve) => {
@@ -354,162 +348,178 @@ export default function Documentos() {
       const carimboBase64 = await getBase64(empresa?.carimbo_url);
       const carimboRespBase64 = await getBase64(empresa?.carimbo_funcionario_url);
 
-      if (logoBase64) console.log('Logo carregada com sucesso');
-      else console.warn('Falha ao carregar logo da empresa:', empresa?.nome);
+      const funcsToProcess = selectedFuncionarios.length > 0 ? selectedFuncionarios.map(id => funcionarios.find(f => String(f.id) === String(id))) : [null];
+      
+      let generatedCount = 0;
+      let lastGeneratedBlobUrl = null;
+      let lastGeneratedName = null;
+      let lastCartaId = null;
 
-      if (activeTemplate.type === 'text') {
-        // Lógica para templates de TEXTO (Atacadão, Geral)
-        let content = activeTemplate.conteudo || '';
-        Object.keys(formData).forEach(key => {
-          let value = String(formData[key] || '').toUpperCase().trim();
-          const keyLower = key.toLowerCase();
-          
-          // Se for Nome, RG ou CPF, envolvemos com a tag <b> no PDF
-          if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
-            if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
-              value = `<b>${value}</b>`;
-            }
+      for (const currentFunc of funcsToProcess) {
+        let blob;
+        let finalFormDataForFunc = { ...formData };
+        
+        // Populate current func data
+        if (currentFunc) {
+          finalFormDataForFunc['Nome'] = currentFunc.nome || '';
+          finalFormDataForFunc['funcionario_nome'] = currentFunc.nome || '';
+          if (currentFunc.dados_extras) {
+            Object.keys(currentFunc.dados_extras).forEach(k => {
+              finalFormDataForFunc[k] = currentFunc.dados_extras[k] || '';
+              finalFormDataForFunc[`funcionario_${k.toLowerCase()}`] = currentFunc.dados_extras[k] || '';
+            });
           }
-
-          // Suporte para {{chave}} e [chave] de forma case-insensitive
-          const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const regexCurly = new RegExp(`{{${escapedKey}}}`, 'gi');
-          const regexSquare = new RegExp(`\\[${escapedKey}\\]`, 'gi');
-          content = content.replace(regexCurly, value).replace(regexSquare, value);
-        });
-        
-        const assets = {
-          logo_url: logoBase64,
-          carimbo_url: carimboBase64,
-          carimbo_responsavel_url: carimboRespBase64,
-          footer_text: cleanFooterText(empresa?.rodape)
-        };
-
-        blob = await PDFGenerator.generateFromText(content, assets);
-      } else {
-        // Lógica para templates de PDF (Extensão NDI, etc)
-        let base64PDF = activeTemplate.file_url;
-        if (base64PDF && base64PDF.startsWith('local:')) {
-          base64PDF = localStorage.getItem(`pdf_${activeTemplate.name}`);
         }
 
-        if (!base64PDF) {
-          throw new Error("Arquivo PDF base não encontrado na nuvem ou no cache local.");
-        }
-
-        const binaryString = atob(base64PDF);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        const empresa = empresas.find(e => String(e.id) === String(selectedEmpresa));
-        
-        // Helper para converter URL em Base64 (mais robusto)
-        const getBase64 = async (url) => {
-          if (!url) return null;
-          return new Promise((resolve) => {
-            const img = new Image();
-            img.crossOrigin = 'Anonymous';
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              canvas.width = img.width;
-              canvas.height = img.height;
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(img, 0, 0);
-              const dataURL = canvas.toDataURL('image/png');
-              resolve(dataURL);
-            };
-            img.onerror = () => {
-              fetch(url).then(res => res.blob()).then(blob => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(blob);
-              }).catch(() => resolve(null));
-            };
-            img.src = url;
+        if (activeTemplate.type === 'text') {
+          let content = activeTemplate.conteudo || '';
+          Object.keys(finalFormDataForFunc).forEach(key => {
+            let value = String(finalFormDataForFunc[key] || '').toUpperCase().trim();
+            const keyLower = key.toLowerCase();
+            if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
+              if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
+                value = `<b>${value}</b>`;
+              }
+            }
+            const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            content = content.replace(new RegExp(`\{\{${escapedKey}\}\}`, 'gi'), value)
+                             .replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), value);
           });
-        };
+          
+          const assets = {
+            logo_url: logoBase64,
+            carimbo_url: carimboBase64,
+            carimbo_responsavel_url: carimboRespBase64,
+            footer_text: cleanFooterText(empresa?.rodape)
+          };
 
-        const logoBase64 = await getBase64(empresa?.logo_url);
-        const carimboBase64 = await getBase64(empresa?.carimbo_url);
-        const carimboRespBase64 = await getBase64(empresa?.carimbo_funcionario_url);
+          blob = await PDFGenerator.generateFromText(content, assets);
+        } else {
+          let base64PDF = activeTemplate.file_url;
+          if (base64PDF && base64PDF.startsWith('local:')) {
+            base64PDF = localStorage.getItem(`pdf_${activeTemplate.name}`);
+          }
+          if (!base64PDF) throw new Error("Arquivo PDF base não encontrado.");
 
-        // Alerta se faltar ativos
-        if (!logoBase64 || !carimboBase64 || !carimboRespBase64) {
-          toast.warning('Atenção: Algumas imagens (logo ou carimbo) não foram carregadas. Verifique o cadastro da empresa.');
+          const binaryString = atob(base64PDF.includes(',') ? base64PDF.split(',')[1] : base64PDF);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+
+          const pdfFinalData = {};
+          Object.keys(finalFormDataForFunc).forEach(key => {
+            const val = finalFormDataForFunc[key];
+            pdfFinalData[key] = typeof val === 'string' ? val.toUpperCase().trim() : val;
+          });
+          pdfFinalData.img_logo = logoBase64;
+          pdfFinalData.img_carimbo = carimboBase64;
+          pdfFinalData.img_carimbo_responsavel = carimboRespBase64;
+
+          blob = await PDFGenerator.fillDocument(bytes, pdfFinalData);
         }
 
-        // Injeta as imagens no formData para o PDF preencher
-        const finalFormData = {};
-        Object.keys(formData).forEach(key => {
-          const val = formData[key];
-          finalFormData[key] = typeof val === 'string' ? val.toUpperCase().trim() : val;
-        });
-        finalFormData.img_logo = logoBase64;
-        finalFormData.img_carimbo = carimboBase64;
-        finalFormData.img_carimbo_responsavel = carimboRespBase64;
+        const nomePromotor = currentFunc?.nome || finalFormDataForFunc['Nome'] || finalFormDataForFunc['funcionario_nome'] || activeTemplate.name || 'documento';
+        const fileName = `CARTA ${nomePromotor.trim().toUpperCase()}.pdf`;
+        const blobUrl = URL.createObjectURL(blob);
 
-        blob = await PDFGenerator.fillDocument(bytes, finalFormData);
-      }
-
-      // Nome do arquivo: CARTA + NOME DO PROMOTOR (Com Espaço)
-      const nomePromotor = activeFuncionario?.nome || formData['Nome'] || formData['funcionario_nome'] || formData['Candidato'] || activeTemplate.name || 'documento';
-      const fileName = `CARTA ${nomePromotor.trim().toUpperCase()}.pdf`;
-
-      const blobUrl = URL.createObjectURL(blob);
-
-      // Converte o blob em base64
-      const getBlobBase64 = (b) => {
-        return new Promise((resolve) => {
+        const getBlobBase64 = (b) => new Promise(res => {
           const reader = new FileReader();
           reader.readAsDataURL(b);
-          reader.onloadend = () => resolve(reader.result);
+          reader.onloadend = () => res(reader.result);
         });
-      };
-      
-      const base64Data = await getBlobBase64(blob);
-
-      // Salva no banco de dados
-      let cartaId = null;
-      try {
-        const nomeArq = `CARTA ${nomePromotor.trim().toUpperCase()} - Admin`;
-        const { data: insertData, error: insertError } = await supabase.from('cartas_geradas').insert({
-          funcionario_id: activeFuncionario?.id || null,
-          template_id: activeTemplate?.id || null,
-          empresa_id: activeEmpresa?.id || null,
-          nome_funcionario: nomePromotor,
-          nome_arquivo: nomeArq,
-          url_storage: base64Data,
-          data_geracao: new Date().toISOString()
-        }).select();
         
-        if (!insertError && insertData && insertData.length > 0) {
-          cartaId = insertData[0].id;
+        const base64Data = await getBlobBase64(blob);
+
+        let cartaId = null;
+        try {
+          const nomeArq = `CARTA ${nomePromotor.trim().toUpperCase()} - Admin`;
+          const { data: insertData, error: insertError } = await supabase.from('cartas_geradas').insert({
+            funcionario_id: currentFunc?.id || null,
+            template_id: activeTemplate?.id || null,
+            empresa_id: activeEmpresa?.id || null,
+            nome_funcionario: nomePromotor,
+            nome_arquivo: nomeArq,
+            url_storage: base64Data,
+            data_geracao: new Date().toISOString()
+          }).select();
+          
+          if (!insertError && insertData && insertData.length > 0) cartaId = insertData[0].id;
+        } catch (dbErr) {
+          console.error('Erro ao salvar no histórico:', dbErr);
         }
-      } catch (dbErr) {
-        console.error('Erro ao salvar no histórico:', dbErr);
+
+        // Trigger download automatically
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        generatedCount++;
+        lastGeneratedBlobUrl = blobUrl;
+        lastGeneratedName = nomePromotor;
+        lastCartaId = cartaId;
       }
-
-      setGeneratedCartaId(cartaId);
-      setGeneratedCartaName(nomePromotor);
-      setGeneratedBlobUrl(blobUrl);
-      setShareModalOpen(true);
-
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
       
-      toast.success('Documento gerado e registrado no histórico com sucesso!');
+      if (generatedCount === 1) {
+        setGeneratedCartaId(lastCartaId);
+        setGeneratedCartaName(lastGeneratedName);
+        setGeneratedBlobUrl(lastGeneratedBlobUrl);
+        setShareModalOpen(true);
+      }
+      
+      toast.success(`${generatedCount} documento(s) gerado(s) com sucesso!`);
     } catch (error) {
       console.error(error);
       toast.error(error.message || 'Erro ao gerar o PDF final.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleProcessImport = () => {
+    if (!importText.trim()) {
+      toast.error('Cole os dados da tabela SAP/TOTVS primeiro.');
+      return;
+    }
+
+    const blocks = importText.split(/\n\s*\n/);
+    const newFormData = { ...formData };
+    let itemCount = 0;
+    let totalValue = 0;
+
+    blocks.forEach(block => {
+      const lines = block.split('\n').map(l => l.trim()).filter(l => l !== '');
+      if (lines.length < 5) return;
+      
+      let descricao = '';
+      let valor = 0;
+
+      const valorLine = lines.find(l => /^\d{1,3}(\.\d{3})*,\d{2}$/.test(l) || /^\d+,\d{2}$/.test(l));
+      if (valorLine) {
+        valor = parseFloat(valorLine.replace(/\./g, '').replace(',', '.'));
+      } else if (lines.length >= 4) {
+        valor = parseFloat(lines[3].replace(/\./g, '').replace(',', '.')) || 0;
+      }
+      
+      descricao = lines[lines.length - 1]; 
+      
+      if (descricao && valor > 0) {
+        itemCount++;
+        newFormData[`descricao_${itemCount}`] = descricao;
+        newFormData[`valor_${itemCount}`] = valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        totalValue += valor;
+      }
+    });
+
+    if (itemCount > 0) {
+      newFormData['total'] = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      setFormData(newFormData);
+      toast.success(`${itemCount} itens importados e Total calculado (R$ ${newFormData['total']})!`);
+      setIsImportModalOpen(false);
+      setImportText('');
+    } else {
+      toast.warning('Não foi possível identificar os itens e valores. Verifique se copiou a tabela completa.');
     }
   };
 
@@ -539,6 +549,12 @@ export default function Documentos() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Gerador de Documentos</h1>
           <p className="text-sm text-slate-500 mt-1">Preencha templates de texto ou PDF e gere arquivos prontos para impressão.</p>
         </div>
+        <button 
+          onClick={() => setIsImportModalOpen(true)}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#8A2BE2] hover:bg-purple-700 text-white text-sm font-bold px-5 py-2.5 shadow-md transition-all">
+          <Wand2 className="w-4 h-4" />
+          Importação Inteligente (Tabela SAP/TOTVS)
+        </button>
       </div>
 
       <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm p-6 md:p-8 space-y-8">
@@ -635,7 +651,7 @@ export default function Documentos() {
                                 key={f.id}
                                 type="button"
                                 onClick={() => {
-                                  setSelectedFuncionario(f.id);
+                                  setSelectedFuncionarios(prev => prev.includes(f.id) ? prev : [...prev, f.id]);
                                   setSearchFuncionario('');
                                   setIsSearchFocused(false);
                                 }}
@@ -681,8 +697,13 @@ export default function Documentos() {
               <div className="mt-2">
                 <select
                   id="funcionario"
-                  value={selectedFuncionario}
-                  onChange={(e) => setSelectedFuncionario(e.target.value)}
+                  multiple
+                  value={selectedFuncionarios}
+                  onChange={(e) => {
+                    const values = Array.from(e.target.selectedOptions, option => option.value);
+                    setSelectedFuncionarios(values);
+                  }}
+                  style={{ minHeight: '120px' }}
                   className="block w-full rounded-xl border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm bg-white transition-all"
                 >
                   <option value="">-- Selecione ou mude o funcionário da lista --</option>
@@ -698,18 +719,18 @@ export default function Documentos() {
               </div>
 
               {/* Status and detected branding */}
-              {selectedFuncionario && activeFuncionario && (
+              {selectedFuncionarios.length > 0 && activeFuncionario && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
                   {/* Selo da Agência */}
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm border ${
-                    activeFuncionario.dados_extras?.['Empresa']?.toUpperCase().includes('POP') 
+                    (activeFuncionario.dados_extras?.['Empresa'] || '').toUpperCase().includes('POP') 
                       ? 'bg-sky-50 text-sky-700 border-sky-200' 
                       : 'bg-blue-50 text-blue-700 border-blue-200'
                   }`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${
-                      activeFuncionario.dados_extras?.['Empresa']?.toUpperCase().includes('POP') ? 'bg-sky-400' : 'bg-blue-500'
+                      (activeFuncionario.dados_extras?.['Empresa'] || '').toUpperCase().includes('POP') ? 'bg-sky-400' : 'bg-blue-500'
                     }`}></span>
-                    {activeFuncionario.dados_extras?.['Empresa']?.toUpperCase().includes('POP') ? 'POP TRADE' : 'SPAR BRASIL'}
+                    {(activeFuncionario.dados_extras?.['Empresa'] || '').toUpperCase().includes('POP') ? 'POP TRADE' : 'SPAR BRASIL'}
                   </span>
 
                   {/* Selo da Empresa Cliente / CDC */}
@@ -736,8 +757,8 @@ export default function Documentos() {
             <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3 shadow-inner animate-in fade-in duration-300">
               <div className="flex justify-between items-center border-b border-slate-100 pb-2">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Identidade Visual da Empresa</span>
-                <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold text-white ${activeEmpresa.nome.toUpperCase().includes('POP') ? 'bg-sky-500 shadow-sm' : 'bg-blue-900 shadow-sm'}`}>
-                  {activeEmpresa.nome.toUpperCase().includes('POP') ? 'POP TRADE' : 'SPAR BRASIL'}
+                <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold text-white ${(activeEmpresa.nome || '').toUpperCase().includes('POP') ? 'bg-sky-500 shadow-sm' : 'bg-blue-900 shadow-sm'}`}>
+                  {(activeEmpresa.nome || '').toUpperCase().includes('POP') ? 'POP TRADE' : 'SPAR BRASIL'}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-4">
@@ -817,13 +838,13 @@ export default function Documentos() {
               
               <div className="grid grid-cols-1 gap-5">
                 {activeTemplate.fields?.filter(field => {
-                  const name = field.name.toLowerCase();
+                  const name = (field.name || '').toLowerCase();
                   const display = (field.displayName || '').toLowerCase();
                   return !name.includes('logo') && !name.includes('carimbo') && !display.includes('carimbo') && !display.includes('logo');
                 }).map(field => {
                   const isAutoFilled = !!field.mappedTo;
                   const labelName = isAutoFilled ? field.name : (field.displayName || field.name);
-                  const isLojaField = !isAutoFilled && (field.name.toLowerCase() === 'loja' || field.name.toLowerCase() === 'lojas' || field.name.toLowerCase() === 'estabelecimento');
+                  const isLojaField = !isAutoFilled && ((field.name || '').toLowerCase() === 'loja' || (field.name || '').toLowerCase() === 'lojas' || (field.name || '').toLowerCase() === 'estabelecimento');
                   
                   return (
                     <div key={field.name} className="space-y-1.5">
@@ -1060,6 +1081,56 @@ export default function Documentos() {
         )}
       </div>
       {/* Modal de Compartilhamento Premium */}
+      
+      {/* Modal de Importação SAP/TOTVS */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
+                  <Wand2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Importação SAP/TOTVS</h3>
+                  <p className="text-xs text-slate-500">Cole os dados da Nota de Débito</p>
+                </div>
+              </div>
+              <button onClick={() => setIsImportModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-50">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-4">
+              <p className="text-sm text-slate-600">Cole abaixo o conteúdo copiado da planilha ou sistema SAP/TOTVS. O sistema irá extrair automaticamente as <b>descrições</b> e <b>valores</b> para preencher o formulário.</p>
+              
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder="Exemplo:\nCONTRATACAO MENSAL PUBLICIDADE E PROPAGANDA\n1\n595,00\n...\n64462 CE - FLD - AKZO..."
+                className="w-full h-64 rounded-xl border border-slate-200 p-4 text-sm font-mono text-slate-700 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-slate-50/50"
+              />
+            </div>
+            
+            <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 mt-auto">
+              <button 
+                onClick={() => setIsImportModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl text-slate-600 font-semibold hover:bg-slate-200 transition-colors text-sm"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleProcessImport}
+                className="px-5 py-2.5 rounded-xl bg-[#8A2BE2] hover:bg-purple-700 text-white font-bold shadow-sm transition-all flex items-center gap-2 text-sm"
+              >
+                <Wand2 className="w-4 h-4" /> Processar Dados
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
       {shareModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden p-6 md:p-8 space-y-6 border border-slate-100 animate-in zoom-in-95 duration-200 relative">

@@ -256,6 +256,18 @@ export default function Estoque() {
     return matchesSearch && matchesType;
   });
 
+  // Agrupa os itens idênticos (mesmo nome, tamanho e modelo)
+  const groupedItens = Object.values(filteredItens.reduce((acc, item) => {
+    const key = `${item.nomeNovo}-${item.tamanho || ''}-${item.modelo || ''}-${item.empresa || ''}`;
+    if (!acc[key]) {
+      acc[key] = { ...item, quantidade: 1, itensOriginais: [item] };
+    } else {
+      acc[key].quantidade += 1;
+      acc[key].itensOriginais.push(item);
+    }
+    return acc;
+  }, {}));
+
   const filteredProdutos = produtosCatalogo.filter(prod => {
     const matchesSearch = 
       (prod.nome || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -462,7 +474,7 @@ export default function Estoque() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredItens.map((item) => (
+            {groupedItens.map((item) => (
               <div key={item.id} className="bg-white rounded-xl border border-gray-150 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all">
                 {/* Imagem do Item */}
                 <div className="h-44 bg-gray-50 relative flex items-center justify-center overflow-hidden border-b border-gray-100">
@@ -478,6 +490,11 @@ export default function Estoque() {
                   <span className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm text-gray-750 text-[10px] font-extrabold px-2.5 py-1 rounded-md shadow-sm border border-gray-200/80 flex items-center gap-1.5 uppercase tracking-wider">
                     {getTipoIcon(item.tipo)}
                     {item.tipo}
+                  </span>
+
+                  {/* Badge de Quantidade */}
+                  <span className="absolute top-3 right-3 bg-indigo-600 text-white text-[11px] font-extrabold px-3 py-1 rounded-md shadow-sm flex items-center gap-1.5 tracking-wider">
+                    {item.quantidade} UN
                   </span>
 
                   {/* Badge de Associação */}
