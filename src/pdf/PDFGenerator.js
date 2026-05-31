@@ -150,7 +150,7 @@ export class PDFGenerator {
             // Campos de texto normais
             else if (field.constructor.name === 'PDFTextField') {
               field.setText(String(value));
-              field.setFontSize(9); // Força uma fonte menor para evitar cortes
+              // REMOVIDO: field.setFontSize(9); para evitar corromper o appearance stream
             } else if (field.constructor.name === 'PDFCheckBox') {
               if (value === true || value === 'true' || value === 'Sim') {
                 field.check();
