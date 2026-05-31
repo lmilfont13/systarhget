@@ -719,6 +719,12 @@ export default function Documentos() {
     newFormData.total = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     newFormData.TOTAL = newFormData.total;
 
+    // Pass the raw array for coordinate-based table auto-mapping in PDFGenerator
+    newFormData._expensesArray = importItems.map(item => ({
+      descricao: item.cdc && item.cdc !== item.descricao ? `${item.cdc}` : item.descricao,
+      valor: item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    }));
+
     setFormData(newFormData);
     toast.success(`${importItems.length} despesas importadas e somadas! Total: R$ ${newFormData.total}`);
     setIsImportModalOpen(false);

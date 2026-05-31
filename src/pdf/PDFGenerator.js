@@ -294,6 +294,116 @@ export class PDFGenerator {
             console.error(`Erro ao preencher campo ${fieldName}:`, e);
           }
         }
+    }
+      }
+
+      // === Injeção Dinâmica de Tabela via Coordenadas Visuais ===
+      if (data._expensesArray && data._expensesArray.length > 0) {
+         try {
+           const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+           const pages = pdfDoc.getPages();
+           const page = pages[0];
+           
+           // Encontrar todos os campos de texto que ESTÃO VAZIOS (não foram preenchidos pelo loop anterior)
+           const emptyTextFields = [];
+           for (const field of fields) {
+              if (field instanceof PDFTextField) {
+                 const fieldName = field.getName();
+                 const fieldNameLower = fieldName.toLowerCase();
+                 const fieldNameNorm = fieldName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                 
+                 let hasValue = data[fieldName] !== undefined;
+                 if (!hasValue) {
+                   const matchKey = Object.keys(data).find(k => k.toLowerCase() === fieldNameLower);
+                   if (matchKey) hasValue = true;
+                 }
+                 if (!hasValue) {
+                   const normKey = Object.keys(data).find(k => k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === fieldNameNorm);
+                   if (normKey) hasValue = true;
+                 }
+                 
+                 if (!hasValue) {
+                    const widgets = field.acroField.getWidgets();
+                    if (widgets.length > 0) {
+                       const rect = widgets[0].getRectangle();
+                       emptyTextFields.push({ field, name: fieldName, rect });
+                    }
+                 }
+              }
+           }
+           
+           // Agrupar os campos candidatos por coordenada Y (com tolerância de 5 pontos)
+           const rowsMap = new Map();
+           for (const item of emptyTextFields) {
+              const yGroup = Math.round(item.rect.y / 5) * 5; 
+              if (!rowsMap.has(yGroup)) rowsMap.set(yGroup, []);
+              rowsMap.get(yGroup).push(item);
+           }
+           
+           // Filtrar linhas com exatamente 2 campos
+           const candidateRows = [];
+           for (const [yGroup, rowFields] of rowsMap.entries()) {
+              if (rowFields.length === 2) {
+                 rowFields.sort((a, b) => a.rect.x - b.rect.x);
+                 candidateRows.push({ yGroup, y: rowFields[0].rect.y, fields: rowFields });
+              }
+           }
+           
+           // Encontrar a tabela verdadeira agrupando as linhas que têm a mesma "assinatura visual"
+           // (ou seja, os mesmos alinhamentos X e larguras para as 2 colunas)
+           const colsMap = new Map();
+           for (const row of candidateRows) {
+              // Assinatura: X1_Width1_X2_Width2 (com tolerância de 2 pontos)
+              const sig = `${Math.round(row.fields[0].rect.x/2)*2}_${Math.round(row.fields[0].rect.width/2)*2}_${Math.round(row.fields[1].rect.x/2)*2}_${Math.round(row.fields[1].rect.width/2)*2}`;
+              if (!colsMap.has(sig)) colsMap.set(sig, []);
+              colsMap.get(sig).push(row);
+           }
+           
+           let bestSignature = null;
+           let maxRows = 0;
+           for (const [sig, rows] of colsMap.entries()) {
+              if (rows.length > maxRows) {
+                 maxRows = rows.length;
+                 bestSignature = sig;
+              }
+           }
+           
+           const finalTableRows = bestSignature ? colsMap.get(bestSignature) : [];
+           finalTableRows.sort((a, b) => b.y - a.y); // Ordena de cima para baixo
+           
+           // Preencher as linhas com os dados
+           let expenseIndex = 0;
+           for (const row of finalTableRows) {
+              if (expenseIndex >= data._expensesArray.length) break;
+              
+              const expense = data._expensesArray[expenseIndex];
+              const descField = row.fields[0];
+              const valField = row.fields[1];
+              
+              page.drawText(String(expense.descricao || ''), {
+                  x: descField.rect.x + 2,
+                  y: descField.rect.y + 2,
+                  size: 8,
+                  font: font,
+                  color: rgb(0, 0, 0),
+                  maxWidth: descField.rect.width - 4,
+              });
+              
+              page.drawText(String(expense.valor || ''), {
+                  x: valField.rect.x + 2,
+                  y: valField.rect.y + 2,
+                  size: 8,
+                  font: font,
+                  color: rgb(0, 0, 0),
+                  maxWidth: valField.rect.width - 4,
+              });
+              
+              expenseIndex++;
+           }
+           
+         } catch(e) {
+           console.error('Erro na injeção de tabela visual:', e);
+         }
       }
       
       // Manter os campos como editáveis para garantir que os visualizadores (como Chrome e Acrobat) 
