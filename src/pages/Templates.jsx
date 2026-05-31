@@ -114,6 +114,10 @@ export default function Templates() {
     if (!window.confirm(`Excluir o template "${fileName}"?`)) return;
     
     try {
+      // 1. Primeiro removemos as cartas geradas associadas para evitar erro de Foreign Key
+      await supabase.from('cartas_geradas').delete().eq('template_id', id);
+      
+      // 2. Agora excluímos o template
       const table = type === 'text' ? 'templates' : 'pdf_templates';
       const { error } = await supabase.from(table).delete().eq('id', id);
       if (error) throw error;
@@ -125,7 +129,8 @@ export default function Templates() {
       setTemplates(prev => prev.filter(t => t.id !== id));
       toast.success('Template removido.');
     } catch (error) {
-      toast.error('Erro ao excluir template.');
+      console.error(error);
+      toast.error('Erro ao excluir template. Ele pode estar sendo usado em outro lugar.');
     }
   };
 
