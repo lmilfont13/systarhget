@@ -573,6 +573,55 @@ export default function Documentos() {
             const val = finalFormDataForFunc[key];
             pdfFinalData[key] = typeof val === 'string' ? val.toUpperCase().trim() : val;
           });
+
+          // === Injeção Automática de Dados das Empresas POP e SEVEN no Momento da Geração ===
+          const empNomeUpper = (funcEmpresaFinal?.nome || '').toUpperCase();
+          if (empNomeUpper.includes('POP')) {
+             pdfFinalData['razao_social'] = 'POP TRADE MARKETING E CONSULTORIA LTDA';
+             pdfFinalData['empresa'] = 'POP TRADE MARKETING E CONSULTORIA LTDA';
+             pdfFinalData['cnpj'] = '07.272.350/0001-56';
+             pdfFinalData['endereco'] = 'RUA LUIS CORREA DE MELO, 92';
+             pdfFinalData['bairro'] = 'SANTO AMARO';
+             pdfFinalData['cep'] = '04726-220';
+             pdfFinalData['cidade'] = 'SÃO PAULO';
+             pdfFinalData['uf'] = 'SP';
+             pdfFinalData['inscricao_estadual'] = 'ISENTA';
+             pdfFinalData['complemento'] = '';
+          } else if (empNomeUpper.includes('SEVEN')) {
+             pdfFinalData['razao_social'] = 'SEVEN TRADE MARKETING E CONSULTORIA LTDA';
+             pdfFinalData['empresa'] = 'SEVEN TRADE MARKETING E CONSULTORIA LTDA';
+             pdfFinalData['cnpj'] = '13.375.691/0001-50';
+             pdfFinalData['endereco'] = 'RUA DEMOSTENES, 729';
+             pdfFinalData['bairro'] = 'CAMPO BELO';
+             pdfFinalData['cep'] = '04614-013';
+             pdfFinalData['cidade'] = 'SÃO PAULO';
+             pdfFinalData['uf'] = 'SP';
+             pdfFinalData['inscricao_estadual'] = 'ISENTA';
+             pdfFinalData['complemento'] = 'Sala 1';
+          }
+
+          // === Geração Automática do Número da Nota e Data de Emissão ===
+          const prefix = empNomeUpper.includes('POP') ? 'P' : (empNomeUpper.includes('SEVEN') ? 'S' : '');
+          const now = new Date();
+          const d = String(now.getDate()).padStart(2, '0');
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const y = now.getFullYear();
+          const dataAtualStr = `${d}/${m}/${y}`;
+          
+          if (prefix) {
+            const numeroNota = `${prefix}${d}${m}${y}`;
+            pdfFinalData['numero'] = numeroNota;
+            pdfFinalData['Text2'] = numeroNota; // Mapeamento comum
+            pdfFinalData['NÚMERO'] = numeroNota;
+            pdfFinalData['número'] = numeroNota;
+          }
+          
+          pdfFinalData['data_emissao'] = dataAtualStr;
+          pdfFinalData['data_atual'] = dataAtualStr;
+          pdfFinalData['Text4'] = dataAtualStr;
+          pdfFinalData['DATA DE EMISSÃO'] = dataAtualStr;
+
+          // Somente usa DEFAULT_CARIMBO se for um campo de carimbo na parte inferior (não logo)
           pdfFinalData.img_logo = funcLogoBase64;
           pdfFinalData.img_carimbo = funcCarimboBase64;
           pdfFinalData.img_carimbo_responsavel = funcCarimboRespBase64;
