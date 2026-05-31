@@ -699,26 +699,9 @@ export default function Documentos() {
     const newFormData = { ...formData };
     let totalValue = 0;
     
-    // Função auxiliar para obter as chaves de descrição e valor dinamicamente baseada no template
     const getKeys = (idxCount) => {
       let dKey = idxCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${idxCount - 1}`;
       let vKey  = idxCount === 1 ? 'VALOR' : `VALOR_${idxCount - 1}`;
-      if (activeTemplate && activeTemplate.fields) {
-         const hasExplicit = activeTemplate.fields.some(f => f.name.includes('DESCRIÇÃO DA DESPESA'));
-         if (!hasExplicit) {
-           const variableFields = activeTemplate.fields.filter(f => {
-               const low = f.name.toLowerCase();
-               return f.type === 'text' &&
-                      !['numero', 'data_emissao', 'empresa', 'bairro', 'cep', 'cnpj', 'cidade', 'uf', 'complemento', 'endereco', 'assinatura', 'carimbo', 'banco', 'agencia', 'conta_corrente', 'observacoes', 'funcionario'].some(k => low.includes(k));
-           });
-           if (variableFields.length > 0) {
-             const idxDesc = (idxCount - 1) * 2;
-             const idxVal = idxDesc + 1;
-             if (idxDesc < variableFields.length - 1) dKey = variableFields[idxDesc].name;
-             if (idxVal < variableFields.length - 1) vKey = variableFields[idxVal].name;
-           }
-         }
-      }
       return { descKey: dKey, valKey: vKey };
     };
 
