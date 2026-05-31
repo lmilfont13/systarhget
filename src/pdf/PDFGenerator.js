@@ -149,8 +149,31 @@ export class PDFGenerator {
             } 
             // Campos de texto normais
             else if (field.constructor.name === 'PDFTextField') {
-              field.setText(String(value));
-              // REMOVIDO: field.setFontSize(9); para evitar corromper o appearance stream
+              // Limpamos o campo original para evitar sobreposição ou bugs do AcroForm
+              field.setText('');
+              
+              const widgets = field.acroField.getWidgets();
+              if (widgets.length > 0) {
+                const widget = widgets[0];
+                const rect = widget.getRectangle();
+                
+                // Vamos tentar achar a página do widget
+                // Se não achar, desenha na primeira página por segurança
+                const pages = pdfDoc.getPages();
+                let targetPage = pages[0];
+                
+                // Desenhar o texto manualmente por cima do campo original
+                // Isso ignora qualquer limitação de fonte ou overflow do PDF original!
+                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+                targetPage.drawText(String(value), {
+                  x: rect.x + 2,
+                  y: rect.y + 2, // Quase na base do retângulo
+                  size: 8,       // Tamanho pequeno garantido
+                  font: font,
+                  color: rgb(0, 0, 0),
+                  maxWidth: rect.width - 4, // Faz quebra de linha se for muito longo
+                });
+              }
             } else if (field.constructor.name === 'PDFCheckBox') {
               if (value === true || value === 'true' || value === 'Sim') {
                 field.check();
