@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { FileEdit, CheckCircle2, Loader2, FileText, Eye, Info, Search, Lock, MessageSquare, Copy, Download, X , Wand2} from 'lucide-react';
 import { toast } from 'sonner';
@@ -52,6 +52,11 @@ export default function Documentos() {
   const [filterEmpresa, setFilterEmpresa] = useState('');
   const [optaContinuar, setOptaContinuar] = useState(true);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // Estados adicionados para a refatoração
+  const [showBranding, setShowBranding] = useState(false);
+  const [isMultiFuncModalOpen, setIsMultiFuncModalOpen] = useState(false);
+  const [multiFuncData, setMultiFuncData] = useState({});
 
   // Estados para o compartilhamento de PDF e histórico
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -166,11 +171,16 @@ export default function Documentos() {
   const handleTemplateSelect = (templateId) => {
     setSelectedTemplate(templateId);
     setFormData({});
+    const tpl = templates.find(t => String(t.id) === String(templateId));
+    if ((tpl?.name || tpl?.nome || '').toLowerCase().includes('nota de d')) {
+      setIsImportModalOpen(true);
+    }
   };
 
   const activeTemplate = templates.find(t => String(t.id) === String(selectedTemplate));
   const activeFuncionario = selectedFuncionarios.length > 0 ? funcionarios.find(f => String(f.id) === String(selectedFuncionarios[0])) : null;
   const activeEmpresa = empresas.find(e => String(e.id) === String(selectedEmpresa));
+  const isNotaDebito = (activeTemplate?.name || activeTemplate?.nome || '').toLowerCase().includes('nota de d');
 
   // Sincroniza a empresa automaticamente quando o funcionário é selecionado
   useEffect(() => {
@@ -302,8 +312,8 @@ export default function Documentos() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-    const handleGenerate = async (e) => {
-    e.preventDefault();
+  const handleGenerate = async (e, overrideFormData = null) => {
+    if (e) e.preventDefault();
     if (!selectedTemplate) {
       toast.error('Selecione um template primeiro.');
       return;
@@ -344,10 +354,6 @@ export default function Documentos() {
         }
       };
 
-      const logoBase64 = await getBase64(empresa?.logo_url);
-      const carimboBase64 = await getBase64(empresa?.carimbo_url);
-      const carimboRespBase64 = await getBase64(empresa?.carimbo_funcionario_url);
-
       const funcsToProcess = selectedFuncionarios.length > 0 ? selectedFuncionarios.map(id => funcionarios.find(f => String(f.id) === String(id))) : [null];
       
       let generatedCount = 0;
@@ -357,24 +363,102 @@ export default function Documentos() {
 
       for (const currentFunc of funcsToProcess) {
         let blob;
-        let finalFormDataForFunc = { ...formData };
+        let finalFormDataForFunc = { ...(overrideFormData || formData) };
         
-        // Populate current func data
+        let targetEmpId = selectedEmpresa;
         if (currentFunc) {
-          finalFormDataForFunc['Nome'] = currentFunc.nome || '';
-          finalFormDataForFunc['funcionario_nome'] = currentFunc.nome || '';
+            const empNome = String(currentFunc.dados_extras?.['Empresa'] || '').toUpperCase();
+            if (empNome.includes('POP')) {
+              const pop = empresas.find(e => (e.nome || '').toUpperCase().includes('POP'));
+              if (pop) targetEmpId = pop.id;
+            } else if (empNome.includes('SPAR')) {
+              const spar = empresas.find(e => (e.nome || '').toUpperCase().includes('SPAR'));
+              if (spar) targetEmpId = spar.id;
+            } else if (currentFunc.empresa_id) {
+              targetEmpId = currentFunc.empresa_id;
+            }
+        }
+        const funcEmpresa = empresas.find(e => String(e.id) === String(targetEmpId)) || empresa;
+        
+        if (currentFunc) {
+          const de = currentFunc.dados_extras || {};
+          let cdcValue = de['NC FUNCIONARIO'] || de['NC'] || de['Cdc'] || de['CDC'] || de['cdc'] || de['Cdc Superior'] || '';
+          if (!cdcValue) {
+            const foundKey = Object.keys(de).find(k => {
+              const up = k.toUpperCase();
+              return up.includes('CDC') || up === 'NC' || up.startsWith('NC ') || up.includes('CENTRO DE CUSTO');
+            });
+            if (foundKey) cdcValue = de[foundKey];
+          }
+
+          const rgValue = de['RG'] || de['rg'] || de['Rg'] || '';
+          
+          finalFormDataForFunc['Nome'] = (currentFunc.nome || '').toUpperCase();
+          finalFormDataForFunc['funcionario_nome'] = (currentFunc.nome || '').toUpperCase();
+          finalFormDataForFunc['cpf'] = de['CPF'] || '';
+          finalFormDataForFunc['CPF'] = de['CPF'] || '';
+          finalFormDataForFunc['rg'] = rgValue;
+          finalFormDataForFunc['RG'] = rgValue;
+          finalFormDataForFunc['cdc'] = cdcValue;
+          finalFormDataForFunc['CDC'] = cdcValue;
+          finalFormDataForFunc['cargo'] = currentFunc.cargo ? String(currentFunc.cargo).toLowerCase() : '';
+          finalFormDataForFunc['CARGO'] = currentFunc.cargo ? String(currentFunc.cargo).toLowerCase() : '';
+          finalFormDataForFunc['empresa'] = funcEmpresa?.nome || '';
+          finalFormDataForFunc['EMPRESA'] = funcEmpresa?.nome || '';
+          finalFormDataForFunc['loja'] = multiFuncData[currentFunc.id]?.['loja'] || multiFuncData[currentFunc.id]?.['LOJA'] || formData['loja'] || formData['LOJA'] || '';
+          finalFormDataForFunc['LOJA'] = finalFormDataForFunc['loja'];
+
+          if (activeTemplate?.fields) {
+            activeTemplate.fields.forEach(field => {
+              if (!field || !field.name) return;
+              const fieldNameLower = (field.name || '').toLowerCase();
+              const displayNameLower = (field.displayName || '').toLowerCase();
+              
+              if (fieldNameLower.includes('nome') || displayNameLower.includes('nome')) finalFormDataForFunc[field.name] = (currentFunc.nome || '').toUpperCase();
+              else if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) finalFormDataForFunc[field.name] = de['CPF'] || '';
+              else if (fieldNameLower.includes('rg') || displayNameLower.includes('rg')) finalFormDataForFunc[field.name] = rgValue;
+              else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) finalFormDataForFunc[field.name] = currentFunc.cargo ? String(currentFunc.cargo).toLowerCase() : '';
+              else if (fieldNameLower.includes('cdc') || displayNameLower.includes('cdc') || fieldNameLower.includes('nc')) finalFormDataForFunc[field.name] = cdcValue;
+              else if (fieldNameLower.includes('empresa') || displayNameLower.includes('empresa')) finalFormDataForFunc[field.name] = funcEmpresa?.nome || '';
+            });
+          }
+
           if (currentFunc.dados_extras) {
             Object.keys(currentFunc.dados_extras).forEach(k => {
               finalFormDataForFunc[k] = currentFunc.dados_extras[k] || '';
               finalFormDataForFunc[`funcionario_${k.toLowerCase()}`] = currentFunc.dados_extras[k] || '';
             });
           }
+          if (multiFuncData[currentFunc.id]) {
+            Object.keys(multiFuncData[currentFunc.id]).forEach(k => {
+              finalFormDataForFunc[k] = multiFuncData[currentFunc.id][k];
+            });
+          }
         }
+
+        const funcEmpresaFinal = empresas.find(e => String(e.id) === String(targetEmpId)) || empresa;
+        const funcLogoBase64 = await getBase64(funcEmpresaFinal?.logo_url);
+        const funcCarimboBase64 = await getBase64(funcEmpresaFinal?.carimbo_url);
+        const funcCarimboRespBase64 = await getBase64(funcEmpresaFinal?.carimbo_funcionario_url);
+        const funcAssinaturaRespBase64 = await getBase64(funcEmpresaFinal?.assinatura_responsavel_url);
 
         if (activeTemplate.type === 'text') {
           let content = activeTemplate.conteudo || '';
-          Object.keys(finalFormDataForFunc).forEach(key => {
+          
+          // Sort keys: process longer keys and keys with non-empty values first
+          // This prevents empty strings in formData from wiping out placeholders
+          // before explicit keys with values can replace them
+          const sortedKeys = Object.keys(finalFormDataForFunc).sort((a, b) => {
+             const valA = finalFormDataForFunc[a] ? 1 : 0;
+             const valB = finalFormDataForFunc[b] ? 1 : 0;
+             if (valA !== valB) return valB - valA; // Non-empty first
+             return b.length - a.length; // Longer keys first
+          });
+
+          sortedKeys.forEach(key => {
             let value = String(finalFormDataForFunc[key] || '').toUpperCase().trim();
+            if (!value) return; // Skip empty replacements to allow other cases to match
+
             const keyLower = key.toLowerCase();
             if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
               if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
@@ -382,15 +466,20 @@ export default function Documentos() {
               }
             }
             const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            content = content.replace(new RegExp(`\{\{${escapedKey}\}\}`, 'gi'), value)
+            content = content.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), value)
                              .replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), value);
           });
           
+          // Second pass: remove any remaining unmatched placeholders
+          content = content.replace(/\{\{[^}]+\}\}/g, '')
+                           .replace(/\[[^\]]+\]/g, '');
+          
           const assets = {
-            logo_url: logoBase64,
-            carimbo_url: carimboBase64,
-            carimbo_responsavel_url: carimboRespBase64,
-            footer_text: cleanFooterText(empresa?.rodape)
+            logo_url: funcLogoBase64,
+            carimbo_url: funcCarimboBase64,
+            carimbo_responsavel_url: funcCarimboRespBase64,
+            assinatura_responsavel_url: funcAssinaturaRespBase64,
+            footer_text: cleanFooterText(funcEmpresaFinal?.rodape)
           };
 
           blob = await PDFGenerator.generateFromText(content, assets);
@@ -410,9 +499,10 @@ export default function Documentos() {
             const val = finalFormDataForFunc[key];
             pdfFinalData[key] = typeof val === 'string' ? val.toUpperCase().trim() : val;
           });
-          pdfFinalData.img_logo = logoBase64;
-          pdfFinalData.img_carimbo = carimboBase64;
-          pdfFinalData.img_carimbo_responsavel = carimboRespBase64;
+          pdfFinalData.img_logo = funcLogoBase64;
+          pdfFinalData.img_carimbo = funcCarimboBase64;
+          pdfFinalData.img_carimbo_responsavel = funcCarimboRespBase64;
+          pdfFinalData.img_assinatura_responsavel = funcAssinaturaRespBase64;
 
           blob = await PDFGenerator.fillDocument(bytes, pdfFinalData);
         }
@@ -483,41 +573,148 @@ export default function Documentos() {
       return;
     }
 
-    const blocks = importText.split(/\n\s*\n/);
+    // Formato SAP/TOTVS:
+    // Linha 0: Descrição (CONTRATACAO MENSAL PUBLICIDADE E PROPAGANDA)
+    // Linha 1: Quantidade (1)
+    // Linha 2: Valor unitário (595,00)
+    // Linha 3: Valor total (595,00)
+    // Linha 4: Código serviço (GERES38419 - ...)
+    // Linha 5: Prazo (30)
+    // Linhas 6-8: Vazias
+    // Linha 9: CDC - identificador do funcionário (64462 CE - FLD - AKZO...)
+    // Linha 10: Vazia (separador do próximo bloco)
+    
+    const allLines = importText.split('\n');
     const newFormData = { ...formData };
     let itemCount = 0;
     let totalValue = 0;
-
-    blocks.forEach(block => {
-      const lines = block.split('\n').map(l => l.trim()).filter(l => l !== '');
-      if (lines.length < 5) return;
+    let tabelaValores = '';
+    
+    // Identificar cada bloco: começa com "CONTRATACAO" ou linha não numérica com letras maiúsculas
+    let i = 0;
+    while (i < allLines.length) {
+      const line = allLines[i].trim();
       
-      let descricao = '';
-      let valor = 0;
-
-      const valorLine = lines.find(l => /^\d{1,3}(\.\d{3})*,\d{2}$/.test(l) || /^\d+,\d{2}$/.test(l));
-      if (valorLine) {
-        valor = parseFloat(valorLine.replace(/\./g, '').replace(',', '.'));
-      } else if (lines.length >= 4) {
-        valor = parseFloat(lines[3].replace(/\./g, '').replace(',', '.')) || 0;
+      // Pular linhas vazias
+      if (!line) { i++; continue; }
+      
+      // Verificar se a linha já é um item completo (formato lista: Descrição + Valor)
+      // Tenta encontrar qualquer valor monetário (com ou sem R$, com ou sem espaços) no final da string
+      const flatListMatch = line.match(/^(.*?)(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/i) 
+                         || line.match(/^(.*?)(?:R\$\s*)?(\d+,\d{2})\s*$/i);
+      
+      if (flatListMatch && flatListMatch[1].trim().length > 0) {
+         const descricao = flatListMatch[1].trim();
+         const valorStr = flatListMatch[2];
+         const valor = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
+         
+         if (descricao && valor > 0) {
+            itemCount++;
+            const descKey = itemCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${itemCount - 1}`;
+            const valKey  = itemCount === 1 ? 'VALOR' : `VALOR_${itemCount - 1}`;
+            newFormData[descKey] = descricao;
+            newFormData[valKey]  = valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            newFormData[`descricao_${itemCount}`] = newFormData[descKey];
+            newFormData[`valor_${itemCount}`]     = newFormData[valKey];
+            totalValue += valor;
+            
+            tabelaValores += `${descricao}[TAB]R$ ${newFormData[valKey]}\n`;
+         }
+         i++;
+         continue;
       }
       
-      descricao = lines[lines.length - 1]; 
+      // Verificar se esta linha é início de um bloco (descrição, não é número puro)
+      // Modificado para aceitar linhas que começam com números (ex: 64462 - CE - FLD)
+      const isDescriptionLine = line.length > 5 
+        && !/^\d+$/.test(line)
+        && !line.match(/^\d+,\d{2}$/)
+        && !line.match(/^GERES\d+/)
+        && !/^R\$\s*$/.test(line);
       
-      if (descricao && valor > 0) {
-        itemCount++;
-        newFormData[`descricao_${itemCount}`] = descricao;
-        newFormData[`valor_${itemCount}`] = valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        totalValue += valor;
+      if (isDescriptionLine) {
+        // Coleta as próximas linhas não-vazias até encontrar o CDC ou outro bloco
+        const blockLines = [];
+        let j = i;
+        // Pega as próximas linhas buscando os dados do item
+        let nonEmptyCount = 0;
+        while (j < allLines.length && nonEmptyCount < 10) {
+          const bl = allLines[j].trim();
+          if (bl) {
+            blockLines.push(bl);
+            nonEmptyCount++;
+          }
+          j++;
+          // Para quando encontrar próximo bloco de descrição ou se achamos o valor
+          if (nonEmptyCount >= 2 && j < allLines.length) {
+            const nextLine = allLines[j] ? allLines[j].trim() : '';
+            // Se a próxima linha parece uma nova descrição (ex: 64479 - CE - FLD) e não é um valor/R$
+            if (nextLine.length > 5 && !/^\d+$/.test(nextLine) && !nextLine.match(/^\d+,\d{2}$/) && !/^R\$\s*$/.test(nextLine)) {
+              // Verifica se já pegamos um valor neste bloco atual
+              const hasValue = blockLines.some(b => b.match(/^R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})$/) || b.match(/^(\d{1,3}(?:\.\d{3})*,\d{2})$/));
+              if (hasValue) break;
+            }
+          }
+        }
+        
+        if (blockLines.length >= 2) {
+          const descricao = blockLines[0];
+          
+          let valor = 0;
+          for (let k = 1; k < blockLines.length; k++) {
+            // Tenta achar R$ 595,00 ou apenas 595,00
+            const vMatch = blockLines[k].match(/^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})$/);
+            if (vMatch) {
+              const parsed = parseFloat(vMatch[1].replace(/\./g, '').replace(',', '.'));
+              if (parsed > valor) valor = parsed;
+            }
+          }
+          
+          let cdc = '';
+          for (let k = blockLines.length - 1; k >= 1; k--) {
+            // Tenta achar o CDC no bloco, se não achar, ignora
+            if (blockLines[k] && /^\d{5}/.test(blockLines[k]) && !blockLines[k].includes(',')) {
+              cdc = blockLines[k];
+              break;
+            }
+          }
+          
+          if (descricao && valor > 0) {
+            itemCount++;
+            const descKey = itemCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${itemCount - 1}`;
+            const valKey  = itemCount === 1 ? 'VALOR' : `VALOR_${itemCount - 1}`;
+            newFormData[descKey] = cdc && cdc !== descricao ? `${cdc}` : descricao;
+            newFormData[valKey]  = valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            newFormData[`descricao_${itemCount}`] = newFormData[descKey];
+            newFormData[`valor_${itemCount}`]     = newFormData[valKey];
+            totalValue += valor;
+            
+            // Build text row with [TAB]
+            const lineName = cdc && cdc !== descricao ? cdc : descricao;
+            const lineValue = `R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            tabelaValores += `${lineName}[TAB]${lineValue}\n`;
+          }
+        }
+        i = j;
+      } else {
+        i++;
       }
-    });
+    }
 
     if (itemCount > 0) {
-      newFormData['total'] = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const totalFormatted = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      newFormData['total'] = totalFormatted;
+      newFormData['TOTAL'] = totalFormatted;
+      newFormData['tabela_valores'] = tabelaValores.trim();
+      newFormData['TABELA_VALORES'] = tabelaValores.trim();
+      
       setFormData(newFormData);
-      toast.success(`${itemCount} itens importados e Total calculado (R$ ${newFormData['total']})!`);
+      toast.success(`${itemCount} itens importados e Total calculado (R$ ${newFormData['total']})! Gerando documento...`);
       setIsImportModalOpen(false);
       setImportText('');
+      
+      // Chamar direto para evitar que o navegador bloqueie o download
+      handleGenerate(null, newFormData);
     } else {
       toast.warning('Não foi possível identificar os itens e valores. Verifique se copiou a tabela completa.');
     }
@@ -537,6 +734,16 @@ export default function Documentos() {
     const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(whatsappUrl, '_blank');
   };
+
+  const allLojas = useMemo(() => {
+    const lojasSet = new Set();
+    empresas.forEach(empresa => {
+      if (Array.isArray(empresa.lojas)) {
+        empresa.lojas.forEach(loja => lojasSet.add(loja));
+      }
+    });
+    return Array.from(lojasSet).sort();
+  }, [empresas]);
 
   if (isLoading) {
     return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
@@ -608,7 +815,8 @@ export default function Documentos() {
           </div>
           
           {/* Selecionar Funcionário (com autocomplete) */}
-          <div className="grid grid-cols-1 gap-6 border-t border-slate-200/40 pt-6">
+          {!isNotaDebito && (
+            <div className="grid grid-cols-1 gap-6 border-t border-slate-200/40 pt-6">
             <div className="space-y-2 relative">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-bold">3</span>
@@ -751,36 +959,51 @@ export default function Documentos() {
               )}
             </div>
           </div>
+          )}
           
           {/* Active Empresa Branding Preview */}
           {activeEmpresa && (
-            <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3 shadow-inner animate-in fade-in duration-300">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Identidade Visual da Empresa</span>
-                <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold text-white ${(activeEmpresa.nome || '').toUpperCase().includes('POP') ? 'bg-sky-500 shadow-sm' : 'bg-blue-900 shadow-sm'}`}>
-                  {(activeEmpresa.nome || '').toUpperCase().includes('POP') ? 'POP TRADE' : 'SPAR BRASIL'}
-                </span>
+            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {activeEmpresa.logo_url && (
+                  <img src={activeEmpresa.logo_url} className="h-8 object-contain" alt="Logo Empresa" />
+                )}
+                <div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold text-white ${(activeEmpresa.nome || '').toUpperCase().includes('POP') ? 'bg-sky-500 shadow-sm' : 'bg-blue-900 shadow-sm'}`}>
+                    {(activeEmpresa.nome || '').toUpperCase().includes('POP') ? 'POP TRADE' : 'SPAR BRASIL'}
+                  </span>
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <button
+                type="button"
+                onClick={() => setShowBranding(!showBranding)}
+                className="text-[10px] flex items-center gap-1 text-slate-500 hover:text-indigo-600 font-semibold transition-colors uppercase tracking-wider"
+              >
+                <Eye className="w-3 h-3" /> {showBranding ? 'Ocultar Identidade' : 'Ver Identidade Visual'}
+              </button>
+            </div>
+          )}
+
+          {activeEmpresa && showBranding && (
+            <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-3 grid grid-cols-3 gap-4 animate-in fade-in duration-300">
                 <div className="space-y-1">
                   <p className="text-[9px] text-slate-400 font-bold text-center uppercase tracking-wider">Logo do Topo</p>
-                  <div className="h-12 w-full bg-slate-50/50 rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
+                  <div className="h-12 w-full bg-white rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
                     {activeEmpresa.logo_url ? <img src={activeEmpresa.logo_url} className="max-h-full max-w-full object-contain" /> : <Info className="w-4 h-4 text-slate-300" />}
                   </div>
                 </div>
                 <div className="space-y-1">
                   <p className="text-[9px] text-slate-400 font-bold text-center uppercase tracking-wider">Carimbo e Assinatura</p>
-                  <div className="h-12 w-full bg-slate-50/50 rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
+                  <div className="h-12 w-full bg-white rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
                     {activeEmpresa.carimbo_url ? <img src={activeEmpresa.carimbo_url} className="max-h-full max-w-full object-contain" /> : <Info className="w-4 h-4 text-slate-300" />}
                   </div>
                 </div>
                 <div className="space-y-1">
                   <p className="text-[9px] text-slate-400 font-bold text-center uppercase tracking-wider">Carimbo Responsável</p>
-                  <div className="h-12 w-full bg-slate-50/50 rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
+                  <div className="h-12 w-full bg-white rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
                     {activeEmpresa.carimbo_funcionario_url ? <img src={activeEmpresa.carimbo_funcionario_url} className="max-h-full max-w-full object-contain" /> : <Info className="w-4 h-4 text-slate-300" />}
                   </div>
                 </div>
-              </div>
             </div>
           )}
         </div>
@@ -789,7 +1012,14 @@ export default function Documentos() {
         {activeTemplate && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-6 border-t border-slate-100">
             {/* Coluna da Esquerda: Formulário */}
-            <form onSubmit={handleGenerate} className="space-y-6">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (selectedFuncionarios.length > 1) {
+                setIsMultiFuncModalOpen(true);
+              } else {
+                handleGenerate(e);
+              }
+            }} className="space-y-6">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
                 <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
                   <FileEdit className="w-4 h-4" />
@@ -1196,6 +1426,103 @@ export default function Documentos() {
                 className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-wider"
               >
                 Fechar Janela
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMultiFuncModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                  <FileEdit className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Dados dos Funcionários</h3>
+                  <p className="text-xs text-slate-500">Preencha os dados específicos para os {selectedFuncionarios.length} funcionários selecionados.</p>
+                </div>
+              </div>
+              <button onClick={() => setIsMultiFuncModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6">
+              {selectedFuncionarios.map((funcId, idx) => {
+                const func = funcionarios.find(f => String(f.id) === String(funcId));
+                if (!func) return null;
+                return (
+                  <div key={func.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <h4 className="font-bold text-slate-700 text-sm mb-3">{(func.nome || 'Desconhecido').toUpperCase()}</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {activeTemplate?.fields?.filter(f => {
+                        const low = f.name.toLowerCase();
+                        return !['funcionario_nome', 'funcionario_cpf', 'funcionario_rg', 'empresa_nome', 'empresa_rodape'].includes(low) 
+                            && !low.includes('nome') && !low.includes('cpf') && !low.includes('rg') && !low.includes('cargo') 
+                            && low !== 'cdc' && !low.includes('assinatura') && !low.includes('carimbo');
+                      }).map(field => (
+                        <div key={field.name}>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                            {field.name.replace(/_/g, ' ')}
+                          </label>
+                          {field.name.toLowerCase() === 'loja' ? (
+                            <select
+                              className="block w-full rounded-lg border-slate-200 bg-white text-xs px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                              value={multiFuncData[func.id]?.[field.name] || formData[field.name] || ''}
+                              onChange={(e) => setMultiFuncData(prev => ({
+                                ...prev,
+                                [func.id]: {
+                                  ...(prev[func.id] || {}),
+                                  [field.name]: e.target.value
+                                }
+                              }))}
+                            >
+                              <option value="">Selecione uma loja...</option>
+                              {allLojas.map(loja => (
+                                <option key={loja} value={loja}>{loja}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              className="block w-full rounded-lg border-slate-200 bg-white text-xs px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                              placeholder="Preencher..."
+                              value={multiFuncData[func.id]?.[field.name] || formData[field.name] || ''}
+                              onChange={(e) => setMultiFuncData(prev => ({
+                                ...prev,
+                                [func.id]: {
+                                  ...(prev[func.id] || {}),
+                                  [field.name]: e.target.value
+                                }
+                              }))}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+              <button
+                onClick={() => setIsMultiFuncModalOpen(false)}
+                className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={(e) => {
+                  setIsMultiFuncModalOpen(false);
+                  handleGenerate(e);
+                }}
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/20 transition-all"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Continuar e Gerar
               </button>
             </div>
           </div>
