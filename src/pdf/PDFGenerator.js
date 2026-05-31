@@ -146,45 +146,46 @@ export class PDFGenerator {
               if (imageSource) {
                 let imageBytes;
 
-              if (imageSource.startsWith('http')) {
-                // É uma URL, precisamos baixar
-                const response = await fetch(imageSource);
-                const arrayBuffer = await response.arrayBuffer();
-                imageBytes = new Uint8Array(arrayBuffer);
-              } else {
-                // Assume que é base64
-                const cleanBase64 = imageSource.includes(',') ? imageSource.split(',')[1] : imageSource;
-                const binaryString = atob(cleanBase64);
-                imageBytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                  imageBytes[i] = binaryString.charCodeAt(i);
+                if (imageSource.startsWith('http')) {
+                  // É uma URL, precisamos baixar
+                  const response = await fetch(imageSource);
+                  const arrayBuffer = await response.arrayBuffer();
+                  imageBytes = new Uint8Array(arrayBuffer);
+                } else {
+                  // Assume que é base64
+                  const cleanBase64 = imageSource.includes(',') ? imageSource.split(',')[1] : imageSource;
+                  const binaryString = atob(cleanBase64);
+                  imageBytes = new Uint8Array(binaryString.length);
+                  for (let i = 0; i < binaryString.length; i++) {
+                    imageBytes[i] = binaryString.charCodeAt(i);
+                  }
                 }
-              }
-              
-              let image;
-              try {
-                // Tenta carregar como PNG primeiro
-                image = await pdfDoc.embedPng(imageBytes);
-              } catch (e) {
-                // Se falhar, tenta como JPG
-                image = await pdfDoc.embedJpg(imageBytes);
-              }
-
-              // Pega a localização do campo no PDF
-              const widgets = field.acroField.getWidgets();
-              if (widgets && widgets.length > 0) {
-                const rect = widgets[0].getRectangle();
-                const pages = pdfDoc.getPages();
-                const page = pages[0]; 
-
-                page.drawImage(image, {
-                  x: rect.x,
-                  y: rect.y,
-                  width: rect.width,
-                  height: rect.height,
-                });
                 
-                field.acroField.setFlags(2); // Hidden flag
+                let image;
+                try {
+                  // Tenta carregar como PNG primeiro
+                  image = await pdfDoc.embedPng(imageBytes);
+                } catch (e) {
+                  // Se falhar, tenta como JPG
+                  image = await pdfDoc.embedJpg(imageBytes);
+                }
+
+                // Pega a localização do campo no PDF
+                const widgets = field.acroField.getWidgets();
+                if (widgets && widgets.length > 0) {
+                  const rect = widgets[0].getRectangle();
+                  const pages = pdfDoc.getPages();
+                  const page = pages[0]; 
+
+                  page.drawImage(image, {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: rect.height,
+                  });
+                  
+                  field.acroField.setFlags(2); // Hidden flag
+                }
               }
             }
             // Campos de texto normais
