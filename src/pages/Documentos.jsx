@@ -591,6 +591,30 @@ export default function Documentos() {
     let tabelaValores = '';
     
     // Identificar cada bloco: começa com "CONTRATACAO" ou linha não numérica com letras maiúsculas
+    
+    // Função auxiliar para obter as chaves de descrição e valor dinamicamente baseada no template
+    const getKeys = (idxCount) => {
+      let dKey = idxCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${idxCount - 1}`;
+      let vKey  = idxCount === 1 ? 'VALOR' : `VALOR_${idxCount - 1}`;
+      if (activeTemplate && activeTemplate.fields) {
+         const hasExplicit = activeTemplate.fields.some(f => f.name.includes('DESCRIÇÃO DA DESPESA'));
+         if (!hasExplicit) {
+           const variableFields = activeTemplate.fields.filter(f => {
+               const low = f.name.toLowerCase();
+               return f.type === 'text' &&
+                      !['numero', 'data_emissao', 'empresa', 'bairro', 'cep', 'cnpj', 'cidade', 'uf', 'complemento', 'endereco', 'assinatura', 'carimbo', 'banco', 'agencia', 'conta_corrente', 'observacoes', 'funcionario'].some(k => low.includes(k));
+           });
+           if (variableFields.length > 0) {
+             const idxDesc = (idxCount - 1) * 2;
+             const idxVal = idxDesc + 1;
+             if (idxDesc < variableFields.length - 1) dKey = variableFields[idxDesc].name;
+             if (idxVal < variableFields.length - 1) vKey = variableFields[idxVal].name;
+           }
+         }
+      }
+      return { descKey: dKey, valKey: vKey };
+    };
+
     let i = 0;
     while (i < allLines.length) {
       const line = allLines[i].trim();
@@ -599,6 +623,7 @@ export default function Documentos() {
       if (!line) { i++; continue; }
       
       // Verificar se a linha já é um item completo (formato lista: Descrição + Valor)
+      // Modificado para aceitar também R$ em linha separada mas capturado se estiver tudo junto
       // Tenta encontrar qualquer valor monetário (com ou sem R$, com ou sem espaços) no final da string
       const flatListMatch = line.match(/^(.*?)(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/i) 
                          || line.match(/^(.*?)(?:R\$\s*)?(\d+,\d{2})\s*$/i);
@@ -610,8 +635,8 @@ export default function Documentos() {
          
          if (descricao && valor > 0) {
             itemCount++;
-            const descKey = itemCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${itemCount - 1}`;
-            const valKey  = itemCount === 1 ? 'VALOR' : `VALOR_${itemCount - 1}`;
+            const { descKey, valKey } = getKeys(itemCount);
+            
             newFormData[descKey] = descricao;
             newFormData[valKey]  = valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             newFormData[`descricao_${itemCount}`] = newFormData[descKey];
@@ -672,31 +697,7 @@ export default function Documentos() {
           
           if (descricao && valor > 0) {
             itemCount++;
-            let descKey = `DESCRIÇÃO DA DESPESA_${itemCount}`;
-            let valKey = `VALOR_${itemCount}`;
-            
-            if (activeTemplate && activeTemplate.fields) {
-               const variableFields = activeTemplate.fields.filter(f => {
-                   const low = f.name.toLowerCase();
-                   return f.type === 'text' &&
-                          !['numero', 'data_emissao', 'empresa', 'bairro', 'cep', 'cnpj', 'cidade', 'uf', 'complemento', 'endereco', 'assinatura', 'carimbo', 'banco', 'agencia', 'conta_corrente', 'observacoes', 'funcionario'].some(k => low.includes(k));
-               });
-               
-               const isGeneric = variableFields.some(f => f.name.toLowerCase().includes('text'));
-               if (isGeneric || variableFields.length > 0) {
-                 const idxDesc = (itemCount - 1) * 2;
-                 const idxVal = idxDesc + 1;
-                 
-                 if (idxDesc < variableFields.length - 1) descKey = variableFields[idxDesc].name;
-                 if (idxVal < variableFields.length - 1) valKey = variableFields[idxVal].name;
-               } else {
-                 descKey = itemCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${itemCount - 1}`;
-                 valKey  = itemCount === 1 ? 'VALOR' : `VALOR_${itemCount - 1}`;
-               }
-            } else {
-               descKey = itemCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${itemCount - 1}`;
-               valKey  = itemCount === 1 ? 'VALOR' : `VALOR_${itemCount - 1}`;
-            }
+            const { descKey, valKey } = getKeys(itemCount);
             
             newFormData[descKey] = cdc && cdc !== descricao ? `${cdc}` : descricao;
             newFormData[valKey]  = valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -720,16 +721,21 @@ export default function Documentos() {
         newFormData.total = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         newFormData.TOTAL = newFormData.total;
         
-        // Mapear dinamicamente o campo TOTAL caso ele seja um TextX genérico (o último dos variáveis)
+        // Mapear dinamicamente o campo TOTAL caso ele seja genérico
         if (activeTemplate && activeTemplate.fields) {
-           const variableFields = activeTemplate.fields.filter(f => {
-               const low = f.name.toLowerCase();
-               return f.type === 'text' &&
-                      !['numero', 'data_emissao', 'empresa', 'bairro', 'cep', 'cnpj', 'cidade', 'uf', 'complemento', 'endereco', 'assinatura', 'carimbo', 'banco', 'agencia', 'conta_corrente', 'observacoes', 'funcionario'].some(k => low.includes(k));
-           });
-           if (variableFields.length > 0) {
-               const lastField = variableFields[variableFields.length - 1];
-               newFormData[lastField.name] = newFormData.total;
+           const hasExplicit = activeTemplate.fields.some(f => f.name.toUpperCase() === 'TOTAL');
+           if (hasExplicit) {
+             newFormData[activeTemplate.fields.find(f => f.name.toUpperCase() === 'TOTAL').name] = newFormData.total;
+           } else {
+               const variableFields = activeTemplate.fields.filter(f => {
+                   const low = f.name.toLowerCase();
+                   return f.type === 'text' &&
+                          !['numero', 'data_emissao', 'empresa', 'bairro', 'cep', 'cnpj', 'cidade', 'uf', 'complemento', 'endereco', 'assinatura', 'carimbo', 'banco', 'agencia', 'conta_corrente', 'observacoes', 'funcionario'].some(k => low.includes(k));
+               });
+               if (variableFields.length > 0) {
+                   const lastField = variableFields[variableFields.length - 1];
+                   newFormData[lastField.name] = newFormData.total;
+               }
            }
         }
         
