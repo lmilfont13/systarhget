@@ -624,8 +624,6 @@ export default function Documentos() {
          continue;
       }
       
-      // Verificar se esta linha é início de um bloco (descrição, não é número puro)
-      // Modificado para aceitar linhas que começam com números (ex: 64462 - CE - FLD)
       const isDescriptionLine = line.length > 5 
         && !/^\d+$/.test(line)
         && !line.match(/^\d+,\d{2}$/)
@@ -633,10 +631,8 @@ export default function Documentos() {
         && !/^R\$\s*$/.test(line);
       
       if (isDescriptionLine) {
-        // Coleta as próximas linhas não-vazias até encontrar o CDC ou outro bloco
         const blockLines = [];
         let j = i;
-        // Pega as próximas linhas buscando os dados do item
         let nonEmptyCount = 0;
         while (j < allLines.length && nonEmptyCount < 10) {
           const bl = allLines[j].trim();
@@ -645,12 +641,9 @@ export default function Documentos() {
             nonEmptyCount++;
           }
           j++;
-          // Para quando encontrar próximo bloco de descrição ou se achamos o valor
           if (nonEmptyCount >= 2 && j < allLines.length) {
             const nextLine = allLines[j] ? allLines[j].trim() : '';
-            // Se a próxima linha parece uma nova descrição (ex: 64479 - CE - FLD) e não é um valor/R$
             if (nextLine.length > 5 && !/^\d+$/.test(nextLine) && !nextLine.match(/^\d+,\d{2}$/) && !/^R\$\s*$/.test(nextLine)) {
-              // Verifica se já pegamos um valor neste bloco atual
               const hasValue = blockLines.some(b => b.match(/^R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})$/) || b.match(/^(\d{1,3}(?:\.\d{3})*,\d{2})$/));
               if (hasValue) break;
             }
@@ -662,7 +655,6 @@ export default function Documentos() {
           
           let valor = 0;
           for (let k = 1; k < blockLines.length; k++) {
-            // Tenta achar R$ 595,00 ou apenas 595,00
             const vMatch = blockLines[k].match(/^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})$/);
             if (vMatch) {
               const parsed = parseFloat(vMatch[1].replace(/\./g, '').replace(',', '.'));
@@ -672,7 +664,6 @@ export default function Documentos() {
           
           let cdc = '';
           for (let k = blockLines.length - 1; k >= 1; k--) {
-            // Tenta achar o CDC no bloco, se não achar, ignora
             if (blockLines[k] && /^\d{5}/.test(blockLines[k]) && !blockLines[k].includes(',')) {
               cdc = blockLines[k];
               break;
@@ -689,7 +680,6 @@ export default function Documentos() {
             newFormData[`valor_${itemCount}`]     = newFormData[valKey];
             totalValue += valor;
             
-            // Build text row with [TAB]
             const lineName = cdc && cdc !== descricao ? cdc : descricao;
             const lineValue = `R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             tabelaValores += `${lineName}[TAB]${lineValue}\n`;
@@ -702,11 +692,12 @@ export default function Documentos() {
     }
 
     if (itemCount > 0) {
-      const totalFormatted = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      newFormData['total'] = totalFormatted;
-      newFormData['TOTAL'] = totalFormatted;
-      newFormData['tabela_valores'] = tabelaValores.trim();
-      newFormData['TABELA_VALORES'] = tabelaValores.trim();
+      if (totalValue > 0) {
+        newFormData.total = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        newFormData.TOTAL = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        newFormData.tabela_valores = tabelaValores.trim();
+        newFormData.TABELA_VALORES = tabelaValores.trim();
+      }
       
       setFormData(newFormData);
       toast.success(`${itemCount} itens importados e Total calculado (R$ ${newFormData['total']})! Gerando documento...`);

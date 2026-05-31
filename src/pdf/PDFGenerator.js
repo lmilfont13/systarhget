@@ -58,17 +58,45 @@ export class PDFGenerator {
       for (const field of fields) {
         const fieldName = field.getName();
         const fieldNameLower = fieldName.toLowerCase();
+        const fieldNameNorm = fieldName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         
         // Procura o valor no data (correspondência exata ou parcial para campos comuns)
         let value = data[fieldName];
         
         if (value === undefined) {
-          // Tenta encontrar por palavras-chave se não houver match exato
+          // Busca case-insensitive geral
+          const matchKey = Object.keys(data).find(k => k.toLowerCase() === fieldNameLower);
+          if (matchKey) value = data[matchKey];
+        }
+
+        if (value === undefined) {
+          // Busca com normalização de acentos (Descrição → descricao)
+          const matchKeyNorm = Object.keys(data).find(k => 
+            k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === fieldNameNorm
+          );
+          if (matchKeyNorm) value = data[matchKeyNorm];
+        }
+
+        if (value === undefined) {
+          // Busca por palavras-chave
           if (fieldNameLower.includes('data') || fieldNameLower.includes('emissao')) value = data['data_atual'] || data['data'] || data['data_emissao'];
           else if (fieldNameLower.includes('nome') || fieldNameLower.includes('promotor')) value = data['funcionario_nome'] || data['promotor'];
           else if (fieldNameLower.includes('cargo')) value = data['funcionario_cargo'] || data['cargo'];
           else if (fieldNameLower.includes('cpf')) value = data['funcionario_cpf'] || data['cpf'];
           else if (fieldNameLower.includes('empresa')) value = data['empresa_razao'] || data['empresa'];
+          else if (fieldNameLower === 'text4') value = data['total'] || data['TOTAL'];
+          // Busca descricao_N / valor_N por índice numérico no nome do campo
+          else {
+            const numMatch = fieldNameLower.match(/(\d+)$/);
+            if (numMatch) {
+              const idx = numMatch[1];
+              if (fieldNameNorm.includes('descricao') || fieldNameNorm.includes('descr') || fieldNameNorm.includes('cdc') || fieldNameNorm.includes('servico')) {
+                value = data[`descricao_${idx}`] || data[`Descricao_${idx}`] || data[`DESCRICAO_${idx}`];
+              } else if (fieldNameNorm.includes('valor') || fieldNameNorm.includes('vl') || fieldNameNorm.includes('preco')) {
+                value = data[`valor_${idx}`] || data[`Valor_${idx}`] || data[`VALOR_${idx}`];
+              }
+            }
+          }
         }
 
         if (value !== undefined) {
@@ -136,8 +164,8 @@ export class PDFGenerator {
         }
       }
       
-      // Achata o formulário para evitar edições futuras e exibir o texto puramente
-      form.flatten();
+      // Manter os campos como editáveis para garantir que os visualizadores (como Chrome e Acrobat) 
+      // gerem as aparências dinamicamente, evitando textos invisíveis.
 
       // 2. Preencher textos por coordenadas (caso o usuário tenha mapeado X/Y na tela Templates)
       if (customCoordinates && customCoordinates.length > 0) {
@@ -157,6 +185,13 @@ export class PDFGenerator {
             }
           }
         }
+      }
+
+      // Achatar o formulário para garantir que o texto seja visível em todos os leitores de PDF
+      try {
+        form.flatten();
+      } catch (e) {
+        console.warn("Aviso ao achatar formulário:", e);
       }
 
       // 3. Salvar o documento preenchido
@@ -259,6 +294,19 @@ export class PDFGenerator {
       const defaultLineBold = isTitle || isHeaderSection;
       const activeSize = isTitle ? fontSize + 0.5 : fontSize;
 
+      if (rawLine.includes('[TAB]')) {
+         const parts = rawLine.split('[TAB]');
+         const lText = parts[0].replace(/<\/?[^>]+(>|$)/g, "").trim();
+         const rText = parts[1].replace(/<\/?[^>]+(>|$)/g, "").trim();
+         
+         page.drawText(lText, { x: margin, y: cursorY, size: activeSize, font: font, color: rgb(0.05, 0.05, 0.05) });
+         const rWidth = font.widthOfTextAtSize(rText, activeSize);
+         page.drawText(rText, { x: width - margin - rWidth, y: cursorY, size: activeSize, font: font, color: rgb(0.05, 0.05, 0.05) });
+         
+         cursorY -= activeSize * 1.8;
+         continue;
+      }
+
       // Tokenização inteligente de palavras preservando a formatação de negrito no meio da linha
       const wordsWithFormat = [];
       let boldActive = false;
@@ -337,11 +385,12 @@ export class PDFGenerator {
       }
     }
 
-    // 3. Inserir Carimbos (Forçado na mesma página se houver espaço)
+    // 3. Inserir Carimbos e Assinatura (Forçado na mesma página se houver espaço)
     const stampImg = await embedImage(assets.carimbo_url);
     const stampRespImg = await embedImage(assets.carimbo_responsavel_url);
+    const signatureImg = await embedImage(assets.assinatura_responsavel_url);
     
-    if (stampImg || stampRespImg) {
+    if (stampImg || stampRespImg || signatureImg) {
       // Se o texto chegou perto do rodapé, move os carimbos para uma nova página
       if (cursorY < 180) { 
         page = pdfDoc.addPage([595.28, 841.89]);
@@ -349,9 +398,22 @@ export class PDFGenerator {
       }
 
       // Calcula o Y dinamicamente para o carimbo ficar colado ao final do texto (margem de assinatura)
+      const MAX_STAMP_WIDTH = 180;
+      const MAX_STAMP_HEIGHT = 80;
+      
+      const getScaledDims = (img) => {
+         let w = img.width;
+         let h = img.height;
+         const scaleW = MAX_STAMP_WIDTH / w;
+         const scaleH = MAX_STAMP_HEIGHT / h;
+         const scale = Math.min(scaleW, scaleH, 1);
+         return { width: w * scale, height: h * scale };
+      };
+
       let maxImgHeight = 80;
-      if (stampRespImg) maxImgHeight = Math.max(maxImgHeight, stampRespImg.scale(0.55).height);
-      if (stampImg) maxImgHeight = Math.max(maxImgHeight, stampImg.scale(0.55).height);
+      if (stampRespImg) maxImgHeight = Math.max(maxImgHeight, getScaledDims(stampRespImg).height);
+      if (stampImg) maxImgHeight = Math.max(maxImgHeight, getScaledDims(stampImg).height);
+      if (signatureImg) maxImgHeight = Math.max(maxImgHeight, getScaledDims(signatureImg).height);
 
       let baseStampY = cursorY - maxImgHeight + 40;
       
@@ -361,7 +423,7 @@ export class PDFGenerator {
       }
 
       if (stampRespImg) {
-        const dims = stampRespImg.scale(0.55); // Ajustado para não ser gigante
+        const dims = getScaledDims(stampRespImg);
         page.drawImage(stampRespImg, {
           x: margin,
           y: baseStampY,
@@ -371,9 +433,19 @@ export class PDFGenerator {
       }
 
       if (stampImg) {
-        const dims = stampImg.scale(0.55);
+        const dims = getScaledDims(stampImg);
         page.drawImage(stampImg, {
           x: width - margin - dims.width,
+          y: baseStampY,
+          width: dims.width,
+          height: dims.height,
+        });
+      }
+
+      if (signatureImg) {
+        const dims = getScaledDims(signatureImg);
+        page.drawImage(signatureImg, {
+          x: (width / 2) - (dims.width / 2),
           y: baseStampY,
           width: dims.width,
           height: dims.height,
