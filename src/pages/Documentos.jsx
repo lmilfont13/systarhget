@@ -312,9 +312,8 @@ export default function Documentos() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleGenerate = async (e, overrideFormData = null) => {
-    if (e) e.preventDefault();
-    if (!selectedTemplate) {
+  const handleGenerate = async (overrideFormData = null) => {
+    if (!activeTemplate) {
       toast.error('Selecione um template primeiro.');
       return;
     }
@@ -405,7 +404,8 @@ export default function Documentos() {
           finalFormDataForFunc['CARGO'] = currentFunc.cargo ? String(currentFunc.cargo).toLowerCase() : '';
           finalFormDataForFunc['empresa'] = funcEmpresa?.nome || '';
           finalFormDataForFunc['EMPRESA'] = funcEmpresa?.nome || '';
-          finalFormDataForFunc['loja'] = multiFuncData[currentFunc.id]?.['loja'] || multiFuncData[currentFunc.id]?.['LOJA'] || formData['loja'] || formData['LOJA'] || '';
+          const baseData = overrideFormData || formData;
+          finalFormDataForFunc['loja'] = multiFuncData[currentFunc.id]?.['loja'] || multiFuncData[currentFunc.id]?.['LOJA'] || baseData['loja'] || baseData['LOJA'] || '';
           finalFormDataForFunc['LOJA'] = finalFormDataForFunc['loja'];
 
           if (activeTemplate?.fields) {
@@ -555,7 +555,7 @@ export default function Documentos() {
         setGeneratedCartaId(lastCartaId);
         setGeneratedCartaName(lastGeneratedName);
         setGeneratedBlobUrl(lastGeneratedBlobUrl);
-        setShareModalOpen(true);
+        // setShareModalOpen(true); // Ocultado a pedido do usuário
       }
       
       toast.success(`${generatedCount} documento(s) gerado(s) com sucesso!`);
@@ -699,7 +699,7 @@ export default function Documentos() {
             itemCount++;
             const { descKey, valKey } = getKeys(itemCount);
             
-            newFormData[descKey] = cdc && cdc !== descricao ? `${cdc}` : descricao;
+            newFormData[descKey] = cdc && cdc !== descricao ? `${cdc}` : descricao.replace(/\s*R\$$/i, '');
             newFormData[valKey]  = valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             newFormData[`descricao_${itemCount}`] = newFormData[descKey];
             newFormData[`valor_${itemCount}`]     = newFormData[valKey];
@@ -744,14 +744,13 @@ export default function Documentos() {
       }
       
       setFormData(newFormData);
-      toast.success(`${itemCount} itens importados e Total calculado (R$ ${newFormData['total']})! Gerando documento...`);
+      toast.success(`${itemCount} despesas importadas e somadas! Total: R$ ${newFormData.total}`);
       setIsImportModalOpen(false);
       setImportText('');
-      
-      // Chamar direto para evitar que o navegador bloqueie o download
-      handleGenerate(null, newFormData);
+      return newFormData;
     } else {
       toast.warning('Não foi possível identificar os itens e valores. Verifique se copiou a tabela completa.');
+      return null;
     }
   };
 
@@ -1052,7 +1051,7 @@ export default function Documentos() {
               if (selectedFuncionarios.length > 1) {
                 setIsMultiFuncModalOpen(true);
               } else {
-                handleGenerate(e);
+                handleGenerate();
               }
             }} className="space-y-6">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
@@ -1385,7 +1384,14 @@ export default function Documentos() {
                 Cancelar
               </button>
               <button 
-                onClick={handleProcessImport}
+                onClick={() => {
+                  const parsedData = handleProcessImport();
+                  if (parsedData) {
+                    setTimeout(() => {
+                      handleGenerate(parsedData);
+                    }, 100);
+                  }
+                }}
                 className="px-5 py-2.5 rounded-xl bg-[#8A2BE2] hover:bg-purple-700 text-white font-bold shadow-sm transition-all flex items-center gap-2 text-sm"
               >
                 <Wand2 className="w-4 h-4" /> Processar Dados
@@ -1551,9 +1557,8 @@ export default function Documentos() {
                 Cancelar
               </button>
               <button
-                onClick={(e) => {
-                  setIsMultiFuncModalOpen(false);
-                  handleGenerate(e);
+                onClick={() => {
+                  handleGenerate();
                 }}
                 className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/20 transition-all"
               >
