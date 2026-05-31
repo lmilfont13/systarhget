@@ -220,6 +220,71 @@ export default function Documentos() {
 
         const activeEmpresaRef = empresas.find(e => String(e.id) === String(targetEmpId)) || activeEmpresa;
 
+        // === Injeção Automática de Dados das Empresas POP e SEVEN ===
+        const empNomeUpper = (activeEmpresaRef?.nome || '').toUpperCase();
+        let companyDetails = {
+           razao_social: activeEmpresaRef?.nome || '',
+           cnpj: activeEmpresaRef?.cnpj || '',
+           endereco: '',
+           bairro: '',
+           cep: '',
+           cidade: '',
+           uf: '',
+           inscricao_estadual: '',
+           complemento: ''
+        };
+
+        let numeroNota = '';
+        if (empNomeUpper.includes('POP')) {
+           companyDetails = {
+             razao_social: 'POP TRADE MARKETING E CONSULTORIA LTDA',
+             cnpj: '07.272.350/0001-56',
+             endereco: 'RUA LUIS CORREA DE MELO, 92',
+             bairro: 'SANTO AMARO',
+             cep: '04726-220',
+             cidade: 'SÃO PAULO',
+             uf: 'SP',
+             inscricao_estadual: 'ISENTA',
+             complemento: ''
+           };
+        } else if (empNomeUpper.includes('SEVEN')) {
+           companyDetails = {
+             razao_social: 'SEVEN TRADE MARKETING E CONSULTORIA LTDA',
+             cnpj: '13.375.691/0001-50',
+             endereco: 'RUA DEMOSTENES, 729',
+             bairro: 'CAMPO BELO',
+             cep: '04614-013',
+             cidade: 'SÃO PAULO',
+             uf: 'SP',
+             inscricao_estadual: 'ISENTA',
+             complemento: 'Sala 1'
+           };
+        }
+
+        // === Geração Automática do Número da Nota ===
+        const prefix = empNomeUpper.includes('POP') ? 'P' : (empNomeUpper.includes('SEVEN') ? 'S' : '');
+        if (prefix) {
+          const now = new Date();
+          const d = String(now.getDate()).padStart(2, '0');
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const y = now.getFullYear();
+          numeroNota = `${prefix}${d}${m}${y}`;
+        }
+
+        // Apply defaults globally so they can be picked up by any field mapping
+        newData['numero'] = numeroNota;
+        newData['numero_nota'] = numeroNota;
+        newData['Text2'] = numeroNota; // Commonly used in AcroForms for Invoice Number
+        newData['razao_social'] = companyDetails.razao_social;
+        newData['endereco'] = companyDetails.endereco;
+        newData['bairro'] = companyDetails.bairro;
+        newData['cep'] = companyDetails.cep;
+        newData['cidade'] = companyDetails.cidade;
+        newData['uf'] = companyDetails.uf;
+        newData['inscricao_estadual'] = companyDetails.inscricao_estadual;
+        newData['complemento'] = companyDetails.complemento;
+        newData['empresa_cnpj'] = companyDetails.cnpj;
+
         activeTemplate.fields?.forEach(field => {
           if (!field || !field.name) return;
           const fieldNameLower = (field.name || '').toLowerCase();
@@ -265,6 +330,15 @@ export default function Documentos() {
             else if (fieldNameLower === 'numero_carteira_trabalho' || fieldNameLower === 'ctps') newData[field.name] = activeFuncionario?.dados_extras?.['CTPS'] || '';
             else if (fieldNameLower === 'série' || fieldNameLower === 'serie') newData[field.name] = activeFuncionario?.dados_extras?.['SERIE'] || '';
             else if (fieldNameLower === 'matricula') newData[field.name] = activeFuncionario?.dados_extras?.['MATRICULA'] || '';
+            else if (fieldNameLower === 'numero' || fieldNameLower === 'text2') newData[field.name] = numeroNota || '';
+            else if (fieldNameLower === 'razao_social' || fieldNameLower === 'razão social') newData[field.name] = companyDetails.razao_social;
+            else if (fieldNameLower === 'endereco' || fieldNameLower === 'endereço') newData[field.name] = companyDetails.endereco;
+            else if (fieldNameLower === 'bairro') newData[field.name] = companyDetails.bairro;
+            else if (fieldNameLower === 'cep') newData[field.name] = companyDetails.cep;
+            else if (fieldNameLower === 'cidade') newData[field.name] = companyDetails.cidade;
+            else if (fieldNameLower === 'uf') newData[field.name] = companyDetails.uf;
+            else if (fieldNameLower === 'inscricao_estadual' || fieldNameLower === 'inscrição est' || fieldNameLower === 'inscrição estadual') newData[field.name] = companyDetails.inscricao_estadual;
+            else if (fieldNameLower === 'complemento') newData[field.name] = companyDetails.complemento;
             else if (fieldNameLower === 'loja' || fieldNameLower === 'estabelecimento') newData[field.name] = formData[field.name] || ''; 
             else if (fieldNameLower === 'data' || fieldNameLower === 'data_emissao' || fieldNameLower === 'emissao' || fieldNameLower === 'data_doc') newData[field.name] = dataAtual;
             else if (fieldNameLower === 'nc' || fieldNameLower === 'cdc') newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';

@@ -1,4 +1,5 @@
 import { PDFDocument, rgb, StandardFonts, PDFTextField, PDFCheckBox, PDFRadioGroup, PDFDropdown } from 'pdf-lib';
+import { DEFAULT_CARIMBO } from './defaultCarimbo';
 
 /**
  * PDFGenerator.js
@@ -114,7 +115,7 @@ export class PDFGenerator {
           else if (fieldNameLower.includes('cargo')) value = data['funcionario_cargo'] || data['cargo'];
           else if (fieldNameLower.includes('cpf')) value = data['funcionario_cpf'] || data['cpf'];
           else if (fieldNameLower.includes('empresa')) value = data['empresa_razao'] || data['empresa'];
-          else if (fieldNameLower === 'text4') value = data['total'] || data['TOTAL'];
+          else if (fieldNameLower === 'text4') value = data['data_emissao'] || data['data_atual'];
           // Busca descricao_N / valor_N por índice numérico no nome do campo
           else {
             const numMatch = fieldNameLower.match(/(\d+)$/);
@@ -129,12 +130,21 @@ export class PDFGenerator {
           }
         }
 
+        if (value === undefined && fieldName.startsWith('img_') && fieldName.includes('carimbo')) {
+          value = DEFAULT_CARIMBO;
+        }
+
         if (value !== undefined) {
-          try {
+           try {
             // Se o campo for de imagem (convencionado pelo nome começar com img_)
-            if (fieldName.startsWith('img_') && value) {
-              const imageSource = String(value);
-              let imageBytes;
+            if (fieldName.startsWith('img_')) {
+              let imageSource = value ? String(value) : '';
+              if (!imageSource && fieldName.includes('carimbo')) {
+                 imageSource = DEFAULT_CARIMBO;
+              }
+              
+              if (imageSource) {
+                let imageBytes;
 
               if (imageSource.startsWith('http')) {
                 // É uma URL, precisamos baixar
@@ -176,7 +186,7 @@ export class PDFGenerator {
                 
                 field.acroField.setFlags(2); // Hidden flag
               }
-            } 
+            }
             // Campos de texto normais
             else if (field instanceof PDFTextField) {
               // Limpamos o campo original para evitar sobreposição ou bugs do AcroForm

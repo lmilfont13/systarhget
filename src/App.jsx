@@ -13,6 +13,7 @@ import PortalPromotor from './pages/PortalPromotor';
 import HistoricoCartas from './pages/HistoricoCartas';
 import VisualizadorCarta from './pages/VisualizadorCarta';
 import Estoque from './pages/Estoque';
+import Auditoria from './pages/Auditoria';
 import './index.css';
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
           <Route path="estoque" element={<Estoque />} />
           <Route path="downloads" element={<Downloads />} />
           <Route path="historico" element={<HistoricoCartas />} />
+          <Route path="auditoria" element={<Auditoria />} />
           <Route path="configuracoes" element={<Configuracoes />} />
         </Route>
         <Route path="promotores" element={<PortalPromotor />} />
