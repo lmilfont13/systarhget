@@ -11,8 +11,22 @@ export class PDFGenerator {
    * @param {Uint8Array | ArrayBuffer} pdfBytes 
    * @returns {Array<{ name: string, type: string }>}
    */
-  static async extractFields(pdfBytes) {
+  static async extractFields(pdfInput) {
     try {
+      let pdfBytes = pdfInput;
+      if (typeof pdfInput === 'string') {
+        if (pdfInput.startsWith('http')) {
+           const response = await fetch(pdfInput);
+           pdfBytes = await response.arrayBuffer();
+        } else {
+           const binaryString = atob(pdfInput.replace(/^data:application\/pdf;base64,/, ''));
+           const len = binaryString.length;
+           pdfBytes = new Uint8Array(len);
+           for (let i = 0; i < len; i++) {
+             pdfBytes[i] = binaryString.charCodeAt(i);
+           }
+        }
+      }
       const pdfDoc = await PDFDocument.load(pdfBytes);
       const form = pdfDoc.getForm();
       const fields = form.getFields();
@@ -516,42 +530,6 @@ export class PDFGenerator {
    * @param {Uint8Array} pdfBytes 
    * @returns {Promise<string>} O Blob URL do PDF de preview
    */
-  static async extractFields(pdfUrl) {
-    const response = await fetch(pdfUrl);
-    const arrayBuffer = await response.arrayBuffer();
-    const pdfDoc = await PDFDocument.load(arrayBuffer);
-    const form = pdfDoc.getForm();
-    const fields = form.getFields();
-
-    return fields.map(field => {
-      let type = 'unknown';
-      if (field.constructor.name === 'PDFTextField') type = 'text';
-      if (field.constructor.name === 'PDFCheckBox') type = 'checkbox';
-      if (field.constructor.name === 'PDFRadioGroup') type = 'radio';
-      if (field.constructor.name === 'PDFDropdown') type = 'dropdown';
-      
-      let y = 0;
-      let x = 0;
-      try {
-        const widgets = field.acroField.getWidgets();
-        if (widgets.length > 0) {
-          const rect = widgets[0].getRectangle();
-          y = rect.y;
-          x = rect.x;
-        }
-      } catch (e) { }
-
-      return {
-        name: field.getName(),
-        type,
-        y,
-        x
-      };
-    }).sort((a, b) => {
-      if (Math.abs(b.y - a.y) > 5) return b.y - a.y;
-      return a.x - b.x;
-    });
-  }
 
   static async generatePreviewWithFieldNames(pdfBytes) {
     const pdfDoc = await PDFDocument.load(pdfBytes);
