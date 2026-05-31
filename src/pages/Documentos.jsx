@@ -672,8 +672,32 @@ export default function Documentos() {
           
           if (descricao && valor > 0) {
             itemCount++;
-            const descKey = itemCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${itemCount - 1}`;
-            const valKey  = itemCount === 1 ? 'VALOR' : `VALOR_${itemCount - 1}`;
+            let descKey = `DESCRIÇÃO DA DESPESA_${itemCount}`;
+            let valKey = `VALOR_${itemCount}`;
+            
+            if (activeTemplate && activeTemplate.fields) {
+               const variableFields = activeTemplate.fields.filter(f => {
+                   const low = f.name.toLowerCase();
+                   return f.type === 'text' &&
+                          !['numero', 'data_emissao', 'empresa', 'bairro', 'cep', 'cnpj', 'cidade', 'uf', 'complemento', 'endereco', 'assinatura', 'carimbo', 'banco', 'agencia', 'conta_corrente', 'observacoes', 'funcionario'].some(k => low.includes(k));
+               });
+               
+               const isGeneric = variableFields.some(f => f.name.toLowerCase().includes('text'));
+               if (isGeneric || variableFields.length > 0) {
+                 const idxDesc = (itemCount - 1) * 2;
+                 const idxVal = idxDesc + 1;
+                 
+                 if (idxDesc < variableFields.length - 1) descKey = variableFields[idxDesc].name;
+                 if (idxVal < variableFields.length - 1) valKey = variableFields[idxVal].name;
+               } else {
+                 descKey = itemCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${itemCount - 1}`;
+                 valKey  = itemCount === 1 ? 'VALOR' : `VALOR_${itemCount - 1}`;
+               }
+            } else {
+               descKey = itemCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${itemCount - 1}`;
+               valKey  = itemCount === 1 ? 'VALOR' : `VALOR_${itemCount - 1}`;
+            }
+            
             newFormData[descKey] = cdc && cdc !== descricao ? `${cdc}` : descricao;
             newFormData[valKey]  = valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             newFormData[`descricao_${itemCount}`] = newFormData[descKey];
@@ -694,7 +718,21 @@ export default function Documentos() {
     if (itemCount > 0) {
       if (totalValue > 0) {
         newFormData.total = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        newFormData.TOTAL = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        newFormData.TOTAL = newFormData.total;
+        
+        // Mapear dinamicamente o campo TOTAL caso ele seja um TextX genérico (o último dos variáveis)
+        if (activeTemplate && activeTemplate.fields) {
+           const variableFields = activeTemplate.fields.filter(f => {
+               const low = f.name.toLowerCase();
+               return f.type === 'text' &&
+                      !['numero', 'data_emissao', 'empresa', 'bairro', 'cep', 'cnpj', 'cidade', 'uf', 'complemento', 'endereco', 'assinatura', 'carimbo', 'banco', 'agencia', 'conta_corrente', 'observacoes', 'funcionario'].some(k => low.includes(k));
+           });
+           if (variableFields.length > 0) {
+               const lastField = variableFields[variableFields.length - 1];
+               newFormData[lastField.name] = newFormData.total;
+           }
+        }
+        
         newFormData.tabela_valores = tabelaValores.trim();
         newFormData.TABELA_VALORES = tabelaValores.trim();
       }
