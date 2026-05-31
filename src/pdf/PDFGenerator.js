@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, PDFTextField, PDFCheckBox, PDFRadioGroup, PDFDropdown } from 'pdf-lib';
 
 /**
  * PDFGenerator.js
@@ -33,10 +33,10 @@ export class PDFGenerator {
       
       return fields.map(field => {
         let type = 'unknown';
-        if (field.constructor.name === 'PDFTextField') type = 'text';
-        if (field.constructor.name === 'PDFCheckBox') type = 'checkbox';
-        if (field.constructor.name === 'PDFRadioGroup') type = 'radio';
-        if (field.constructor.name === 'PDFDropdown') type = 'dropdown';
+        if (field instanceof PDFTextField) type = 'text';
+        if (field instanceof PDFCheckBox) type = 'checkbox';
+        if (field instanceof PDFRadioGroup) type = 'radio';
+        if (field instanceof PDFDropdown) type = 'dropdown';
         
         let y = 0;
         let x = 0;
@@ -178,7 +178,7 @@ export class PDFGenerator {
               }
             } 
             // Campos de texto normais
-            else if (field.constructor.name === 'PDFTextField') {
+            else if (field instanceof PDFTextField) {
               // Limpamos o campo original para evitar sobreposição ou bugs do AcroForm
               field.setText('');
               
@@ -204,7 +204,7 @@ export class PDFGenerator {
                   maxWidth: rect.width - 4, // Faz quebra de linha se for muito longo
                 });
               }
-            } else if (field.constructor.name === 'PDFCheckBox') {
+            } else if (field instanceof PDFCheckBox) {
               if (value === true || value === 'true' || value === 'Sim') {
                 field.check();
               } else {
