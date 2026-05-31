@@ -2,6 +2,60 @@ import { PDFDocument, rgb, StandardFonts, PDFTextField, PDFCheckBox, PDFRadioGro
 import { DEFAULT_CARIMBO } from './defaultCarimbo';
 
 /**
+ * Utilitário para remover fundo branco de assinaturas
+ */
+const removeWhiteBackground = async (imageSource) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i+1];
+          const b = data[i+2];
+          
+          // Fundo claro (branco/cinza claro) vira transparente
+          if (r > 160 && g > 160 && b > 160) {
+            data[i+3] = 0; // Alpha = 0
+          } else {
+            // Opcional: Escurecer um pouco o traço
+            data[i] = Math.max(0, r - 30);
+            data[i+1] = Math.max(0, g - 30);
+            data[i+2] = Math.max(0, b - 30);
+          }
+        }
+        
+        ctx.putImageData(imgData, 0, 0);
+        const dataUrl = canvas.toDataURL('image/png');
+        
+        // Converte o dataUrl para Uint8Array
+        const cleanBase64 = dataUrl.split(',')[1];
+        const binaryString = atob(cleanBase64);
+        const imageBytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          imageBytes[i] = binaryString.charCodeAt(i);
+        }
+        resolve(imageBytes);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = (err) => reject(err);
+    img.src = imageSource;
+  });
+};
+
+/**
  * PDFGenerator.js
  * Módulo central para manipulação e preenchimento de PDFs utilizando pdf-lib.
  */
@@ -82,6 +136,15 @@ export class PDFGenerator {
       const form = pdfDoc.getForm();
       const fields = form.getFields();
       
+      // Ordena para que carimbos sejam desenhados PRIMEIRO, e assinaturas POR CIMA
+      fields.sort((a, b) => {
+         const nameA = a.getName().toLowerCase();
+         const nameB = b.getName().toLowerCase();
+         const weightA = nameA.includes('carimbo') ? -1 : (nameA.includes('assinatura') ? 1 : 0);
+         const weightB = nameB.includes('carimbo') ? -1 : (nameB.includes('assinatura') ? 1 : 0);
+         return weightA - weightB;
+      });
+      
       console.log('--- CAMPOS DETECTADOS NO PDF ---');
       fields.forEach(f => console.log(`Campo: ${f.getName()}`));
       console.log('-------------------------------');
@@ -146,18 +209,23 @@ export class PDFGenerator {
               if (imageSource) {
                 let imageBytes;
 
-                if (imageSource.startsWith('http')) {
-                  // É uma URL, precisamos baixar
-                  const response = await fetch(imageSource);
-                  const arrayBuffer = await response.arrayBuffer();
-                  imageBytes = new Uint8Array(arrayBuffer);
+                if (fieldName.includes('assinatura')) {
+                  // Se for assinatura, removemos o fundo branco ativamente para ficar transparente sobre o carimbo
+                  imageBytes = await removeWhiteBackground(imageSource);
                 } else {
-                  // Assume que é base64
-                  const cleanBase64 = imageSource.includes(',') ? imageSource.split(',')[1] : imageSource;
-                  const binaryString = atob(cleanBase64);
-                  imageBytes = new Uint8Array(binaryString.length);
-                  for (let i = 0; i < binaryString.length; i++) {
-                    imageBytes[i] = binaryString.charCodeAt(i);
+                  if (imageSource.startsWith('http')) {
+                    // É uma URL, precisamos baixar
+                    const response = await fetch(imageSource);
+                    const arrayBuffer = await response.arrayBuffer();
+                    imageBytes = new Uint8Array(arrayBuffer);
+                  } else {
+                    // Assume que é base64
+                    const cleanBase64 = imageSource.includes(',') ? imageSource.split(',')[1] : imageSource;
+                    const binaryString = atob(cleanBase64);
+                    imageBytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                      imageBytes[i] = binaryString.charCodeAt(i);
+                    }
                   }
                 }
                 
