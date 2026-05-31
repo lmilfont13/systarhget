@@ -294,7 +294,6 @@ export class PDFGenerator {
             console.error(`Erro ao preencher campo ${fieldName}:`, e);
           }
         }
-    }
       }
 
       // === Injeção Dinâmica de Tabela via Coordenadas Visuais ===
