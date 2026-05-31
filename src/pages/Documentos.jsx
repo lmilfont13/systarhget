@@ -61,7 +61,7 @@ export default function Documentos() {
   // Estados para o compartilhamento de PDF e histórico
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importText, setImportText] = useState('');
+  const [importItems, setImportItems] = useState([]);
   const [generatedCartaId, setGeneratedCartaId] = useState(null);
   const [generatedCartaName, setGeneratedCartaName] = useState('');
   const [generatedBlobUrl, setGeneratedBlobUrl] = useState(null);
@@ -568,29 +568,13 @@ export default function Documentos() {
   };
 
   const handleProcessImport = () => {
-    if (!importText.trim()) {
-      toast.error('Cole os dados da tabela SAP/TOTVS primeiro.');
-      return;
+    if (importItems.length === 0) {
+      toast.error('Cole os dados da planilha primeiro dando Ctrl+V na área indicada.');
+      return null;
     }
 
-    // Formato SAP/TOTVS:
-    // Linha 0: Descrição (CONTRATACAO MENSAL PUBLICIDADE E PROPAGANDA)
-    // Linha 1: Quantidade (1)
-    // Linha 2: Valor unitário (595,00)
-    // Linha 3: Valor total (595,00)
-    // Linha 4: Código serviço (GERES38419 - ...)
-    // Linha 5: Prazo (30)
-    // Linhas 6-8: Vazias
-    // Linha 9: CDC - identificador do funcionário (64462 CE - FLD - AKZO...)
-    // Linha 10: Vazia (separador do próximo bloco)
-    
-    const allLines = importText.split('\n');
     const newFormData = { ...formData };
-    let itemCount = 0;
     let totalValue = 0;
-    let tabelaValores = '';
-    
-    // Identificar cada bloco: começa com "CONTRATACAO" ou linha não numérica com letras maiúsculas
     
     // Função auxiliar para obter as chaves de descrição e valor dinamicamente baseada no template
     const getKeys = (idxCount) => {
@@ -615,60 +599,91 @@ export default function Documentos() {
       return { descKey: dKey, valKey: vKey };
     };
 
-    let i = 0;
-    while (i < allLines.length) {
-      const line = allLines[i].trim();
+    importItems.forEach((item, index) => {
+      const idxCount = index + 1;
+      const { descKey, valKey } = getKeys(idxCount);
       
-      // Pular linhas vazias
-      if (!line) { i++; continue; }
+      newFormData[descKey] = item.cdc && item.cdc !== item.descricao ? `${item.cdc}` : item.descricao;
+      newFormData[valKey]  = item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      newFormData[`descricao_${idxCount}`] = newFormData[descKey];
+      newFormData[`valor_${idxCount}`]     = newFormData[valKey];
+      totalValue += item.valor;
+    });
+    
+    newFormData.total = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    newFormData.TOTAL = newFormData.total;
+
+    setFormData(newFormData);
+    toast.success(`${importItems.length} despesas importadas e somadas! Total: R$ ${newFormData.total}`);
+    setIsImportModalOpen(false);
+    setImportItems([]);
+    return newFormData;
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const clipboardData = e.clipboardData || window.clipboardData;
+    const pastedData = clipboardData.getData('text');
+    
+    if (!pastedData) return;
+
+    const rows = pastedData.split('\n');
+    const newItems = [];
+    
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i].trim();
+      if (!row) continue;
       
-      // Verificar se a linha já é um item completo (formato lista: Descrição + Valor)
-      // Modificado para aceitar também R$ em linha separada mas capturado se estiver tudo junto
-      // Tenta encontrar qualquer valor monetário (com ou sem R$, com ou sem espaços) no final da string
-      const flatListMatch = line.match(/^(.*?)(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/i) 
-                         || line.match(/^(.*?)(?:R\$\s*)?(\d+,\d{2})\s*$/i);
+      const cols = row.split('\t');
+      if (cols.length >= 2) {
+        // Excel format with tabs
+        const potentialValue = cols[cols.length - 1].trim();
+        const valueMatch = potentialValue.match(/^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})$/);
+        
+        if (valueMatch) {
+           let desc = cols.slice(0, cols.length - 1).join(' ').trim();
+           desc = desc.replace(/\s*R\$$/i, '').trim();
+           const valor = parseFloat(valueMatch[1].replace(/\./g, '').replace(',', '.'));
+           newItems.push({ id: Date.now() + i, descricao: desc, valor, cdc: '' });
+           continue;
+        }
+      }
+      
+      // Fallback: SAP block or string
+      const flatListMatch = row.match(/^(.*?)(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/i) 
+                         || row.match(/^(.*?)(?:R\$\s*)?(\d+,\d{2})\s*$/i);
       
       if (flatListMatch && flatListMatch[1].trim().length > 0) {
-         const descricao = flatListMatch[1].trim();
+         let desc = flatListMatch[1].trim();
+         desc = desc.replace(/\s*R\$$/i, '').trim();
          const valorStr = flatListMatch[2];
          const valor = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
-         
-         if (descricao && valor > 0) {
-            itemCount++;
-            const { descKey, valKey } = getKeys(itemCount);
-            
-            newFormData[descKey] = descricao;
-            newFormData[valKey]  = valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            newFormData[`descricao_${itemCount}`] = newFormData[descKey];
-            newFormData[`valor_${itemCount}`]     = newFormData[valKey];
-            totalValue += valor;
-            
-            tabelaValores += `${descricao}[TAB]R$ ${newFormData[valKey]}\n`;
-         }
-         i++;
+         newItems.push({ id: Date.now() + i, descricao: desc, valor, cdc: '' });
          continue;
       }
       
-      const isDescriptionLine = line.length > 5 
-        && !/^\d+$/.test(line)
-        && !line.match(/^\d+,\d{2}$/)
-        && !line.match(/^GERES\d+/)
-        && !/^R\$\s*$/.test(line);
-      
-      if (isDescriptionLine) {
-        const blockLines = [];
-        let j = i;
-        let nonEmptyCount = 0;
-        while (j < allLines.length && nonEmptyCount < 10) {
-          const bl = allLines[j].trim();
-          if (bl) {
-            blockLines.push(bl);
-            nonEmptyCount++;
-          }
-          j++;
-          if (nonEmptyCount >= 2 && j < allLines.length) {
-            const nextLine = allLines[j] ? allLines[j].trim() : '';
-            if (nextLine.length > 5 && !/^\d+$/.test(nextLine) && !nextLine.match(/^\d+,\d{2}$/) && !/^R\$\s*$/.test(nextLine)) {
+      // Lookahead for next line if it's an SAP block split
+      if (i + 1 < rows.length) {
+         const nextLine = rows[i+1].trim();
+         const nextMatch = nextLine.match(/^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})$/);
+         if (nextMatch) {
+            let desc = row.replace(/\s*R\$$/i, '').trim();
+            const valor = parseFloat(nextMatch[1].replace(/\./g, '').replace(',', '.'));
+            newItems.push({ id: Date.now() + i, descricao: desc, valor, cdc: '' });
+            i++; 
+            continue;
+         }
+      }
+    }
+    
+    if (newItems.length > 0) {
+      setImportItems(prev => [...prev, ...newItems]);
+      toast.success(`${newItems.length} itens extraídos da planilha!`);
+    } else {
+      toast.error('Não conseguimos extrair as colunas. Verifique se copiou a Descrição e o Valor do Excel.');
+    }
+  };
+    
               const hasValue = blockLines.some(b => b.match(/^R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})$/) || b.match(/^(\d{1,3}(?:\.\d{3})*,\d{2})$/));
               if (hasValue) break;
             }
@@ -1365,15 +1380,77 @@ export default function Documentos() {
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-4">
-              <p className="text-sm text-slate-600">Cole abaixo o conteúdo copiado da planilha ou sistema SAP/TOTVS. O sistema irá extrair automaticamente as <b>descrições</b> e <b>valores</b> para preencher o formulário.</p>
+            <div className="p-6 overflow-y-auto space-y-4 max-h-[60vh]">
+              <p className="text-sm text-slate-600">Copie as linhas da sua planilha do Excel ou relatório SAP e clique na área abaixo, depois pressione <kbd className="px-2 py-1 bg-slate-100 rounded border font-mono text-xs text-slate-600">Ctrl + V</kbd></p>
               
-              <textarea
-                value={importText}
-                onChange={(e) => setImportText(e.target.value)}
-                placeholder="Exemplo:\nCONTRATACAO MENSAL PUBLICIDADE E PROPAGANDA\n1\n595,00\n...\n64462 CE - FLD - AKZO..."
-                className="w-full h-64 rounded-xl border border-slate-200 p-4 text-sm font-mono text-slate-700 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-slate-50/50"
-              />
+              <div 
+                onPaste={handlePaste}
+                tabIndex="0"
+                className="w-full min-h-[100px] border-2 border-dashed border-purple-200 rounded-xl bg-purple-50/50 flex flex-col items-center justify-center text-center p-6 cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-purple-100/50 transition-all group"
+              >
+                <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-focus:scale-110 transition-transform">
+                  <Wand2 className="w-6 h-6 text-purple-500" />
+                </div>
+                <h4 className="font-bold text-slate-700">Cole seus dados aqui</h4>
+                <p className="text-sm text-slate-500 mt-1">O sistema irá separar as colunas magicamente.</p>
+              </div>
+
+              {importItems.length > 0 && (
+                <div className="mt-6 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Descrição da Despesa</th>
+                        <th className="px-4 py-3 font-semibold w-32">Valor (R$)</th>
+                        <th className="px-4 py-3 font-semibold w-12 text-center"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {importItems.map((item, idx) => (
+                        <tr key={item.id} className="hover:bg-slate-50/50">
+                          <td className="px-4 py-2">
+                            <input 
+                              type="text" 
+                              value={item.descricao} 
+                              onChange={(e) => setImportItems(prev => prev.map(p => p.id === item.id ? { ...p, descricao: e.target.value } : p))}
+                              className="w-full bg-transparent border-0 focus:ring-0 p-0 text-slate-700"
+                            />
+                          </td>
+                          <td className="px-4 py-2 font-mono">
+                            <input 
+                              type="text" 
+                              value={item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
+                              onChange={(e) => {
+                                 const raw = e.target.value.replace(/[^\d,-]/g, '').replace(',', '.');
+                                 const val = parseFloat(raw) || 0;
+                                 setImportItems(prev => prev.map(p => p.id === item.id ? { ...p, valor: val } : p));
+                              }}
+                              className="w-full bg-transparent border-0 focus:ring-0 p-0 text-slate-700 font-medium"
+                            />
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <button 
+                              onClick={() => setImportItems(prev => prev.filter(p => p.id !== item.id))}
+                              className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-purple-50/50 border-t border-purple-100">
+                      <tr>
+                        <td className="px-4 py-3 font-bold text-right text-purple-900">Total:</td>
+                        <td className="px-4 py-3 font-bold font-mono text-purple-700">
+                           {importItems.reduce((acc, item) => acc + item.valor, 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
             </div>
             
             <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 mt-auto">
