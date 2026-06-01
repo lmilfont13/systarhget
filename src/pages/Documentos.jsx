@@ -274,8 +274,9 @@ export default function Documentos() {
         // Apply defaults globally so they can be picked up by any field mapping
         newData['numero'] = numeroNota;
         newData['numero_nota'] = numeroNota;
-        newData['Text2'] = numeroNota; // Commonly used in AcroForms for Invoice Number
+        newData['NÚMERO'] = numeroNota; // Acroform specific
         newData['razao_social'] = companyDetails.razao_social;
+        newData['empresa'] = companyDetails.razao_social; // Acroform specific
         newData['endereco'] = companyDetails.endereco;
         newData['bairro'] = companyDetails.bairro;
         newData['cep'] = companyDetails.cep;
@@ -284,6 +285,14 @@ export default function Documentos() {
         newData['inscricao_estadual'] = companyDetails.inscricao_estadual;
         newData['complemento'] = companyDetails.complemento;
         newData['empresa_cnpj'] = companyDetails.cnpj;
+        newData['cnpj'] = companyDetails.cnpj; // Acroform specific
+
+        // Date fields (Text2 = DD, Text3 = MM, Text4 = YYYY)
+        const now = new Date();
+        newData['Text2'] = String(now.getDate()).padStart(2, '0');
+        newData['Text3'] = String(now.getMonth() + 1).padStart(2, '0');
+        newData['Text4'] = String(now.getFullYear());
+        newData['data_emissao'] = dataAtual;
 
         activeTemplate.fields?.forEach(field => {
           if (!field || !field.name) return;
@@ -718,6 +727,7 @@ export default function Documentos() {
     
     newFormData.total = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     newFormData.TOTAL = newFormData.total;
+    newFormData.Text1 = newFormData.total; // Acroform specific for TOTAL
 
     // Pass the raw array for coordinate-based table auto-mapping in PDFGenerator
     newFormData._expensesArray = importItems.map(item => ({
@@ -1489,12 +1499,7 @@ export default function Documentos() {
               </button>
               <button 
                 onClick={() => {
-                  const parsedData = handleProcessImport();
-                  if (parsedData) {
-                    setTimeout(() => {
-                      handleGenerate(parsedData);
-                    }, 100);
-                  }
+                  handleProcessImport();
                 }}
                 className="px-5 py-2.5 rounded-xl bg-[#8A2BE2] hover:bg-purple-700 text-white font-bold shadow-sm transition-all flex items-center gap-2 text-sm"
               >

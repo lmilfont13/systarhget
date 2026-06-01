@@ -365,23 +365,37 @@ export class PDFGenerator {
                for (let i = 0; i < data._expensesArray.length; i++) {
                    const expense = data._expensesArray[i];
                    
-                   page.drawText(String(expense.descricao || ''), {
-                      x: baseDescRect.x + 2,
-                      y: currentY + 2,
-                      size: 8,
-                      font: font,
-                      color: rgb(0, 0, 0),
-                      maxWidth: baseDescRect.width - 4,
-                   });
+                   try {
+                     const cleanText = (str) => {
+                         if (!str) return '';
+                         return String(str)
+                             .replace(/[–—]/g, '-')
+                             .replace(/[“”]/g, '"')
+                             .replace(/[‘’]/g, "'")
+                             .replace(/[\u2022\u2023\u25E6\u2043\u2219]/g, '-')
+                             .replace(/[^\x20-\x7E\xA0-\xFF]/g, ''); // Remove qualquer outro Unicode exótico que não caiba no WinAnsi
+                     };
 
-                   page.drawText(String(expense.valor || ''), {
-                      x: baseValRect.x + 2,
-                      y: currentY + 2,
-                      size: 8,
-                      font: font,
-                      color: rgb(0, 0, 0),
-                      maxWidth: baseValRect.width - 4,
-                   });
+                     page.drawText(cleanText(expense.descricao), {
+                        x: baseDescRect.x + 2,
+                        y: currentY + 2,
+                        size: 8,
+                        font: font,
+                        color: rgb(0, 0, 0),
+                        maxWidth: baseDescRect.width - 4,
+                     });
+
+                     page.drawText(cleanText(expense.valor), {
+                        x: baseValRect.x + 2,
+                        y: currentY + 2,
+                        size: 8,
+                        font: font,
+                        color: rgb(0, 0, 0),
+                        maxWidth: baseValRect.width - 4,
+                     });
+                   } catch (innerErr) {
+                     console.error('Erro ao desenhar item da tabela:', innerErr);
+                   }
 
                    currentY -= ROW_HEIGHT;
                }
