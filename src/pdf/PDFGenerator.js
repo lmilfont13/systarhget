@@ -330,35 +330,25 @@ export class PDFGenerator {
          try {
            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
            const pages = pdfDoc.getPages();
-           const page = pages[0];
+           let page = pages[0];
            
            let baseDescRect = null;
            let baseValRect = null;
-
-           // Limpar qualquer campo que pareça ser da tabela de despesas para evitar sobreposição
+           
+           // Se o template já tiver campos específicos de tabela
            for (const field of fields) {
-              const name = field.getName().toUpperCase();
-              if (name.includes('DESCRIÇÃO') || name.includes('DESCRICAO') || name.includes('VALOR')) {
-                  if (field instanceof PDFTextField) {
-                      try {
-                        field.setText('');
-                        field.updateAppearances(font); // Atualizar a aparência para efetivamente apagar o texto visual
-                      } catch(e) {}
-                  }
-                  
-                  if (!baseDescRect && (name.includes('DESCRIÇÃO') || name.includes('DESCRICAO'))) {
-                     const widgets = field.acroField.getWidgets();
-                     if (widgets.length > 0) baseDescRect = widgets[0].getRectangle();
-                  }
-                  if (!baseValRect && name.includes('VALOR')) {
-                     const widgets = field.acroField.getWidgets();
-                     if (widgets.length > 0) baseValRect = widgets[0].getRectangle();
-                  }
-              }
+               const name = field.getName().toUpperCase();
+               if (name.includes('DESCRICAO_1') || name.includes('DESPESA_1')) {
+                   const widgets = field.acroField.getWidgets();
+                   if (widgets.length > 0) baseDescRect = widgets[0].getRectangle();
+               }
+               if (name.includes('VALOR_1')) {
+                   const widgets = field.acroField.getWidgets();
+                   if (widgets.length > 0) baseValRect = widgets[0].getRectangle();
+               }
            }
 
-           // Fallback: se o usuário usou o gerador automático do Acrobat (campos Text1...Text31)
-           // Limpamos todos os campos 'Text' que estão na área visual da tabela e forçamos as coordenadas conhecidas
+           // Fallback: limpar campos Text intrusos gerados pelo Acrobat na área da tabela
            if (!baseDescRect || !baseValRect) {
                for (const field of fields) {
                    const name = field.getName().toUpperCase();
@@ -366,8 +356,8 @@ export class PDFGenerator {
                        const widgets = field.acroField.getWidgets();
                        if (widgets.length > 0) {
                            const y = widgets[0].getRectangle().y;
-                           // Área da tabela na Nota de Débito é aprox entre Y=450 e Y=620
-                           if (y > 450 && y < 620) {
+                           // Expandindo a área de limpeza para capturar campos logo acima da primeira linha
+                           if (y > 400 && y < 640) {
                                if (field instanceof PDFTextField) {
                                    try { field.setText(''); field.updateAppearances(font); } catch(e) {}
                                }
@@ -380,26 +370,44 @@ export class PDFGenerator {
                baseValRect = { x: 504, y: 613, width: 59, height: 8 };
            }
            
+           // Aplainar o formulário AGORA, para que os campos sejam "impressos" no PDF
+           // Assim, se precisarmos duplicar a página, as cópias terão o cabeçalho preenchido!
+           try {
+             form.flatten();
+           } catch (e) {
+             console.warn("Aviso ao achatar formulário:", e);
+           }
+
            if (baseDescRect && baseValRect) {
-               // Encontramos as colunas base!
-               const ROW_HEIGHT = 15; // Altura fixa da linha (evita problemas de campos desenhados um em cima do outro no PDF)
-               let currentY = baseDescRect.y;
+               const ROW_HEIGHT = 15;
+               const MAX_ROWS = 12;
+               
+               // Cria novas páginas se houver muitas linhas
+               const numPagesRequired = Math.ceil(data._expensesArray.length / MAX_ROWS);
+               for (let p = 1; p < numPagesRequired; p++) {
+                   const [copiedPage] = await pdfDoc.copyPages(pdfDoc, [0]);
+                   pdfDoc.addPage(copiedPage);
+               }
+
+               const cleanText = (str) => {
+                   if (!str) return '';
+                   return String(str)
+                       .replace(/[–—]/g, '-')
+                       .replace(/[“”]/g, '"')
+                       .replace(/[‘’]/g, "'")
+                       .replace(/[\u2022\u2023\u25E6\u2043\u2219]/g, '-')
+                       .replace(/[^\x20-\x7E\xA0-\xFF]/g, '');
+               };
 
                for (let i = 0; i < data._expensesArray.length; i++) {
                    const expense = data._expensesArray[i];
+                   const pageIndex = Math.floor(i / MAX_ROWS);
+                   const rowIndex = i % MAX_ROWS;
+                   const currentPage = pdfDoc.getPages()[pageIndex];
+                   const currentY = baseDescRect.y - (rowIndex * ROW_HEIGHT);
                    
                    try {
-                     const cleanText = (str) => {
-                         if (!str) return '';
-                         return String(str)
-                             .replace(/[–—]/g, '-')
-                             .replace(/[“”]/g, '"')
-                             .replace(/[‘’]/g, "'")
-                             .replace(/[\u2022\u2023\u25E6\u2043\u2219]/g, '-')
-                             .replace(/[^\x20-\x7E\xA0-\xFF]/g, ''); // Remove qualquer outro Unicode exótico que não caiba no WinAnsi
-                     };
-
-                     page.drawText(cleanText(expense.descricao), {
+                     currentPage.drawText(cleanText(expense.descricao), {
                         x: baseDescRect.x + 2,
                         y: currentY + 2,
                         size: 8,
@@ -408,7 +416,7 @@ export class PDFGenerator {
                         maxWidth: baseDescRect.width - 4,
                      });
 
-                     page.drawText(cleanText(expense.valor), {
+                     currentPage.drawText(cleanText(expense.valor), {
                         x: baseValRect.x + 2,
                         y: currentY + 2,
                         size: 8,
@@ -419,12 +427,17 @@ export class PDFGenerator {
                    } catch (innerErr) {
                      console.error('Erro ao desenhar item da tabela:', innerErr);
                    }
-
-                   currentY -= ROW_HEIGHT;
                }
            }
          } catch(e) {
            console.error('Erro na injeção de tabela visual:', e);
+         }
+      } else {
+         // Se não houver array de despesas, aplaina o formulário normalmente no final
+         try {
+           form.flatten();
+         } catch (e) {
+           console.warn("Aviso ao achatar formulário:", e);
          }
       }
       
@@ -449,13 +462,6 @@ export class PDFGenerator {
             }
           }
         }
-      }
-
-      // Achatar o formulário para garantir que o texto seja visível em todos os leitores de PDF
-      try {
-        form.flatten();
-      } catch (e) {
-        console.warn("Aviso ao achatar formulário:", e);
       }
 
       // 3. Salvar o documento preenchido
