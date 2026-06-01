@@ -759,19 +759,26 @@ export default function Documentos() {
       if (!row) continue;
       
       const cols = row.split('\t');
+      let foundValue = false;
+      
       if (cols.length >= 2) {
-        // Excel format with tabs
-        const potentialValue = cols[cols.length - 1].trim();
-        const valueMatch = potentialValue.match(/^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})$/);
-        
-        if (valueMatch) {
-           let desc = cols.slice(0, cols.length - 1).join(' ').trim();
-           desc = desc.replace(/\s*R\$$/i, '').trim();
-           const valor = parseFloat(valueMatch[1].replace(/\./g, '').replace(',', '.'));
-           newItems.push({ id: Date.now() + i, descricao: desc, valor, cdc: '' });
-           continue;
+        // Search backwards for the first column that looks like a value
+        for (let j = cols.length - 1; j >= 1; j--) {
+          const potentialValue = cols[j].trim();
+          const valueMatch = potentialValue.match(/^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})$/) || potentialValue.match(/^(?:R\$\s*)?(\d+,\d{2})$/);
+          
+          if (valueMatch) {
+             let desc = cols.slice(0, j).join(' ').trim();
+             desc = desc.replace(/\s*R\$$/i, '').trim();
+             const valor = parseFloat(valueMatch[1].replace(/\./g, '').replace(',', '.'));
+             newItems.push({ id: Date.now() + i, descricao: desc, valor, cdc: '' });
+             foundValue = true;
+             break;
+          }
         }
       }
+      
+      if (foundValue) continue;
       
       // Fallback: SAP block or string
       const flatListMatch = row.match(/^(.*?)(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/i) 
@@ -789,7 +796,7 @@ export default function Documentos() {
       // Lookahead for next line if it's an SAP block split
       if (i + 1 < rows.length) {
          const nextLine = rows[i+1].trim();
-         const nextMatch = nextLine.match(/^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})$/);
+         const nextMatch = nextLine.match(/^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})$/) || nextLine.match(/^(?:R\$\s*)?(\d+,\d{2})$/);
          if (nextMatch) {
             let desc = row.replace(/\s*R\$$/i, '').trim();
             const valor = parseFloat(nextMatch[1].replace(/\./g, '').replace(',', '.'));
