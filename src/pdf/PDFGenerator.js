@@ -249,13 +249,24 @@ export class PDFGenerator {
                   }
                   
                   // Força a assinatura a ficar POR CIMA do carimbo
-                  if (fieldName.includes('assinatura') && lastCarimboRect) {
-                    rect = {
-                      x: lastCarimboRect.x + 15, // Deslocamento para parecer natural
-                      y: lastCarimboRect.y + 5,
-                      width: lastCarimboRect.width - 30,
-                      height: lastCarimboRect.height - 10
-                    };
+                  if (fieldName.includes('assinatura')) {
+                    if (lastCarimboRect) {
+                      rect = {
+                        x: lastCarimboRect.x + 15, // Deslocamento para parecer natural
+                        y: lastCarimboRect.y + 5,
+                        width: lastCarimboRect.width - 30,
+                        height: lastCarimboRect.height - 10
+                      };
+                    } else {
+                      // Se não existir campo de carimbo, movemos a assinatura 
+                      // 150 pixels para a esquerda para cobrir o carimbo estático
+                      rect = {
+                        x: rect.x - 150, 
+                        y: rect.y,
+                        width: rect.width * 1.2,
+                        height: rect.height * 1.2
+                      };
+                    }
                   }
                   
                   const pages = pdfDoc.getPages();
