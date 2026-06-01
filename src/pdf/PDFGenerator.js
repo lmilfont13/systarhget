@@ -356,6 +356,29 @@ export class PDFGenerator {
                   }
               }
            }
+
+           // Fallback: se o usuário usou o gerador automático do Acrobat (campos Text1...Text31)
+           // Limpamos todos os campos 'Text' que estão na área visual da tabela e forçamos as coordenadas conhecidas
+           if (!baseDescRect || !baseValRect) {
+               for (const field of fields) {
+                   const name = field.getName().toUpperCase();
+                   if (name.startsWith('TEXT')) {
+                       const widgets = field.acroField.getWidgets();
+                       if (widgets.length > 0) {
+                           const y = widgets[0].getRectangle().y;
+                           // Área da tabela na Nota de Débito é aprox entre Y=450 e Y=620
+                           if (y > 450 && y < 620) {
+                               if (field instanceof PDFTextField) {
+                                   try { field.setText(''); field.updateAppearances(font); } catch(e) {}
+                               }
+                           }
+                       }
+                   }
+               }
+               // Coordenadas fixas do layout padrão da Nota de Débito
+               baseDescRect = { x: 55, y: 613, width: 448, height: 8 };
+               baseValRect = { x: 504, y: 613, width: 59, height: 8 };
+           }
            
            if (baseDescRect && baseValRect) {
                // Encontramos as colunas base!

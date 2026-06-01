@@ -287,12 +287,8 @@ export default function Documentos() {
         newData['empresa_cnpj'] = companyDetails.cnpj;
         newData['cnpj'] = companyDetails.cnpj; // Acroform specific
 
-        // Date fields (Text2 = DD, Text3 = MM, Text4 = YYYY)
-        const now = new Date();
-        newData['Text2'] = String(now.getDate()).padStart(2, '0');
-        newData['Text3'] = String(now.getMonth() + 1).padStart(2, '0');
-        newData['Text4'] = String(now.getFullYear());
         newData['data_emissao'] = dataAtual;
+        newData['DATA DE EMISSÃO'] = dataAtual;
 
         activeTemplate.fields?.forEach(field => {
           if (!field || !field.name) return;
@@ -727,7 +723,7 @@ export default function Documentos() {
     
     newFormData.total = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     newFormData.TOTAL = newFormData.total;
-    newFormData.Text1 = newFormData.total; // Acroform specific for TOTAL
+
 
     // Pass the raw array for coordinate-based table auto-mapping in PDFGenerator
     newFormData._expensesArray = importItems.map(item => ({
