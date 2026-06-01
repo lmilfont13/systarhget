@@ -21,18 +21,17 @@ const removeWhiteBackground = async (imageSource) => {
         
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
-          const g = data[i+1];
-          const b = data[i+2];
+          // Usa luminância para separar o traço da caneta do fundo do papel
+          // Caneta = bem escuro (luminância baixa), Fundo = cinza/branco (luminância mais alta)
+          const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
           
-          // Fundo claro ou cinza médio (foto) vira transparente
-          // Assinaturas a caneta costumam ser bem escuras, então r,g,b > 100 vai remover todo o fundo cinza
-          if (r > 100 && g > 100 && b > 100) {
-            data[i+3] = 0; // Alpha = 0
+          if (luminance > 110) {
+            data[i+3] = 0; // Alpha = 0 (Transparente)
           } else {
-            // Opcional: Escurecer um pouco o traço
-            data[i] = Math.max(0, r - 50);
-            data[i+1] = Math.max(0, g - 50);
-            data[i+2] = Math.max(0, b - 50);
+            // Caneta escura - mantemos a cor, mas escurecemos um pouco para contraste
+            data[i] = Math.max(0, r - 30);
+            data[i+1] = Math.max(0, g - 30);
+            data[i+2] = Math.max(0, b - 30);
           }
         }
         
