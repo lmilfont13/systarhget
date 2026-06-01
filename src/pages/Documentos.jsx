@@ -287,6 +287,12 @@ export default function Documentos() {
         newData['empresa_cnpj'] = companyDetails.cnpj;
         newData['cnpj'] = companyDetails.cnpj; // Acroform specific
 
+        // Date fields (Text2 = DD, Text3 = MM, Text4 = YYYY)
+        const now = new Date();
+        newData['Text2'] = String(now.getDate()).padStart(2, '0');
+        newData['Text3'] = String(now.getMonth() + 1).padStart(2, '0');
+        newData['Text4'] = String(now.getFullYear());
+        
         newData['data_emissao'] = dataAtual;
         newData['DATA DE EMISSÃO'] = dataAtual;
 
