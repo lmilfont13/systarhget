@@ -24,14 +24,15 @@ const removeWhiteBackground = async (imageSource) => {
           const g = data[i+1];
           const b = data[i+2];
           
-          // Fundo claro (branco/cinza claro) vira transparente
-          if (r > 160 && g > 160 && b > 160) {
+          // Fundo claro ou cinza médio (foto) vira transparente
+          // Assinaturas a caneta costumam ser bem escuras, então r,g,b > 100 vai remover todo o fundo cinza
+          if (r > 100 && g > 100 && b > 100) {
             data[i+3] = 0; // Alpha = 0
           } else {
             // Opcional: Escurecer um pouco o traço
-            data[i] = Math.max(0, r - 30);
-            data[i+1] = Math.max(0, g - 30);
-            data[i+2] = Math.max(0, b - 30);
+            data[i] = Math.max(0, r - 50);
+            data[i+1] = Math.max(0, g - 50);
+            data[i+2] = Math.max(0, b - 50);
           }
         }
         
@@ -146,8 +147,9 @@ export class PDFGenerator {
       });
       
       console.log('--- CAMPOS DETECTADOS NO PDF ---');
-      fields.forEach(f => console.log(`Campo: ${f.getName()}`));
       console.log('-------------------------------');
+      
+      let lastCarimboRect = null;
       
       for (const field of fields) {
         const fieldName = field.getName();
@@ -241,7 +243,22 @@ export class PDFGenerator {
                 // Pega a localização do campo no PDF
                 const widgets = field.acroField.getWidgets();
                 if (widgets && widgets.length > 0) {
-                  const rect = widgets[0].getRectangle();
+                  let rect = widgets[0].getRectangle();
+                  
+                  if (fieldName.includes('carimbo')) {
+                    lastCarimboRect = rect;
+                  }
+                  
+                  // Força a assinatura a ficar POR CIMA do carimbo
+                  if (fieldName.includes('assinatura') && lastCarimboRect) {
+                    rect = {
+                      x: lastCarimboRect.x + 15, // Deslocamento para parecer natural
+                      y: lastCarimboRect.y + 5,
+                      width: lastCarimboRect.width - 30,
+                      height: lastCarimboRect.height - 10
+                    };
+                  }
+                  
                   const pages = pdfDoc.getPages();
                   const page = pages[0]; 
 
