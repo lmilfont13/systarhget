@@ -114,8 +114,9 @@ export default function Templates() {
     if (!window.confirm(`Excluir o template "${fileName}"?`)) return;
     
     try {
-      // 1. Primeiro removemos as cartas geradas associadas para evitar erro de Foreign Key
+      // 1. Primeiro removemos as cartas geradas e assinaturas pendentes associadas
       await supabase.from('cartas_geradas').delete().eq('template_id', id);
+      await supabase.from('assinaturas_pendentes').delete().eq('template_id', id);
       
       // 2. Agora excluímos o template
       const table = type === 'text' ? 'templates' : 'pdf_templates';
