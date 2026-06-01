@@ -488,11 +488,14 @@ export class PDFGenerator {
     let cursorY = height - margin;
 
     // Helper para carregar imagens (URL ou Base64)
-    const embedImage = async (url) => {
+    const embedImage = async (url, isSignature = false) => {
       if (!url) return null;
       try {
         let imageBytes;
-        if (typeof url === 'string' && url.startsWith('data:')) {
+        
+        if (isSignature) {
+          imageBytes = await removeWhiteBackground(url);
+        } else if (typeof url === 'string' && url.startsWith('data:')) {
           const base64 = url.split(',')[1];
           const binaryString = atob(base64);
           imageBytes = Uint8Array.from(binaryString, c => c.charCodeAt(0));
@@ -658,7 +661,7 @@ export class PDFGenerator {
     // 3. Inserir Carimbos e Assinatura (Forçado na mesma página se houver espaço)
     const stampImg = await embedImage(assets.carimbo_url);
     const stampRespImg = await embedImage(assets.carimbo_responsavel_url);
-    const signatureImg = await embedImage(assets.assinatura_responsavel_url);
+    const signatureImg = await embedImage(assets.assinatura_responsavel_url, true); // Passa true para remover fundo
     
     if (stampImg || stampRespImg || signatureImg) {
       // Se o texto chegou perto do rodapé, move os carimbos para uma nova página
@@ -714,9 +717,21 @@ export class PDFGenerator {
 
       if (signatureImg) {
         const dims = getScaledDims(signatureImg);
+        
+        let targetX = (width / 2) - (dims.width / 2); // default center
+        let targetY = baseStampY;
+        
+        // Se existe o carimbo da Vanessa na esquerda, coloca a assinatura SOBRE ele!
+        if (stampRespImg) {
+           targetX = margin + 15; // Joga pra esquerda, no mesmo lugar do carimbo
+           targetY = baseStampY + 5;
+           dims.width = dims.width * 0.9; // Diminui um pouco para caber dentro
+           dims.height = dims.height * 0.9;
+        }
+        
         page.drawImage(signatureImg, {
-          x: (width / 2) - (dims.width / 2),
-          y: baseStampY,
+          x: targetX,
+          y: targetY,
           width: dims.width,
           height: dims.height,
         });
