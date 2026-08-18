@@ -200,7 +200,34 @@ export class PDFGenerator {
           value = DEFAULT_CARIMBO;
         }
 
-        if (value !== undefined) {
+        if (value !== undefined && value !== null) {
+           // 1. Formatação Inteligente de CPF (Garante 11 dígitos com zeros à esquerda)
+           if (fieldNameLower.includes('cpf')) {
+             let cleanCpf = String(value).replace(/\D/g, '');
+             if (cleanCpf.length > 0 && cleanCpf.length <= 11) {
+               cleanCpf = cleanCpf.padStart(11, '0');
+               value = cleanCpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+             }
+           }
+           
+           // 2. Formatação Inteligente de Datas (Força DD/MM/AAAA)
+           if (fieldNameLower.includes('data') || fieldNameLower.includes('competencia') || fieldNameLower.includes('inicial') || fieldNameLower.includes('final') || fieldNameLower.includes('demissao') || fieldNameLower.includes('emissao') || fieldNameLower === 'text4') {
+              const strVal = String(value).trim();
+              // Se vier do padrão ISO (YYYY-MM-DD) do formulário HTML date
+              if (strVal.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                 const [y, m, d] = strVal.split('-');
+                 value = `${d}/${m}/${y}`;
+              } 
+              // Se vier do Excel já com barras mas sem zeros à esquerda ou ano com 2 dígitos
+              else if (strVal.match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) {
+                 let [d, m, y] = strVal.split('/');
+                 d = d.padStart(2, '0');
+                 m = m.padStart(2, '0');
+                 if (y.length === 2) y = '20' + y;
+                 value = `${d}/${m}/${y}`;
+              }
+           }
+
            try {
             // Se o campo for de imagem (convencionado pelo nome começar com img_)
             if (fieldName.startsWith('img_')) {
@@ -483,9 +510,93 @@ export class PDFGenerator {
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const margin = 60;
     const { width, height } = page.getSize();
-    const fontSize = 10.5;
+    const maxWidth = width - (margin * 2);
+
+    // Limpa todas as tags HTML EXCETO <b>, <strong>, </b>, </strong> para mantermos negritos sob medida
+    const cleanContent = content
+      .replace(/<(?!b\b|strong\b|\/b\b|\/strong\b)[^>]*>/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/[^\x20-\x7E\xA0-\xFF\n<>\/a-zA-Z]/g, ''); 
     
-    let cursorY = height - margin;
+    const rawLines = cleanContent.split('\n');
+
+    // Layout loop to find optimal font size so everything fits on a single sheet
+    let bestFontSize = 10.5;
+    const minFontSize = 8.0;
+    const hasStamps = (assets.carimbo_url || assets.carimbo_responsavel_url || assets.assinatura_responsavel_url);
+    const minAllowedY = hasStamps ? 160 : 60;
+
+    const simulateLayout = (fSize) => {
+      let simY = height - margin - 120; // Começa abaixo do cabeçalho
+      
+      for (const rawLine of rawLines) {
+        const isTitle = (rawLine.toUpperCase() === rawLine && rawLine.length > 5 && !rawLine.includes('<') && !rawLine.startsWith('REF.:'));
+        const isHeaderSection = rawLine.trim().endsWith(':') && rawLine.length < 50;
+        const lineFontSize = isTitle ? fSize + 0.5 : fSize;
+        
+        if (rawLine.includes('[TAB]')) {
+          simY -= lineFontSize * 1.8;
+          continue;
+        }
+        
+        const wordsWithFormat = [];
+        let boldActive = false;
+        const parts = rawLine.split(/(<\/?[b|strong]>)/gi);
+        for (const part of parts) {
+          if (!part) continue;
+          const partLower = part.toLowerCase();
+          if (partLower === '<b>' || partLower === '<strong>') {
+            boldActive = true;
+          } else if (partLower === '</b>' || partLower === '</strong>') {
+            boldActive = false;
+          } else {
+            const words = part.split(/(\s+)/);
+            for (const word of words) {
+              if (word) {
+                wordsWithFormat.push({ text: word, isBold: boldActive || isTitle || isHeaderSection });
+              }
+            }
+          }
+        }
+        
+        if (wordsWithFormat.length === 0) {
+          simY -= fSize * 1.2;
+          continue;
+        }
+        
+        let currentLineWidth = 0;
+        let lineCount = 1;
+        
+        for (const wordObj of wordsWithFormat) {
+          const activeFont = wordObj.isBold ? fontBold : font;
+          const wordWidth = activeFont.widthOfTextAtSize(wordObj.text, lineFontSize);
+          
+          if (currentLineWidth + wordWidth > maxWidth) {
+            lineCount++;
+            currentLineWidth = wordWidth;
+          } else {
+            currentLineWidth += wordWidth;
+          }
+        }
+        
+        simY -= lineFontSize * 1.5 * (lineCount - 1);
+        simY -= lineFontSize * (isTitle ? 2.0 : 1.8);
+      }
+      return simY;
+    };
+
+    while (bestFontSize > minFontSize) {
+      const finalY = simulateLayout(bestFontSize);
+      if (finalY >= minAllowedY) {
+        break;
+      }
+      bestFontSize -= 0.5;
+    }
+
+    const fontSize = bestFontSize;
+    let cursorY = height - margin - 120;
 
     // Helper para carregar imagens (URL ou Base64)
     const embedImage = async (url, isSignature = false) => {
@@ -546,19 +657,7 @@ export class PDFGenerator {
       color: rgb(0.2, 0.2, 0.2),
     });
 
-    cursorY = height - margin - 120;
-
     // 2. Inserir Conteúdo (Texto)
-    // Limpa todas as tags HTML EXCETO <b>, <strong>, </b>, </strong> para mantermos negritos sob medida
-    const cleanContent = content
-      .replace(/<(?!b\b|strong\b|\/b\b|\/strong\b)[^>]*>/g, '')
-      .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/[^\x20-\x7E\xA0-\xFF\n<>\/a-zA-Z]/g, ''); 
-    
-    const rawLines = cleanContent.split('\n');
-    const maxWidth = width - (margin * 2);
 
     for (const rawLine of rawLines) {
       // Regra de títulos inteiros em negrito (ex: AO CLIENTE, seções inteiras em maiúsculas sem tags)
@@ -664,11 +763,6 @@ export class PDFGenerator {
     const signatureImg = await embedImage(assets.assinatura_responsavel_url, true); // Passa true para remover fundo
     
     if (stampImg || stampRespImg || signatureImg) {
-      // Se o texto chegou perto do rodapé, move os carimbos para uma nova página
-      if (cursorY < 180) { 
-        page = pdfDoc.addPage([595.28, 841.89]);
-        cursorY = height - margin;
-      }
 
       // Calcula o Y dinamicamente para o carimbo ficar colado ao final do texto (margem de assinatura)
       const MAX_STAMP_WIDTH = 180;

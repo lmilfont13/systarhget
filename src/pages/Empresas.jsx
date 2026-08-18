@@ -10,6 +10,7 @@ export default function Empresas() {
   
   // Modal State
   const [editModal, setEditModal] = useState({ isOpen: false, data: null });
+  const [imageErrors, setImageErrors] = useState({});
 
   useEffect(() => {
     fetchEmpresas();
@@ -45,48 +46,30 @@ export default function Empresas() {
 
     setIsSubmitting(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const bucketName = field === 'logo_url' ? 'logos' : 'carimbos';
-      
-      // Tenta upload no Storage do Supabase
-      const { data, error } = await supabase.storage
-        .from(bucketName)
-        .upload(fileName, file);
-
-      if (!error) {
-        // Se funcionou, pega a URL pública
-        const { data: { publicUrl } } = supabase.storage
-          .from(bucketName)
-          .getPublicUrl(fileName);
-        
+      const reader = new FileReader();
+      reader.onload = () => {
         setEditModal(prev => ({
           ...prev,
-          data: { ...prev.data, [field]: publicUrl }
+          data: { ...prev.data, [field]: reader.result }
         }));
-        toast.success('Upload concluído no servidor.');
-      } else {
-        // Se falhou (ex: bucket não existe), usa Base64 como fallback
-        console.warn('Falha no upload para o storage, usando Base64:', error.message);
-        const reader = new FileReader();
-        reader.onload = () => {
-          setEditModal(prev => ({
-            ...prev,
-            data: { ...prev.data, [field]: reader.result }
-          }));
-          toast.info('Imagem salva localmente no banco (Nuvem indisponível).');
-        };
-        reader.readAsDataURL(file);
-      }
+        setImageErrors(prev => ({ ...prev, [field]: false }));
+        toast.success('Upload de imagem processado com sucesso!');
+        setIsSubmitting(false);
+      };
+      reader.onerror = () => {
+        toast.error('Erro ao ler a imagem.');
+        setIsSubmitting(false);
+      };
+      reader.readAsDataURL(file);
     } catch (error) {
       console.error('Erro no upload:', error);
       toast.error('Erro ao processar imagem.');
-    } finally {
       setIsSubmitting(false);
     }
   };
 
   const openNew = () => {
+    setImageErrors({});
     setEditModal({
       isOpen: true,
       data: {
@@ -110,7 +93,15 @@ export default function Empresas() {
 
     setIsSubmitting(true);
     try {
-      const payload = { nome, email_responsavel, rodape, logo_url, carimbo_url, carimbo_funcionario_url, assinatura_responsavel_url };
+      const payload = { 
+        nome, 
+        email_responsavel: email_responsavel ? email_responsavel.trim() : `sem-email-${Date.now()}@docflow.local`, 
+        rodape, 
+        logo_url, 
+        carimbo_url, 
+        carimbo_funcionario_url, 
+        assinatura_responsavel_url 
+      };
 
       if (id) {
         const { error } = await supabase.from('empresas').update(payload).eq('id', id);
@@ -127,7 +118,8 @@ export default function Empresas() {
       setEditModal({ isOpen: false, data: null });
     } catch (error) {
       console.error(error);
-      toast.error('Erro ao salvar empresa. Verifique se as colunas estão corretas.');
+      const errMsg = error.message || error.details || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+      toast.error(`Erro ao salvar: ${errMsg}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -163,7 +155,7 @@ export default function Empresas() {
         </button>
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-lg border border-gray-100 overflow-hidden">
         {isLoading ? (
           <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-indigo-500" /></div>
         ) : empresas.length === 0 ? (
@@ -182,11 +174,14 @@ export default function Empresas() {
                   )}
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900">{empresa.nome}</h3>
-                    <p className="text-xs text-gray-500">{empresa.email_responsavel || 'Sem e-mail'}</p>
+                    <p className="text-xs text-gray-500">{(empresa.email_responsavel && !empresa.email_responsavel.includes('sem-email-')) ? empresa.email_responsavel : 'Sem e-mail'}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => setEditModal({ isOpen: true, data: empresa })} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md">
+                  <button onClick={() => {
+                    setImageErrors({});
+                    setEditModal({ isOpen: true, data: { ...empresa, email_responsavel: empresa.email_responsavel?.includes('sem-email-') ? '' : empresa.email_responsavel } });
+                  }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md">
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button onClick={() => handleDelete(empresa.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md">
@@ -201,7 +196,7 @@ export default function Empresas() {
 
       {editModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between bg-gray-50">
               <h3 className="text-lg font-semibold">{editModal.data.id ? 'Editar Empresa' : 'Nova Empresa'}</h3>
               <button onClick={() => setEditModal({ isOpen: false, data: null })}><X className="w-5 h-5 text-gray-400" /></button>
@@ -231,13 +226,16 @@ export default function Empresas() {
                         <img 
                           src={editModal.data.logo_url} 
                           alt="Logo" 
-                          className="max-h-24 object-contain" 
-                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                          className={`max-h-24 object-contain ${imageErrors.logo_url ? 'hidden' : ''}`} 
+                          onLoad={() => setImageErrors(prev => ({ ...prev, logo_url: false }))}
+                          onError={() => setImageErrors(prev => ({ ...prev, logo_url: true }))}
                         />
-                        <div className="hidden flex-col items-center text-gray-400">
-                          <ImageIcon className="w-6 h-6 mb-1" />
-                          <span className="text-[10px]">URL corrompida</span>
-                        </div>
+                        {imageErrors.logo_url && (
+                          <div className="flex flex-col items-center text-gray-400">
+                            <ImageIcon className="w-6 h-6 mb-1" />
+                            <span className="text-[10px]">URL corrompida</span>
+                          </div>
+                        )}
                         <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity rounded-md">
                           <ImageIcon className="w-4 h-4 mb-1" />
                           <span className="text-[10px]">Trocar</span>
@@ -263,13 +261,16 @@ export default function Empresas() {
                         <img 
                           src={editModal.data.carimbo_url} 
                           alt="Carimbo" 
-                          className="max-h-24 object-contain mix-blend-multiply" 
-                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                          className={`max-h-24 object-contain mix-blend-multiply ${imageErrors.carimbo_url ? 'hidden' : ''}`} 
+                          onLoad={() => setImageErrors(prev => ({ ...prev, carimbo_url: false }))}
+                          onError={() => setImageErrors(prev => ({ ...prev, carimbo_url: true }))}
                         />
-                        <div className="hidden flex-col items-center text-gray-400">
-                          <ImageIcon className="w-6 h-6 mb-1" />
-                          <span className="text-[10px]">URL corrompida</span>
-                        </div>
+                        {imageErrors.carimbo_url && (
+                          <div className="flex flex-col items-center text-gray-400">
+                            <ImageIcon className="w-6 h-6 mb-1" />
+                            <span className="text-[10px]">URL corrompida</span>
+                          </div>
+                        )}
                         <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity rounded-md">
                           <ImageIcon className="w-4 h-4 mb-1" />
                           <span className="text-[10px]">Trocar</span>
@@ -295,13 +296,16 @@ export default function Empresas() {
                         <img 
                           src={editModal.data.carimbo_funcionario_url} 
                           alt="Carimbo Resp" 
-                          className="max-h-24 object-contain mix-blend-multiply" 
-                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                          className={`max-h-24 object-contain mix-blend-multiply ${imageErrors.carimbo_funcionario_url ? 'hidden' : ''}`} 
+                          onLoad={() => setImageErrors(prev => ({ ...prev, carimbo_funcionario_url: false }))}
+                          onError={() => setImageErrors(prev => ({ ...prev, carimbo_funcionario_url: true }))}
                         />
-                        <div className="hidden flex-col items-center text-gray-400">
-                          <ImageIcon className="w-6 h-6 mb-1" />
-                          <span className="text-[10px]">URL corrompida</span>
-                        </div>
+                        {imageErrors.carimbo_funcionario_url && (
+                          <div className="flex flex-col items-center text-gray-400">
+                            <ImageIcon className="w-6 h-6 mb-1" />
+                            <span className="text-[10px]">URL corrompida</span>
+                          </div>
+                        )}
                         <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity rounded-md">
                           <ImageIcon className="w-4 h-4 mb-1" />
                           <span className="text-[10px]">Trocar</span>
@@ -327,13 +331,16 @@ export default function Empresas() {
                         <img 
                           src={editModal.data.assinatura_responsavel_url} 
                           alt="Assinatura Resp" 
-                          className="max-h-24 object-contain mix-blend-multiply" 
-                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                          className={`max-h-24 object-contain mix-blend-multiply ${imageErrors.assinatura_responsavel_url ? 'hidden' : ''}`} 
+                          onLoad={() => setImageErrors(prev => ({ ...prev, assinatura_responsavel_url: false }))}
+                          onError={() => setImageErrors(prev => ({ ...prev, assinatura_responsavel_url: true }))}
                         />
-                        <div className="hidden flex-col items-center text-gray-400">
-                          <ImageIcon className="w-6 h-6 mb-1" />
-                          <span className="text-[10px]">URL corrompida</span>
-                        </div>
+                        {imageErrors.assinatura_responsavel_url && (
+                          <div className="flex flex-col items-center text-gray-400">
+                            <ImageIcon className="w-6 h-6 mb-1" />
+                            <span className="text-[10px]">URL corrompida</span>
+                          </div>
+                        )}
                         <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity rounded-md">
                           <ImageIcon className="w-4 h-4 mb-1" />
                           <span className="text-[10px]">Trocar</span>
