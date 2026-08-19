@@ -1,9 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = 'https://bunnclexcjutrltuybam.supabase.co';
-const supabaseAnonKey = 'sb_publishable_d_csjPkdDkTkS8blr8Vekw_cxdR2J6k';
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { supabase } from '../src/lib/supabase.js';
 
 async function test() {
   const resEstoque = await supabase.from('estoque').select('*').limit(1);

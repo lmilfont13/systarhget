@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Store, Plus, Trash2, Edit2, X, Save, Search, MapPin, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '../lib/supabase';
+import { capitalizeStoreName } from '../lib/formatters';
 
 export default function Lojas() {
   const [lojas, setLojas] = useState([]);
@@ -11,19 +13,53 @@ export default function Lojas() {
   // Modal State
   const [editModal, setEditModal] = useState({ isOpen: false, data: null });
 
-  useEffect(() => {
-    fetchLojas();
-  }, []);
-
-  const fetchLojas = () => {
+  const fetchLojas = async () => {
     try {
       setIsLoading(true);
-      const savedLojas = localStorage.getItem('docflow_lojas');
-      if (savedLojas) {
-        setLojas(JSON.parse(savedLojas));
-      } else {
-        setLojas([]);
+      let savedLojas = [];
+      const savedLojasStr = localStorage.getItem('docflow_lojas');
+      if (savedLojasStr) {
+        savedLojas = JSON.parse(savedLojasStr);
       }
+
+      const { data: empresasData } = await supabase.from('empresas').select('lojas');
+      
+      let changed = false;
+      const lojasMap = new Map();
+      
+      savedLojas.forEach(l => {
+        lojasMap.set((l.nome || '').toLowerCase().trim(), l);
+      });
+
+      if (empresasData) {
+        empresasData.forEach(empresa => {
+          if (Array.isArray(empresa.lojas)) {
+            empresa.lojas.forEach(loja => {
+              if (!loja) return;
+              const cleanName = String(loja).trim().toLowerCase();
+              if (cleanName && !lojasMap.has(cleanName)) {
+                const capitalizedName = capitalizeStoreName(String(loja).trim());
+                const newLoja = {
+                  id: 'migrated-' + Math.random().toString(36).substr(2, 9),
+                  nome: capitalizedName,
+                  endereco: '',
+                  cidadeUf: '',
+                  cnpj: ''
+                };
+                lojasMap.set(cleanName, newLoja);
+                savedLojas.push(newLoja);
+                changed = true;
+              }
+            });
+          }
+        });
+      }
+
+      if (changed) {
+        localStorage.setItem('docflow_lojas', JSON.stringify(savedLojas));
+      }
+
+      setLojas(savedLojas);
     } catch (error) {
       console.error('Erro ao buscar lojas:', error);
       toast.error('Erro ao carregar lojas salvas.');
@@ -31,6 +67,11 @@ export default function Lojas() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line
+    fetchLojas();
+  }, []);
 
   const openNew = () => {
     setEditModal({
@@ -139,7 +180,7 @@ export default function Lojas() {
       </div>
 
       {/* Listagem de Lojas */}
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-lg border border-gray-100 overflow-hidden">
         {isLoading ? (
           <div className="p-12 flex justify-center items-center gap-3 text-indigo-600">
             <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
@@ -210,7 +251,7 @@ export default function Lojas() {
       {/* Modal Criar/Editar Loja */}
       {editModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-base font-semibold text-gray-900">
                 {editModal.data.id ? 'Editar Loja' : 'Nova Loja'}

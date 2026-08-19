@@ -10,10 +10,6 @@ export default function VisualizadorCarta() {
   const [carta, setCarta] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
 
-  useEffect(() => {
-    fetchCarta();
-  }, [id]);
-
   const fetchCarta = async () => {
     try {
       setLoading(true);
@@ -57,6 +53,11 @@ export default function VisualizadorCarta() {
     }
   };
 
+  useEffect(() => {
+    // eslint-disable-next-line
+    fetchCarta();
+  }, [id]);
+
   const handleDownload = () => {
     if (!pdfUrl || !carta) return;
     const link = document.createElement('a');
@@ -81,14 +82,14 @@ export default function VisualizadorCarta() {
   if (error) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center space-y-4 border border-slate-200">
+        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center space-y-4 border border-slate-200">
           <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
           <h2 className="text-lg font-bold text-slate-800">Falha ao abrir documento</h2>
           <p className="text-sm text-slate-500 leading-normal">{error}</p>
           <div className="pt-2">
             <button 
               onClick={fetchCarta}
-              className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/15"
+              className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/15"
             >
               Tentar Novamente
             </button>
@@ -111,7 +112,7 @@ export default function VisualizadorCarta() {
         </div>
         <button
           onClick={handleDownload}
-          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md shadow-indigo-600/10 active:scale-[0.98]"
+          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all shadow-md shadow-indigo-600/10 active:scale-[0.98]"
         >
           <Download className="w-4 h-4" />
           Baixar PDF
@@ -122,7 +123,7 @@ export default function VisualizadorCarta() {
       <main className="flex-1 p-4 md:p-8 flex flex-col items-center">
         <div className="max-w-4xl w-full space-y-4 flex flex-col flex-grow">
           {/* Info Card */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <span className="text-[9px] font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
                 Documento Autêntico
@@ -137,7 +138,7 @@ export default function VisualizadorCarta() {
             
             <button
               onClick={handleDownload}
-              className="sm:w-auto w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-850 text-white text-xs font-bold px-5 py-3 rounded-xl transition-all active:scale-[0.98]"
+              className="sm:w-auto w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-850 text-white text-xs font-bold px-5 py-3 rounded-lg transition-all active:scale-[0.98]"
             >
               <Download className="w-4 h-4" />
               Baixar Carta de Apresentação
@@ -145,7 +146,7 @@ export default function VisualizadorCarta() {
           </div>
 
           {/* Document Viewer Frame */}
-          <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden flex flex-col min-h-[450px]">
+          <div className="flex-1 bg-white rounded-lg border border-slate-200 shadow-md overflow-hidden flex flex-col min-h-[450px]">
             {isMobile ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
                 <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
@@ -159,7 +160,7 @@ export default function VisualizadorCarta() {
                 </div>
                 <button
                   onClick={handleDownload}
-                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-6 py-3 rounded-xl transition-all shadow-lg shadow-indigo-600/15"
+                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-6 py-3 rounded-lg transition-all shadow-lg shadow-indigo-600/15"
                 >
                   <Download className="w-4 h-4" />
                   Abrir PDF Oficial

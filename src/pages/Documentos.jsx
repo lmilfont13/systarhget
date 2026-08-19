@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { FileEdit, CheckCircle2, Loader2, FileText, Eye, Info, Search, Lock, MessageSquare, Copy, Download, X , Wand2} from 'lucide-react';
+import { Wrench, CheckCircle2, Copy, Download, Edit2, Eye, FileEdit, FileText, Info, Loader2, Search, Trash2, Wand2, X, Plus, Users, Building2, Tag, Link2, Hash, Lock, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { PDFGenerator } from '../pdf/PDFGenerator';
+import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
 
-// Função Auxiliar de Limpeza de Rodapé
 const cleanFooterText = (text) => {
   if (!text) return '';
   let clean = text.trim();
@@ -32,17 +32,22 @@ const cleanFooterText = (text) => {
   return clean;
 };
 
+const generateUniqueId = () => Date.now().toString();
+
 export default function Documentos() {
   const location = useLocation();
   const [templates, setTemplates] = useState([]);
   const [funcionarios, setFuncionarios] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   
+  const [funcSearchQuery, setFuncSearchQuery] = useState('');
+  const [isFuncDropdownOpen, setIsFuncDropdownOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [selectedFuncionarios, setSelectedFuncionarios] = useState([]);
   const [selectedEmpresa, setSelectedEmpresa] = useState('');
   
   const [formData, setFormData] = useState({});
+  const [includedFields, setIncludedFields] = useState({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lojas, setLojas] = useState([]);
@@ -57,6 +62,10 @@ export default function Documentos() {
   const [showBranding, setShowBranding] = useState(false);
   const [isMultiFuncModalOpen, setIsMultiFuncModalOpen] = useState(false);
   const [multiFuncData, setMultiFuncData] = useState({});
+
+  // Novos estados para validação de formulário (P1)
+  const [formErrors, setFormErrors] = useState({});
+  const [touched, setTouched] = useState({});
 
   // Estados para o compartilhamento de PDF e histórico
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -77,7 +86,7 @@ export default function Documentos() {
     const matchesEmpresa = !filterEmpresa || cdc.includes(filterEmpresa.toLowerCase());
     
     return matchesTerm && matchesEmpresa;
-  });
+  }).sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
 
   useEffect(() => {
     fetchData();
@@ -118,8 +127,10 @@ export default function Documentos() {
               seen.add(nameLower);
               let mappedTo = '';
               if (nameLower === 'empresa') mappedTo = 'empresa_razao';
-              if (nameLower === 'nome') mappedTo = 'funcionario_nome';
-              if (nameLower === 'cpf') mappedTo = 'funcionario_cpf';
+              else if (nameLower.includes('cpf')) mappedTo = 'funcionario_cpf';
+              else if (nameLower.includes('rg')) mappedTo = 'funcionario_rg';
+              else if (nameLower.includes('cargo')) mappedTo = 'funcionario_cargo';
+              else if (nameLower.includes('nome') || nameLower.includes('promotor') || nameLower.includes('funcionario')) mappedTo = 'funcionario_nome';
               fields.push({ name, mappedTo });
             }
           });
@@ -155,7 +166,7 @@ export default function Documentos() {
         setSelectedTemplate(tplId);
       }
       if (funcId && fData.data?.find(f => String(f.id) === String(funcId))) {
-        setSelectedFuncionario(funcId);
+        setSelectedFuncionarios([funcId]);
       }
       if (empId && eData.data?.find(e => String(e.id) === String(empId))) {
         setSelectedEmpresa(empId);
@@ -197,6 +208,7 @@ export default function Documentos() {
     if (activeTemplate && activeFuncionario) {
       try {
         const newData = { ...formData };
+        const newIncluded = { ...includedFields };
         const companySettings = JSON.parse(localStorage.getItem('companySettings') || '{}');
         const dataAtual = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
@@ -298,6 +310,7 @@ export default function Documentos() {
 
         activeTemplate.fields?.forEach(field => {
           if (!field || !field.name) return;
+          if (!(field.name in newIncluded)) newIncluded[field.name] = true;
           const fieldNameLower = (field.name || '').toLowerCase();
           
           if (field.mappedTo) {
@@ -309,8 +322,8 @@ export default function Documentos() {
               case 'empresa_logo': newData[field.name] = activeEmpresaRef?.logo_url || ''; break;
               case 'empresa_carimbo': newData[field.name] = activeEmpresaRef?.carimbo_url || ''; break;
               case 'funcionario_nome': newData[field.name] = (activeFuncionario?.nome || '').toUpperCase(); break;
-              case 'funcionario_cpf': newData[field.name] = activeFuncionario?.dados_extras?.CPF || ''; break;
-              case 'funcionario_cargo': newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toLowerCase() : ''; break;
+              case 'funcionario_cpf': newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF); break;
+              case 'funcionario_cargo': newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toUpperCase() : ''; break;
               case 'data_atual': newData[field.name] = dataAtual; break;
               default: 
                 if (activeFuncionario?.dados_extras && activeFuncionario.dados_extras[field.mappedTo] !== undefined) {
@@ -321,26 +334,19 @@ export default function Documentos() {
             }
           } else {
             const displayNameLower = (field.displayName || '').toLowerCase();
+            const fieldNameLower = (field.name || '').toLowerCase();
             
-            if (displayNameLower.includes('data')) newData[field.name] = dataAtual;
-            else if (displayNameLower.includes('rg')) newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
-            else if (displayNameLower.includes('cpf')) newData[field.name] = activeFuncionario?.dados_extras?.CPF || '';
-            else if (displayNameLower.includes('cargo')) newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toLowerCase() : '';
-            else if (displayNameLower.includes('empresa')) newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
-            else if (displayNameLower.includes('nc') || displayNameLower.includes('cdc')) newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
-            else if (displayNameLower.includes('nome')) newData[field.name] = (activeFuncionario?.nome || '').toUpperCase();
-            else if (displayNameLower.includes('carteira') || displayNameLower.includes('ctps')) newData[field.name] = activeFuncionario?.dados_extras?.['CTPS'] || '';
-            else if (displayNameLower.includes('serie')) newData[field.name] = activeFuncionario?.dados_extras?.['SERIE'] || '';
-            else if (displayNameLower.includes('matricula')) newData[field.name] = activeFuncionario?.dados_extras?.['MATRICULA'] || '';
+            if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF);
+            else if (fieldNameLower.includes('rg') || displayNameLower.includes('rg')) newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
+            else if (fieldNameLower.includes('nome') || displayNameLower.includes('nome') || fieldNameLower.includes('promotor') || displayNameLower.includes('promotor') || fieldNameLower.includes('funcionario') || displayNameLower.includes('funcionario')) newData[field.name] = (activeFuncionario?.nome || '').toUpperCase();
+            else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toUpperCase() : '';
+            else if (fieldNameLower.includes('data') || displayNameLower.includes('data')) newData[field.name] = dataAtual;
+            else if (fieldNameLower.includes('empresa') || displayNameLower.includes('empresa')) newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
+            else if (fieldNameLower.includes('nc') || displayNameLower.includes('nc') || fieldNameLower.includes('cdc') || displayNameLower.includes('cdc')) newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
+            else if (fieldNameLower.includes('carteira') || displayNameLower.includes('carteira') || fieldNameLower.includes('ctps') || displayNameLower.includes('ctps')) newData[field.name] = activeFuncionario?.dados_extras?.['CTPS'] || '';
+            else if (fieldNameLower.includes('serie') || displayNameLower.includes('serie') || fieldNameLower.includes('série') || displayNameLower.includes('série')) newData[field.name] = activeFuncionario?.dados_extras?.['SERIE'] || '';
+            else if (fieldNameLower.includes('matricula') || displayNameLower.includes('matricula')) newData[field.name] = activeFuncionario?.dados_extras?.['MATRICULA'] || '';
             
-            else if (fieldNameLower === 'empresa' || fieldNameLower === 'empresa_nome') newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
-            else if (fieldNameLower === 'promotor' || fieldNameLower === 'funcionario' || fieldNameLower === 'nome') newData[field.name] = (activeFuncionario?.nome || '').toUpperCase();
-            else if (fieldNameLower === 'cargo') newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toLowerCase() : '';
-            else if (fieldNameLower === 'cpf') newData[field.name] = activeFuncionario?.dados_extras?.CPF || '';
-            else if (fieldNameLower === 'rg') newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
-            else if (fieldNameLower === 'numero_carteira_trabalho' || fieldNameLower === 'ctps') newData[field.name] = activeFuncionario?.dados_extras?.['CTPS'] || '';
-            else if (fieldNameLower === 'série' || fieldNameLower === 'serie') newData[field.name] = activeFuncionario?.dados_extras?.['SERIE'] || '';
-            else if (fieldNameLower === 'matricula') newData[field.name] = activeFuncionario?.dados_extras?.['MATRICULA'] || '';
             else if (fieldNameLower === 'numero' || fieldNameLower === 'text2') newData[field.name] = numeroNota || '';
             else if (fieldNameLower === 'razao_social' || fieldNameLower === 'razão social') newData[field.name] = companyDetails.razao_social;
             else if (fieldNameLower === 'endereco' || fieldNameLower === 'endereço') newData[field.name] = companyDetails.endereco;
@@ -386,6 +392,7 @@ export default function Documentos() {
         newData['opta_nao'] = optaContinuar ? ' ' : 'X';
         
         setFormData(newData);
+        setIncludedFields(newIncluded);
       } catch (err) {
         console.error('Erro no auto-fill:', err);
       }
@@ -398,12 +405,135 @@ export default function Documentos() {
   };
 
   const handleGenerate = async (overrideFormData = null) => {
+    let newErrors = {};
+
     if (!activeTemplate) {
       toast.error('Selecione um template primeiro.');
       return;
     }
+
+    // 1. Validação Cruzada de Promotor (Impede geração se faltar Empresa ou Cargo)
+    if (selectedFuncionarios.length > 0) {
+      for (const funcId of selectedFuncionarios) {
+        const f = funcionarios.find(x => String(x.id) === String(funcId));
+        if (f) {
+          if (!f.empresa_id) {
+            toast.error(`O promotor ${String(f.nome || 'Desconhecido').toUpperCase()} não possui Empresa vinculada. Cadastre a empresa antes de gerar a carta.`);
+            return;
+          }
+          if (!f.cargo || f.cargo.trim() === '') {
+            toast.error(`O promotor ${String(f.nome || 'Desconhecido').toUpperCase()} não possui Cargo preenchido. Complete o cadastro antes de gerar a carta.`);
+            return;
+          }
+        }
+      }
+    }
+
+    // Validação de Loja
+    if (activeTemplate.fields) {
+      const lojaField = activeTemplate.fields.find(f => {
+        const name = (f.name || '').toLowerCase();
+        const display = (f.displayName || '').toLowerCase();
+        return name === 'loja' || name === 'lojas' || name === 'estabelecimento' ||
+               display === 'loja' || display === 'lojas' || display === 'estabelecimento';
+      });
+      
+      if (lojaField) {
+        if (selectedFuncionarios.length > 1) {
+          // Geração em massa: verifica se cada promotor tem a loja preenchida
+          for (const funcId of selectedFuncionarios) {
+            let lojaVal = String(multiFuncData[funcId]?.[lojaField.name] || formData[lojaField.name] || '').trim();
+            if (!lojaVal) {
+              const func = funcionarios.find(f => String(f.id) === String(funcId));
+              newErrors.loja = `Falta selecionar a loja para ${String(func?.nome || 'Desconhecido').toUpperCase()}.`;
+              setTouched(prev => ({ ...prev, [lojaField.name]: true }));
+              break;
+            }
+          }
+        } else {
+          // Geração única: verifica o formulário global e salva a loja se for nova
+          const currentFormData = overrideFormData || formData;
+          let lojaValue = String(currentFormData[lojaField.name] || '').trim();
+          if (!lojaValue) {
+            newErrors.loja = 'Por favor, selecione ou digite a loja obrigatória.';
+            setTouched(prev => ({ ...prev, [lojaField.name]: true }));
+          }
+        }
+      }
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setFormErrors(newErrors);
+      toast.error('Preencha os campos obrigatórios em vermelho antes de gerar.', { duration: 4000 });
+      setIsGenerating(false);
+      return;
+    }
+
+    if (activeTemplate.fields) {
+      const lojaField = activeTemplate.fields.find(f => {
+        const name = (f.name || '').toLowerCase();
+        const display = (f.displayName || '').toLowerCase();
+        return name === 'loja' || name === 'lojas' || name === 'estabelecimento' ||
+               display === 'loja' || display === 'lojas' || display === 'estabelecimento';
+      });
+      
+      if (lojaField) {
+        if (selectedFuncionarios.length <= 1) {
+          const currentFormData = overrideFormData || formData;
+          let lojaValue = String(currentFormData[lojaField.name] || '').trim();
+          
+          // Se veio do select usando `old-`, remove o prefixo
+          if (lojaValue.startsWith('old-')) {
+            lojaValue = lojaValue.replace('old-', '');
+            if (overrideFormData) overrideFormData[lojaField.name] = lojaValue;
+            else setFormData(prev => ({ ...prev, [lojaField.name]: lojaValue }));
+          }
+
+          const isKnownLoja = lojas.some(l => String(l.id) === lojaValue || l.nome.toLowerCase() === lojaValue.toLowerCase());
+          const isOldLoja = allLojas.some(nome => nome.toLowerCase() === lojaValue.toLowerCase());
+
+          if (!isKnownLoja && !isOldLoja && lojaValue) {
+            const capitalizedName = capitalizeStoreName(lojaValue);
+            const newLoja = {
+              id: generateUniqueId(),
+              nome: capitalizedName,
+              endereco: '',
+              cidadeUf: '',
+              cnpj: ''
+            };
+            const updatedLojas = [newLoja, ...lojas];
+            localStorage.setItem('docflow_lojas', JSON.stringify(updatedLojas));
+            setLojas(updatedLojas);
+            
+            if (overrideFormData) overrideFormData[lojaField.name] = capitalizedName;
+            else setFormData(prev => ({ ...prev, [lojaField.name]: capitalizedName }));
+          } else {
+            // Apenas capitaliza o valor no form, para o PDF sair bonitinho
+            const capitalizedName = capitalizeStoreName(lojaValue);
+            if (overrideFormData) overrideFormData[lojaField.name] = capitalizedName;
+            else setFormData(prev => ({ ...prev, [lojaField.name]: capitalizedName }));
+          }
+        }
+      }
+    }
     
     setIsGenerating(true);
+    
+    // Validação geral antes de prosseguir (Priority 1)
+    if (!selectedTemplate) {
+      newErrors.template = 'Selecione um template obrigatório.';
+    }
+    if (selectedFuncionarios.length === 0 && !isNotaDebito) {
+      newErrors.promotores = 'Selecione pelo menos 1 promotor obrigatório.';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setFormErrors(newErrors);
+      setTouched({ template: true, promotores: true });
+      toast.error('Preencha os campos obrigatórios em vermelho antes de gerar.', { duration: 4000 });
+      setIsGenerating(false);
+      return;
+    }
     
     try {
       const empresa = empresas.find(e => String(e.id) === String(selectedEmpresa));
@@ -444,6 +574,7 @@ export default function Documentos() {
       let lastGeneratedBlobUrl = null;
       let lastGeneratedName = null;
       let lastCartaId = null;
+      const generatedBatchFiles = [];
 
       for (const currentFunc of funcsToProcess) {
         let blob;
@@ -479,14 +610,18 @@ export default function Documentos() {
           
           finalFormDataForFunc['Nome'] = (currentFunc.nome || '').toUpperCase();
           finalFormDataForFunc['funcionario_nome'] = (currentFunc.nome || '').toUpperCase();
-          finalFormDataForFunc['cpf'] = de['CPF'] || '';
-          finalFormDataForFunc['CPF'] = de['CPF'] || '';
+          finalFormDataForFunc['promotor'] = (currentFunc.nome || '').toUpperCase();
+          finalFormDataForFunc['PROMOTOR'] = (currentFunc.nome || '').toUpperCase();
+          finalFormDataForFunc['funcionario'] = (currentFunc.nome || '').toUpperCase();
+          finalFormDataForFunc['FUNCIONARIO'] = (currentFunc.nome || '').toUpperCase();
+          finalFormDataForFunc['cpf'] = formatCpf(de['CPF']);
+          finalFormDataForFunc['CPF'] = formatCpf(de['CPF']);
           finalFormDataForFunc['rg'] = rgValue;
           finalFormDataForFunc['RG'] = rgValue;
           finalFormDataForFunc['cdc'] = cdcValue;
           finalFormDataForFunc['CDC'] = cdcValue;
-          finalFormDataForFunc['cargo'] = currentFunc.cargo ? String(currentFunc.cargo).toLowerCase() : '';
-          finalFormDataForFunc['CARGO'] = currentFunc.cargo ? String(currentFunc.cargo).toLowerCase() : '';
+          finalFormDataForFunc['cargo'] = currentFunc.cargo ? String(currentFunc.cargo).toUpperCase() : '';
+          finalFormDataForFunc['CARGO'] = currentFunc.cargo ? String(currentFunc.cargo).toUpperCase() : '';
           finalFormDataForFunc['empresa'] = funcEmpresa?.nome || '';
           finalFormDataForFunc['EMPRESA'] = funcEmpresa?.nome || '';
           const baseData = overrideFormData || formData;
@@ -499,10 +634,10 @@ export default function Documentos() {
               const fieldNameLower = (field.name || '').toLowerCase();
               const displayNameLower = (field.displayName || '').toLowerCase();
               
-              if (fieldNameLower.includes('nome') || displayNameLower.includes('nome')) finalFormDataForFunc[field.name] = (currentFunc.nome || '').toUpperCase();
-              else if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) finalFormDataForFunc[field.name] = de['CPF'] || '';
+              if (fieldNameLower.includes('nome') || displayNameLower.includes('nome') || fieldNameLower.includes('promotor') || displayNameLower.includes('promotor') || fieldNameLower.includes('funcionario') || displayNameLower.includes('funcionario')) finalFormDataForFunc[field.name] = (currentFunc.nome || '').toUpperCase();
+              else if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) finalFormDataForFunc[field.name] = formatCpf(de['CPF']);
+              else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) finalFormDataForFunc[field.name] = currentFunc.cargo ? String(currentFunc.cargo).toUpperCase() : '';
               else if (fieldNameLower.includes('rg') || displayNameLower.includes('rg')) finalFormDataForFunc[field.name] = rgValue;
-              else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) finalFormDataForFunc[field.name] = currentFunc.cargo ? String(currentFunc.cargo).toLowerCase() : '';
               else if (fieldNameLower.includes('cdc') || displayNameLower.includes('cdc') || fieldNameLower.includes('nc')) finalFormDataForFunc[field.name] = cdcValue;
               else if (fieldNameLower.includes('empresa') || displayNameLower.includes('empresa')) finalFormDataForFunc[field.name] = funcEmpresa?.nome || '';
             });
@@ -510,8 +645,8 @@ export default function Documentos() {
 
           if (currentFunc.dados_extras) {
             Object.keys(currentFunc.dados_extras).forEach(k => {
-              finalFormDataForFunc[k] = currentFunc.dados_extras[k] || '';
-              finalFormDataForFunc[`funcionario_${k.toLowerCase()}`] = currentFunc.dados_extras[k] || '';
+              finalFormDataForFunc[k] = formatExcelDate(currentFunc.dados_extras[k], k) || '';
+              finalFormDataForFunc[`funcionario_${k.toLowerCase()}`] = formatExcelDate(currentFunc.dados_extras[k], k) || '';
             });
           }
           if (multiFuncData[currentFunc.id]) {
@@ -541,18 +676,46 @@ export default function Documentos() {
           });
 
           sortedKeys.forEach(key => {
-            let value = String(finalFormDataForFunc[key] || '').toUpperCase().trim();
-            if (!value) return; // Skip empty replacements to allow other cases to match
-
-            const keyLower = key.toLowerCase();
-            if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
-              if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
-                value = `<b>${value}</b>`;
+            if (includedFields[key] === false) {
+              const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const keyLower = key.toLowerCase();
+              
+              if (keyLower === 'rg') {
+                content = content.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?R\\.?G\\.?\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                content = content.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?R\\.?G\\.?\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+              } else if (keyLower === 'cpf') {
+                content = content.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?CPF\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                content = content.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?CPF\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+              } else if (keyLower === 'carteira' || keyLower === 'ctps') {
+                content = content.replace(new RegExp(`(?:da\\s+|de\\s+)?(?:CTPS|Carteira(?: de Trabalho)?)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                content = content.replace(new RegExp(`(?:da\\s+|de\\s+)?(?:CTPS|Carteira(?: de Trabalho)?)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+              } else if (keyLower === 'serie' || keyLower === 'série') {
+                content = content.replace(new RegExp(`(?:s[eé]rie)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                content = content.replace(new RegExp(`(?:s[eé]rie)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
               }
+              
+              const genericRegex1 = new RegExp(`(?:do\\s+|da\\s+|de\\s+)?(?:${escapedKey})\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi');
+              content = content.replace(genericRegex1, '');
+              
+              const genericRegex2 = new RegExp(`(?:do\\s+|da\\s+|de\\s+)?(?:${escapedKey})\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi');
+              content = content.replace(genericRegex2, '');
+              
+              content = content.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), '');
+              content = content.replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), '');
+            } else {
+              let value = String(finalFormDataForFunc[key] || '').toUpperCase().trim();
+              if (value) {
+                const keyLower = key.toLowerCase();
+                if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
+                  if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
+                    value = `<b>${value}</b>`;
+                  }
+                }
+              }
+              const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              content = content.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), value)
+                               .replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), value);
             }
-            const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            content = content.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), value)
-                             .replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), value);
           });
           
           // Second pass: remove any remaining unmatched placeholders
@@ -581,8 +744,12 @@ export default function Documentos() {
 
           const pdfFinalData = {};
           Object.keys(finalFormDataForFunc).forEach(key => {
-            const val = finalFormDataForFunc[key];
-            pdfFinalData[key] = typeof val === 'string' ? val.toUpperCase().trim() : val;
+            if (includedFields[key] !== false) {
+              const val = finalFormDataForFunc[key];
+              pdfFinalData[key] = typeof val === 'string' ? val.toUpperCase().trim() : val;
+            } else {
+              pdfFinalData[key] = '';
+            }
           });
 
           // === Injeção Automática de Dados das Empresas POP e SEVEN no Momento da Geração ===
@@ -642,7 +809,13 @@ export default function Documentos() {
         }
 
         const nomePromotor = currentFunc?.nome || finalFormDataForFunc['Nome'] || finalFormDataForFunc['funcionario_nome'] || activeTemplate.name || 'documento';
-        const fileName = `CARTA ${nomePromotor.trim().toUpperCase()}.pdf`;
+        const lojaExt = finalFormDataForFunc['loja'] || finalFormDataForFunc['LOJA'] || '';
+        let baseFileName = `CARTA ${nomePromotor.trim().toUpperCase()}`;
+        if (lojaExt) {
+          baseFileName += ` - ${lojaExt.trim().toUpperCase()}`;
+        }
+        
+        const fileName = `${baseFileName}.pdf`;
         const blobUrl = URL.createObjectURL(blob);
 
         const getBlobBase64 = (b) => new Promise(res => {
@@ -655,12 +828,12 @@ export default function Documentos() {
 
         let cartaId = null;
         try {
-          const nomeArq = `CARTA ${nomePromotor.trim().toUpperCase()} - Admin`;
+          const nomeArq = `${baseFileName} - Admin`;
           const { data: insertData, error: insertError } = await supabase.from('cartas_geradas').insert({
             funcionario_id: currentFunc?.id || null,
             template_id: activeTemplate?.id || null,
             empresa_id: activeEmpresa?.id || null,
-            nome_funcionario: nomePromotor,
+            nome_funcionario: baseFileName.replace('CARTA ', ''),
             nome_arquivo: nomeArq,
             url_storage: base64Data,
             data_geracao: new Date().toISOString()
@@ -681,18 +854,56 @@ export default function Documentos() {
 
         generatedCount++;
         lastGeneratedBlobUrl = blobUrl;
-        lastGeneratedName = nomePromotor;
+        lastGeneratedName = baseFileName.replace('CARTA ', '');
         lastCartaId = cartaId;
+        generatedBatchFiles.push(new File([blob], fileName, { type: 'application/pdf' }));
       }
       
       if (generatedCount === 1) {
         setGeneratedCartaId(lastCartaId);
         setGeneratedCartaName(lastGeneratedName);
         setGeneratedBlobUrl(lastGeneratedBlobUrl);
-        // setShareModalOpen(true); // Ocultado a pedido do usuário
+        
+        toast.success(`Documento gerado com sucesso!`, {
+          duration: 10000,
+          action: {
+            label: '📱 Enviar WhatsApp',
+            onClick: () => handleWhatsAppShareDirect(lastGeneratedBlobUrl, lastGeneratedName)
+          }
+        });
+      } else {
+        toast.success(`${generatedCount} documento(s) gerado(s) com sucesso!`, {
+          duration: 15000,
+          action: {
+            label: '📱 Enviar Todos no WhatsApp',
+            onClick: async () => {
+              try {
+                toast.loading(`Preparando ${generatedBatchFiles.length} arquivos para envio...`, { id: 'batch-wa-direct' });
+                if (navigator.canShare && navigator.canShare({ files: generatedBatchFiles })) {
+                  toast.dismiss('batch-wa-direct');
+                  await navigator.share({
+                    files: generatedBatchFiles,
+                    title: 'Cartas em Lote',
+                    text: `Olá, seguem os documentos em anexo.`
+                  });
+                } else {
+                  toast.dismiss('batch-wa-direct');
+                  toast.success('O WhatsApp Web será aberto para você anexar todos de uma vez.', { duration: 5000 });
+                  setTimeout(() => {
+                    const text = `Olá, seguem os documentos em anexo.`;
+                    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+                    window.open(whatsappUrl, '_blank');
+                  }, 1500);
+                }
+              } catch(e) {
+                console.error(e);
+                toast.dismiss('batch-wa-direct');
+                if (e.name !== 'AbortError') toast.error('Erro ao compartilhar arquivos em lote.');
+              }
+            }
+          }
+        });
       }
-      
-      toast.success(`${generatedCount} documento(s) gerado(s) com sucesso!`);
     } catch (error) {
       console.error(error);
       toast.error(error.message || 'Erro ao gerar o PDF final.');
@@ -822,22 +1033,64 @@ export default function Documentos() {
     toast.success('Link da carta copiado para a área de transferência!');
   };
 
+  const handleWhatsAppShareDirect = async (blobUrl, cartaName) => {
+    if (!blobUrl) return;
+    try {
+      toast.loading('Preparando arquivo para envio...', { id: 'share-wa' });
+      const res = await fetch(blobUrl);
+      const blob = await res.blob();
+      const fileName = `CARTA ${cartaName.trim().toUpperCase()}.pdf`;
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        toast.dismiss('share-wa');
+        await navigator.share({
+          files: [file],
+          title: fileName,
+          text: `Olá, segue o documento de ${cartaName}`
+        });
+      } else {
+        const linkUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = linkUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(linkUrl);
+
+        toast.dismiss('share-wa');
+        toast.success('Arquivo baixado! O WhatsApp Web será aberto para você anexar o PDF.', { duration: 5000 });
+        
+        setTimeout(() => {
+          const text = `Olá, estou enviando o documento de ${cartaName} em anexo.`;
+          const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+          window.open(whatsappUrl, '_blank');
+        }, 1500);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.dismiss('share-wa');
+      toast.error('Erro ao compartilhar arquivo pelo WhatsApp.');
+    }
+  };
+
   const handleWhatsAppShare = () => {
-    if (!generatedCartaId) return;
-    const shareUrl = `${window.location.origin}/carta/${generatedCartaId}`;
-    const text = `Olá, segue a carta de apresentação de *${generatedCartaName}*: ${shareUrl}`;
-    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(whatsappUrl, '_blank');
+    handleWhatsAppShareDirect(generatedBlobUrl, generatedCartaName);
   };
 
   const allLojas = useMemo(() => {
-    const lojasSet = new Set();
+    const lojasMap = new Map();
     empresas.forEach(empresa => {
       if (Array.isArray(empresa.lojas)) {
-        empresa.lojas.forEach(loja => lojasSet.add(loja));
+        empresa.lojas.forEach(loja => {
+          if (!loja) return;
+          const key = String(loja).trim().toLowerCase();
+          if (!lojasMap.has(key)) lojasMap.set(key, capitalizeStoreName(String(loja).trim()));
+        });
       }
     });
-    return Array.from(lojasSet).sort();
+    return Array.from(lojasMap.values()).sort();
   }, [empresas]);
 
   if (isLoading) {
@@ -853,16 +1106,16 @@ export default function Documentos() {
         </div>
         <button 
           onClick={() => setIsImportModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#8A2BE2] hover:bg-purple-700 text-white text-sm font-bold px-5 py-2.5 shadow-md transition-all">
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#8A2BE2] hover:bg-purple-700 text-white text-sm font-bold px-5 py-2.5 shadow-md transition-all">
           <Wand2 className="w-4 h-4" />
           Importação Inteligente (Tabela SAP/TOTVS)
         </button>
       </div>
 
-      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm p-6 md:p-8 space-y-8">
+      <div className="bg-white border border-slate-200/80 rounded-lg shadow-sm p-6 md:p-8 space-y-8">
         
         {/* Painel de Configurações */}
-        <div className="bg-slate-50/50 rounded-2xl border border-slate-100 p-6 space-y-6">
+        <div className="bg-slate-50/50 rounded-lg border border-slate-100 p-6 space-y-6">
           <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60 pb-3">
             Configuração Inicial do Documento
           </h2>
@@ -870,36 +1123,65 @@ export default function Documentos() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Selecionar Template */}
             <div className="space-y-2">
-              <label htmlFor="template" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <label htmlFor="template" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5" data-required="true">
                 <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-bold">1</span>
                 1. Selecionar Template
+                <span style={{ color: '#EF4444' }}>*</span>
+                <span className="text-slate-400 font-normal text-[10px] lowercase">(obrigatório)</span>
               </label>
-              <select
-                id="template"
-                value={selectedTemplate}
-                onChange={(e) => handleTemplateSelect(e.target.value)}
-                className="block w-full rounded-xl border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-600 sm:text-sm bg-white"
-              >
-                <option value="">Selecione um arquivo...</option>
-                {templates.map(t => (
-                  <option key={t.id} value={t.id}>
-                    [{t.type === 'pdf' ? 'PDF' : 'Texto'}] {t.name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  id="template"
+                  value={selectedTemplate}
+                  onChange={(e) => {
+                    handleTemplateSelect(e.target.value);
+                    setFormErrors(prev => ({ ...prev, template: null }));
+                  }}
+                  onBlur={() => setTouched(prev => ({ ...prev, template: true }))}
+                  className={`block w-full rounded-lg py-2.5 pl-3 pr-10 text-slate-800 sm:text-sm bg-white transition-all duration-200 ${
+                    touched.template && formErrors.template 
+                      ? 'border-2 border-red-500 bg-red-50/50 focus:ring-red-500 ring-0' 
+                      : touched.template && selectedTemplate
+                        ? 'border-2 border-emerald-500 bg-emerald-50/50 focus:ring-emerald-500 ring-0'
+                        : 'border-0 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-600'
+                  }`}
+                >
+                  <option value="">Selecione um arquivo...</option>
+                  {templates.map(t => (
+                    <option key={t.id} value={t.id}>
+                      [{t.type === 'pdf' ? 'PDF' : 'Texto'}] {t.name}
+                    </option>
+                  ))}
+                </select>
+                {touched.template && formErrors.template && (
+                  <div className="absolute inset-y-0 right-8 flex items-center pointer-events-none">
+                    <X className="w-4 h-4 text-red-500" />
+                  </div>
+                )}
+                {touched.template && !formErrors.template && selectedTemplate && (
+                  <div className="absolute inset-y-0 right-8 flex items-center pointer-events-none">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  </div>
+                )}
+              </div>
+              {touched.template && formErrors.template && (
+                <p className="text-xs text-red-500 font-medium animate-in slide-in-from-top-1">{formErrors.template}</p>
+              )}
             </div>
 
             {/* Selecionar Empresa */}
             <div className="space-y-2">
-              <label htmlFor="empresa" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <label htmlFor="empresa" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5" title="Selecione para pré-popular dados no documento">
                 <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-bold">2</span>
-                2. Selecionar Empresa (Opcional)
+                2. Selecionar Empresa
+                <span className="text-slate-400 font-normal text-[10px] lowercase">(opcional)</span>
+                <Info className="w-3.5 h-3.5 text-slate-400 ml-1 cursor-help" />
               </label>
               <select
                 id="empresa"
                 value={selectedEmpresa}
                 onChange={(e) => setSelectedEmpresa(e.target.value)}
-                className="block w-full rounded-xl border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-600 sm:text-sm bg-white"
+                className="block w-full rounded-lg border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-600 sm:text-sm bg-white"
               >
                 <option value="">Nenhuma / Manual</option>
                 {empresas.map(e => (
@@ -912,113 +1194,134 @@ export default function Documentos() {
           {/* Selecionar Funcionário (com autocomplete) */}
           {!isNotaDebito && (
             <div className="grid grid-cols-1 gap-6 border-t border-slate-200/40 pt-6">
-            <div className="space-y-2 relative">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-bold">3</span>
-                3. Selecionar Funcionário (Opcional)
-              </label>
-              
-              <div className="flex flex-col sm:flex-row gap-3">
-                {/* Autocomplete Search input */}
-                <div className="relative flex-grow">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Search className="h-4 w-4 text-slate-400" />
-                  </div>
-                  <input 
-                    type="text" 
-                    placeholder="Buscar por nome ou CPF..." 
-                    value={searchFuncionario}
-                    onFocus={() => setIsSearchFocused(true)}
-                    onChange={e => {
-                      setSearchFuncionario(e.target.value);
-                      setIsSearchFocused(true);
-                    }}
-                    className="block w-full rounded-xl border-0 py-2.5 pl-10 pr-4 text-slate-900 ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 sm:text-sm bg-white transition-all"
-                  />
-                  
-                  {/* Floating dropdown results */}
-                  {isSearchFocused && searchFuncionario.trim() !== '' && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setIsSearchFocused(false)} />
-                      <div className="absolute z-20 w-full bg-white border border-slate-200 rounded-2xl shadow-xl mt-1.5 max-h-60 overflow-y-auto divide-y divide-slate-100 animate-in fade-in slide-in-from-top-2 duration-150">
-                        {filteredFuncionarios.length === 0 ? (
-                          <div className="p-4 text-sm text-slate-400 text-center">Nenhum funcionário encontrado</div>
-                        ) : (
-                          filteredFuncionarios.map(f => {
-                            const cpf = f.dados_extras?.CPF || 'Sem CPF';
-                            const emp = (f.dados_extras?.['Empresa'] || '').toUpperCase();
-                            const isPop = emp.includes('POP');
-                            const isSpar = emp.includes('SPAR');
-                            return (
-                              <button
-                                key={f.id}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedFuncionarios(prev => prev.includes(f.id) ? prev : [...prev, f.id]);
-                                  setSearchFuncionario('');
-                                  setIsSearchFocused(false);
-                                }}
-                                className="w-full text-left px-4 py-3 text-sm hover:bg-indigo-50/50 transition-colors flex items-center justify-between group"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-semibold text-slate-700 group-hover:text-indigo-600 truncate">{String(f.nome || '').toUpperCase()}</p>
-                                  <p className="text-xs text-slate-400 font-mono mt-0.5">CPF: {cpf}</p>
-                                </div>
-                                {(isPop || isSpar) && (
-                                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider shrink-0 ml-2 border ${
-                                    isPop ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-blue-50 text-blue-700 border-blue-200'
-                                  }`}>
-                                    {isPop ? 'POP' : 'SPAR'}
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
+                <div className="relative">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex justify-between items-center" data-required="true">
+                  <span className="flex items-center gap-1">
+                    Promotor(es)
+                    <span style={{ color: '#EF4444' }}>*</span>
+                    <span className="text-slate-400 font-normal text-[10px] lowercase">(obrigatório)</span>
+                  </span>
+                  <span className="text-indigo-500 font-normal flex items-center gap-1 cursor-help" title="Pesquise por nome ou CPF do promotor">
+                    <Info className="w-3.5 h-3.5" />
+                    Busca inteligente ativada
+                  </span>
+                </label>
                 
-                {/* CDC filter select */}
-                <select
-                  value={filterEmpresa}
-                  onChange={e => setFilterEmpresa(e.target.value)}
-                  className="block w-full sm:w-48 rounded-xl border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm bg-white"
-                >
-                  <option value="">Filtrar por CDC</option>
-                  {[...new Set(funcionarios.map(f => {
-                    const de = f.dados_extras || {};
-                    return de['NC FUNCIONARIO'] || de['NC'] || de['Cdc'] || de['CDC'] || de['cdc'] || de['Cdc Superior'];
-                  }).filter(Boolean))].sort().map(cdc => (
-                    <option key={cdc} value={cdc}>{cdc}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Híbrido: Select Standard dropdown */}
-              <div className="mt-2">
-                <select
-                  id="funcionario"
-                  multiple
-                  value={selectedFuncionarios}
-                  onChange={(e) => {
-                    const values = Array.from(e.target.selectedOptions, option => option.value);
-                    setSelectedFuncionarios(values);
-                  }}
-                  style={{ minHeight: '120px' }}
-                  className="block w-full rounded-xl border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm bg-white transition-all"
-                >
-                  <option value="">-- Selecione ou mude o funcionário da lista --</option>
-                  {filteredFuncionarios.map(f => {
-                    const cpf = f.dados_extras?.CPF || 'Sem CPF';
-                    const emp = (f.dados_extras?.['Empresa'] || '').toUpperCase();
-                    const badge = emp.includes('POP') ? ' [POP]' : emp.includes('SPAR') ? ' [SPAR]' : '';
+                {/* Tags Selecionadas */}
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {selectedFuncionarios.map(funcId => {
+                    const func = funcionarios.find(f => String(f.id) === String(funcId));
+                    if (!func) return null;
                     return (
-                      <option key={f.id} value={f.id}>{String(f.nome || '').toUpperCase()} - {cpf}{badge}</option>
+                      <span key={funcId} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:shadow-md hover:border-indigo-300 transition-all duration-200">
+                        {String(func.nome || 'Desconhecido').toUpperCase()}
+                        <button 
+                          type="button" 
+                          onClick={() => setSelectedFuncionarios(prev => prev.filter(id => id !== funcId))}
+                          className="hover:bg-indigo-600 hover:text-white text-indigo-400 rounded-full p-0.5 transition-all duration-200"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
                     );
                   })}
-                </select>
+                </div>
+
+                {/* Combobox Input */}
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={funcSearchQuery}
+                    onChange={(e) => {
+                      setFuncSearchQuery(e.target.value);
+                      setIsFuncDropdownOpen(true);
+                      setFormErrors(prev => ({ ...prev, promotores: null }));
+                    }}
+                    onBlur={() => {
+                      setTouched(prev => ({ ...prev, promotores: true }));
+                      if (selectedFuncionarios.length === 0) {
+                        setFormErrors(prev => ({ ...prev, promotores: 'Selecione pelo menos 1 promotor.' }));
+                      }
+                    }}
+                    onFocus={() => setIsFuncDropdownOpen(true)}
+                    placeholder="Digite o nome ou CPF para adicionar promotores..."
+                    className={`block w-full rounded-lg py-2.5 pl-10 pr-10 text-slate-800 sm:text-sm bg-white transition-all duration-200 ${
+                      touched.promotores && selectedFuncionarios.length === 0
+                        ? 'border-2 border-red-500 bg-red-50/50 focus:ring-red-500 ring-0'
+                        : selectedFuncionarios.length > 0
+                          ? 'border-2 border-emerald-500 bg-emerald-50/50 focus:ring-emerald-500 ring-0'
+                          : 'border-0 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500'
+                    }`}
+                  />
+                  {funcSearchQuery && (
+                    <button 
+                      type="button" 
+                      onClick={() => setFuncSearchQuery('')}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                  {touched.promotores && selectedFuncionarios.length === 0 && !funcSearchQuery && (
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                      <X className="w-4 h-4 text-red-500" />
+                    </div>
+                  )}
+                  {selectedFuncionarios.length > 0 && !funcSearchQuery && (
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    </div>
+                  )}
+                </div>
+                {touched.promotores && selectedFuncionarios.length === 0 && (
+                  <p className="text-xs text-red-500 font-medium animate-in slide-in-from-top-1 mt-1">{formErrors.promotores}</p>
+                )}
+
+                {/* Combobox Dropdown */}
+                {isFuncDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setIsFuncDropdownOpen(false)}></div>
+                    <div className="absolute z-20 mt-1 w-full bg-white rounded-lg shadow-xl border border-slate-200 max-h-60 overflow-y-auto ring-1 ring-black ring-opacity-5">
+                      {filteredFuncionarios
+                        .filter(f => {
+                          if (!funcSearchQuery) return true;
+                          const q = funcSearchQuery.toLowerCase();
+                          return (f.nome || '').toLowerCase().includes(q) || String(f.dados_extras?.CPF || '').includes(q);
+                        })
+                        .filter(f => !selectedFuncionarios.includes(f.id)) // Remove os já selecionados
+                        .map(f => {
+                          const cpf = f.dados_extras?.CPF || 'Sem CPF';
+                          const emp = (f.dados_extras?.['Empresa'] || '').toUpperCase();
+                          const badge = emp.includes('POP') ? ' [POP]' : emp.includes('SPAR') ? ' [SPAR]' : '';
+                          return (
+                            <button
+                              key={f.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedFuncionarios(prev => [...prev, f.id]);
+                                setFuncSearchQuery('');
+                                setIsFuncDropdownOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0 flex flex-col transition-colors"
+                            >
+                              <span className="font-medium text-slate-800">{String(f.nome || '').toUpperCase()}</span>
+                              <span className="text-[10px] text-slate-500">{cpf} {badge}</span>
+                            </button>
+                          );
+                      })}
+                      {filteredFuncionarios.filter(f => {
+                          if (!funcSearchQuery) return true;
+                          const q = funcSearchQuery.toLowerCase();
+                          return (f.nome || '').toLowerCase().includes(q) || String(f.dados_extras?.CPF || '').includes(q);
+                        }).filter(f => !selectedFuncionarios.includes(f.id)).length === 0 && (
+                        <div className="p-4 text-center text-sm text-slate-500">Nenhum promotor encontrado.</div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Status and detected branding */}
@@ -1053,7 +1356,6 @@ export default function Documentos() {
                 </div>
               )}
             </div>
-          </div>
           )}
           
           {/* Active Empresa Branding Preview */}
@@ -1080,7 +1382,7 @@ export default function Documentos() {
           )}
 
           {activeEmpresa && showBranding && (
-            <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 mt-3 grid grid-cols-3 gap-4 animate-in fade-in duration-300">
+            <div className="bg-slate-50/50 p-4 rounded-lg border border-slate-100 mt-3 grid grid-cols-3 gap-4 animate-in fade-in duration-300">
                 <div className="space-y-1">
                   <p className="text-[9px] text-slate-400 font-bold text-center uppercase tracking-wider">Logo do Topo</p>
                   <div className="h-12 w-full bg-white rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
@@ -1105,7 +1407,7 @@ export default function Documentos() {
 
         {/* Formulário Dinâmico */}
         {activeTemplate && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-6 border-t border-slate-100">
+          <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] xl:grid-cols-[65%_35%] gap-8 pt-6 border-t border-slate-100">
             {/* Coluna da Esquerda: Formulário */}
             <form onSubmit={(e) => {
               e.preventDefault();
@@ -1127,11 +1429,11 @@ export default function Documentos() {
 
               {/* Opção de Continuidade (Hap Vida / NDI) */}
               {(activeTemplate.name?.includes('Hap Vida') || activeTemplate.name?.includes('Extensão NDI')) && (
-                <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/60 space-y-3 animate-in slide-in-from-top-2 duration-300">
+                <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100/60 space-y-3 animate-in slide-in-from-top-2 duration-300">
                   <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider">Opção de Plano (Hap Vida / NDI)</p>
                   <p className="text-xs text-slate-500">O colaborador opta pela continuidade do plano?</p>
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <label className="flex items-center gap-2.5 cursor-pointer bg-white px-4 py-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 transition-all select-none shadow-sm flex-1">
+                    <label className="flex items-center gap-2.5 cursor-pointer bg-white px-4 py-2.5 rounded-lg border border-slate-200 hover:border-indigo-300 transition-all select-none shadow-sm flex-1">
                       <input 
                         type="radio" 
                         name="opta_plano" 
@@ -1144,7 +1446,7 @@ export default function Documentos() {
                       />
                       <span className="text-xs font-semibold text-slate-700">SIM (Manter Plano)</span>
                     </label>
-                    <label className="flex items-center gap-2.5 cursor-pointer bg-white px-4 py-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 transition-all select-none shadow-sm flex-1">
+                    <label className="flex items-center gap-2.5 cursor-pointer bg-white px-4 py-2.5 rounded-lg border border-slate-200 hover:border-indigo-300 transition-all select-none shadow-sm flex-1">
                       <input 
                         type="radio" 
                         name="opta_plano" 
@@ -1173,15 +1475,30 @@ export default function Documentos() {
                   
                   return (
                     <div key={field.name} className="space-y-1.5">
-                      <label htmlFor={field.name} className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center">
-                        <span className="flex items-center gap-1">
-                          {labelName} 
-                          {isAutoFilled && (
-                            <span className="text-[9px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide">
-                              Automatizado
-                            </span>
-                          )}
-                        </span>
+                      <label htmlFor={field.name} className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center" data-required={isLojaField ? "true" : "false"}>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3 w-3"
+                            checked={includedFields[field.name] !== false} 
+                            onChange={(e) => setIncludedFields(prev => ({ ...prev, [field.name]: e.target.checked }))} 
+                          />
+                          <span className="flex items-center gap-1">
+                            {labelName} 
+                            {isLojaField && (
+                              <>
+                                <span style={{ color: '#EF4444' }}>*</span>
+                                <span className="text-slate-400 font-normal text-[10px] lowercase">(obrigatório)</span>
+                              </>
+                            )}
+                            {isAutoFilled && (
+                              <span className="text-[9px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide flex items-center gap-1 cursor-help" title="Este campo é preenchido automaticamente">
+                                <Info className="w-3 h-3" />
+                                Automatizado
+                              </span>
+                            )}
+                          </span>
+                        </label>
                         {isLojaField && lojas.length > 0 && (
                           <button
                             type="button"
@@ -1193,7 +1510,7 @@ export default function Documentos() {
                         )}
                       </label>
                       
-                      <div className="mt-1">
+                      <div className="mt-1 relative">
                         {isLojaField ? (
                           lojas.length === 0 ? (
                             <div className="space-y-2">
@@ -1202,8 +1519,21 @@ export default function Documentos() {
                                 name={field.name}
                                 id={field.name}
                                 value={formData[field.name] || ''}
-                                onChange={handleInputChange}
-                                className="block w-full rounded-xl border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm text-slate-900 bg-white"
+                                onChange={(e) => {
+                                  handleInputChange(e);
+                                  setFormErrors(prev => ({ ...prev, loja: null }));
+                                }}
+                                onBlur={() => {
+                                  setTouched(prev => ({ ...prev, [field.name]: true }));
+                                  if (!formData[field.name]) setFormErrors(prev => ({ ...prev, loja: 'Por favor, selecione ou digite a loja.' }));
+                                }}
+                                className={`block w-full rounded-lg py-2.5 px-3.5 shadow-sm transition-all duration-200 sm:text-sm text-slate-900 bg-white ${
+                                  touched[field.name] && formErrors.loja
+                                    ? 'border-2 border-red-500 bg-red-50/50 focus:ring-red-500 ring-0'
+                                    : touched[field.name] && formData[field.name]
+                                      ? 'border-2 border-emerald-500 bg-emerald-50/50 focus:ring-emerald-500 ring-0'
+                                      : 'border-0 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500'
+                                }`}
                                 placeholder="Digite o nome da loja..."
                               />
                               <p className="text-[10px] text-slate-400 leading-normal">
@@ -1213,6 +1543,16 @@ export default function Documentos() {
                                 </Link>{' '}
                                 para seleção rápida com endereço automático.
                               </p>
+                              {touched[field.name] && formErrors.loja && (
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                  <X className="h-4 w-4 text-red-500" />
+                                </div>
+                              )}
+                              {touched[field.name] && !formErrors.loja && formData[field.name] && (
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                </div>
+                              )}
                             </div>
                           ) : manualLojas[field.name] ? (
                             <input
@@ -1220,34 +1560,70 @@ export default function Documentos() {
                               name={field.name}
                               id={field.name}
                               value={formData[field.name] || ''}
-                              onChange={handleInputChange}
-                              className="block w-full rounded-xl border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm text-slate-900 bg-white"
+                              onChange={(e) => {
+                                handleInputChange(e);
+                                setFormErrors(prev => ({ ...prev, loja: null }));
+                              }}
+                              onBlur={() => {
+                                setTouched(prev => ({ ...prev, [field.name]: true }));
+                                if (!formData[field.name]) setFormErrors(prev => ({ ...prev, loja: 'Por favor, digite a loja.' }));
+                              }}
+                              className={`block w-full rounded-lg py-2.5 px-3.5 shadow-sm transition-all duration-200 sm:text-sm text-slate-900 bg-white ${
+                                touched[field.name] && formErrors.loja
+                                  ? 'border-2 border-red-500 bg-red-50/50 focus:ring-red-500 ring-0'
+                                  : touched[field.name] && formData[field.name]
+                                    ? 'border-2 border-emerald-500 bg-emerald-50/50 focus:ring-emerald-500 ring-0'
+                                    : 'border-0 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500'
+                              }`}
                               placeholder="Digite a loja manualmente..."
                             />
                           ) : (
                             <select
                               name={field.name}
                               id={field.name}
-                              value={lojas.some(l => l.nome === formData[field.name] || (l.endereco ? `${l.nome} (${l.endereco})` : l.nome) === formData[field.name]) ? lojas.find(l => l.nome === formData[field.name] || (l.endereco ? `${l.nome} (${l.endereco})` : l.nome) === formData[field.name]).id : ''}
+                              value={
+                                formData[field.name]?.startsWith('old-') 
+                                  ? formData[field.name] 
+                                  : (lojas.find(l => l.nome === formData[field.name] || (l.endereco ? `${l.nome} (${l.endereco})` : l.nome) === formData[field.name])?.id || '')
+                              }
                               onChange={(e) => {
                                 const selectedId = e.target.value;
                                 if (selectedId === 'manual') {
                                   setManualLojas(prev => ({ ...prev, [field.name]: true }));
                                   setFormData(prev => ({ ...prev, [field.name]: '' }));
+                                } else if (selectedId.startsWith('old-')) {
+                                  setFormData(prev => ({ ...prev, [field.name]: selectedId }));
+                                  setFormErrors(prev => ({ ...prev, loja: null }));
                                 } else {
-                                  const selectedLoja = lojas.find(l => l.id === selectedId);
+                                  const selectedLoja = lojas.find(l => String(l.id) === String(selectedId));
                                   setFormData(prev => ({ 
                                     ...prev, 
                                     [field.name]: selectedLoja ? (selectedLoja.endereco ? `${selectedLoja.nome} (${selectedLoja.endereco})` : selectedLoja.nome) : '' 
                                   }));
+                                  setFormErrors(prev => ({ ...prev, loja: null }));
                                 }
                               }}
-                              className="block w-full rounded-xl border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm bg-white"
+                              onBlur={() => setTouched(prev => ({ ...prev, [field.name]: true }))}
+                              className={`block w-full rounded-lg py-2.5 pl-3 pr-10 text-slate-800 shadow-sm transition-all duration-200 sm:text-sm bg-white ${
+                                touched[field.name] && formErrors.loja
+                                  ? 'border-2 border-red-500 bg-red-50/50 focus:ring-red-500 ring-0'
+                                  : touched[field.name] && formData[field.name]
+                                    ? 'border-2 border-emerald-500 bg-emerald-50/50 focus:ring-emerald-500 ring-0'
+                                    : 'border-0 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-500'
+                              }`}
                             >
                               <option value="">Selecione uma loja...</option>
                               {lojas.map(l => (
                                 <option key={l.id} value={l.id}>
-                                  {l.nome} {l.cidadeUf ? `(${l.cidadeUf})` : ''}
+                                  {capitalizeStoreName(l.nome)} {l.cidadeUf ? `(${l.cidadeUf})` : ''}
+                                </option>
+                              ))}
+                              {allLojas.filter(nome => {
+                                const cleanNome = (nome || '').trim().toLowerCase();
+                                return !lojas.some(l => (l.nome || '').trim().toLowerCase() === cleanNome);
+                              }).map(nome => (
+                                <option key={`old-${nome}`} value={`old-${nome}`}>
+                                  {nome}
                                 </option>
                               ))}
                               <option value="manual">-- Outra (Digitar Manualmente) --</option>
@@ -1262,7 +1638,7 @@ export default function Documentos() {
                               readOnly={isAutoFilled}
                               value={formData[field.name] || ''}
                               onChange={handleInputChange}
-                              className={`block w-full rounded-xl border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset sm:text-sm sm:leading-6 transition-all ${
+                              className={`block w-full rounded-lg border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset sm:text-sm sm:leading-6 transition-all ${
                                 isAutoFilled 
                                   ? 'bg-slate-50/80 text-slate-500 ring-slate-100 pr-10 cursor-not-allowed font-medium' 
                                   : 'bg-white text-slate-900 ring-slate-200 focus:ring-2 focus:ring-indigo-500'
@@ -1286,7 +1662,7 @@ export default function Documentos() {
                 <button
                   type="submit"
                   disabled={isGenerating}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg hover:bg-indigo-500 hover:shadow-indigo-500/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg hover:bg-indigo-500 hover:shadow-indigo-500/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? (
                     <><Loader2 className="w-5 h-5 animate-spin" /> Gerando Documento...</>
@@ -1298,7 +1674,7 @@ export default function Documentos() {
             </form>
 
             {/* Coluna da Direita: Pré-visualização Real-time (Apenas para Texto) */}
-            <div className="bg-slate-100/60 rounded-2xl border border-slate-200/80 p-6 flex flex-col h-fit min-h-[600px] shadow-sm lg:sticky lg:top-4">
+            <div className="bg-slate-100/60 rounded-lg border border-slate-200/80 p-6 flex flex-col h-fit min-h-[600px] shadow-sm lg:sticky lg:top-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                   <Eye className="w-4 h-4 text-indigo-500" />
@@ -1342,16 +1718,45 @@ export default function Documentos() {
 
                         const keys = Object.keys(formData).sort((a, b) => b.length - a.length);
                         keys.forEach(key => {
-                          let value = String(formData[key] || `[${key}]`).toUpperCase().trim();
-                          const keyLower = key.toLowerCase();
-                          
-                          if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
-                            if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
-                              value = `<b>${value}</b>`;
+                          if (includedFields[key] === false) {
+                            const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            const keyLower = key.toLowerCase();
+                            
+                            if (keyLower === 'rg') {
+                              preview = preview.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?R\\.?G\\.?\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                              preview = preview.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?R\\.?G\\.?\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+                            } else if (keyLower === 'cpf') {
+                              preview = preview.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?CPF\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                              preview = preview.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?CPF\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+                            } else if (keyLower === 'carteira' || keyLower === 'ctps') {
+                              preview = preview.replace(new RegExp(`(?:da\\s+|de\\s+)?(?:CTPS|Carteira(?: de Trabalho)?)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                              preview = preview.replace(new RegExp(`(?:da\\s+|de\\s+)?(?:CTPS|Carteira(?: de Trabalho)?)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+                            } else if (keyLower === 'serie' || keyLower === 'série') {
+                              preview = preview.replace(new RegExp(`(?:s[eé]rie)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                              preview = preview.replace(new RegExp(`(?:s[eé]rie)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
                             }
+                            
+                            const genericRegex1 = new RegExp(`(?:do\\s+|da\\s+|de\\s+)?(?:${escapedKey})\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi');
+                            preview = preview.replace(genericRegex1, '');
+                            
+                            const genericRegex2 = new RegExp(`(?:do\\s+|da\\s+|de\\s+)?(?:${escapedKey})\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi');
+                            preview = preview.replace(genericRegex2, '');
+                            
+                            preview = preview.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), '');
+                            preview = preview.replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), '');
+                          } else {
+                            let value = String(formData[key] || `[${key}]`).toUpperCase().trim();
+                            const keyLower = key.toLowerCase();
+                            
+                            if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
+                              if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
+                                value = `<b>${value}</b>`;
+                              }
+                            }
+                            const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            preview = preview.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), value)
+                                             .replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), value);
                           }
-
-                          preview = preview.split(`{{${key}}}`).join(value);
                         });
                         return preview;
                       })()
@@ -1410,10 +1815,10 @@ export default function Documentos() {
       {/* Modal de Importação SAP/TOTVS */}
       {isImportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-5 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600">
+                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600">
                   <Wand2 className="w-5 h-5" />
                 </div>
                 <div>
@@ -1432,7 +1837,7 @@ export default function Documentos() {
               <div 
                 onPaste={handlePaste}
                 tabIndex="0"
-                className="w-full min-h-[100px] border-2 border-dashed border-purple-200 rounded-xl bg-purple-50/50 flex flex-col items-center justify-center text-center p-6 cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-purple-100/50 transition-all group"
+                className="w-full min-h-[100px] border-2 border-dashed border-purple-200 rounded-lg bg-purple-50/50 flex flex-col items-center justify-center text-center p-6 cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-purple-100/50 transition-all group"
               >
                 <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-focus:scale-110 transition-transform">
                   <Wand2 className="w-6 h-6 text-purple-500" />
@@ -1442,7 +1847,7 @@ export default function Documentos() {
               </div>
 
               {importItems.length > 0 && (
-                <div className="mt-6 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="mt-6 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                       <tr>
@@ -1502,7 +1907,7 @@ export default function Documentos() {
             <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 mt-auto">
               <button 
                 onClick={() => setIsImportModalOpen(false)}
-                className="px-5 py-2.5 rounded-xl text-slate-600 font-semibold hover:bg-slate-200 transition-colors text-sm"
+                className="px-5 py-2.5 rounded-lg text-slate-600 font-semibold hover:bg-slate-200 transition-colors text-sm"
               >
                 Cancelar
               </button>
@@ -1510,7 +1915,7 @@ export default function Documentos() {
                 onClick={() => {
                   handleProcessImport();
                 }}
-                className="px-5 py-2.5 rounded-xl bg-[#8A2BE2] hover:bg-purple-700 text-white font-bold shadow-sm transition-all flex items-center gap-2 text-sm"
+                className="px-5 py-2.5 rounded-lg bg-[#8A2BE2] hover:bg-purple-700 text-white font-bold shadow-sm transition-all flex items-center gap-2 text-sm"
               >
                 <Wand2 className="w-4 h-4" /> Processar Dados
               </button>
@@ -1522,7 +1927,7 @@ export default function Documentos() {
 
       {shareModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden p-6 md:p-8 space-y-6 border border-slate-100 animate-in zoom-in-95 duration-200 relative">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden p-6 md:p-8 space-y-6 border border-slate-100 animate-in zoom-in-95 duration-200 relative">
             <button
               onClick={() => setShareModalOpen(false)}
               className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-655 hover:bg-slate-50 rounded-full transition-colors"
@@ -1546,7 +1951,7 @@ export default function Documentos() {
               <button
                 onClick={handleWhatsAppShare}
                 disabled={!generatedCartaId}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba56] active:scale-[0.99] text-white py-3.5 text-sm font-bold shadow-lg shadow-emerald-500/10 transition-all disabled:opacity-50"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-[#25D366] hover:bg-[#20ba56] active:scale-[0.99] text-white py-3.5 text-sm font-bold shadow-lg shadow-emerald-500/10 transition-all disabled:opacity-50"
               >
                 <MessageSquare className="w-5 h-5 fill-white" />
                 Enviar pelo WhatsApp
@@ -1555,7 +1960,7 @@ export default function Documentos() {
               <button
                 onClick={handleCopyLink}
                 disabled={!generatedCartaId}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 active:scale-[0.99] py-3.5 text-sm font-bold transition-all disabled:opacity-50"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 active:scale-[0.99] py-3.5 text-sm font-bold transition-all disabled:opacity-50"
               >
                 <Copy className="w-4 h-4" />
                 Copiar Link da Carta
@@ -1572,7 +1977,7 @@ export default function Documentos() {
                     document.body.removeChild(link);
                   }
                 }}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 active:scale-[0.99] text-white py-3.5 text-sm font-bold transition-all"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-indigo-650 hover:bg-indigo-700 active:scale-[0.99] text-white py-3.5 text-sm font-bold transition-all"
               >
                 <Download className="w-4 h-4" />
                 Baixar Novamente
@@ -1593,10 +1998,10 @@ export default function Documentos() {
 
       {isMultiFuncModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
                   <FileEdit className="w-5 h-5" />
                 </div>
                 <div>
@@ -1614,7 +2019,7 @@ export default function Documentos() {
                 const func = funcionarios.find(f => String(f.id) === String(funcId));
                 if (!func) return null;
                 return (
-                  <div key={func.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  <div key={func.id} className="bg-slate-50 border border-slate-200 rounded-lg p-4">
                     <h4 className="font-bold text-slate-700 text-sm mb-3">{(func.nome || 'Desconhecido').toUpperCase()}</h4>
                     <div className="grid grid-cols-2 gap-4">
                       {activeTemplate?.fields?.filter(f => {
@@ -1678,7 +2083,7 @@ export default function Documentos() {
                 onClick={() => {
                   handleGenerate();
                 }}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/20 transition-all"
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-indigo-600/20 transition-all"
               >
                 <CheckCircle2 className="w-4 h-4" /> Continuar e Gerar
               </button>

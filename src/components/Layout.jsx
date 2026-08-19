@@ -1,9 +1,9 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, FileEdit, Download, Settings,
   FileSignature, Users, Building2, Store, Menu, X, History,
-  Package, GripVertical
+  Package, Sparkles, ChevronRight
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -17,12 +17,12 @@ const BASE_NAV = [
   { id: 'dashboard',    name: 'Dashboard',            href: '/dashboard',    icon: 'LayoutDashboard' },
   { id: 'templates',    name: 'Templates',            href: '/templates',    icon: 'FileSignature' },
   { id: 'documentos',   name: 'Documentos',           href: '/documentos',   icon: 'FileEdit' },
-  { id: 'historico',    name: 'Assinaturas',          href: '/historico',    icon: 'History' },
+  { id: 'historico',    name: 'Histórico de Cartas',  href: '/historico',    icon: 'History' },
   { id: 'funcionarios', name: 'Funcionários',         href: '/funcionarios', icon: 'Users' },
   { id: 'empresas',     name: 'Empresas',             href: '/empresas',     icon: 'Building2' },
-  { id: 'lojas',        name: 'Catálogo',             href: '/lojas',        icon: 'Store' },
+  { id: 'lojas',        name: 'Lojas',                href: '/lojas',        icon: 'Store' },
   { id: 'estoque',      name: 'Estoque',              href: '/estoque',      icon: 'Package' },
-  { id: 'auditoria',    name: 'Auditoria',            href: '/auditoria',    icon: 'History' }, // Placeholder icon if Shield doesn't exist
+  { id: 'auditoria',    name: 'Auditoria',            href: '/auditoria',    icon: 'History' },
   { id: 'downloads',    name: 'Downloads',            href: '/downloads',    icon: 'Download' },
   { id: 'configuracoes',name: 'Configurações',        href: '/configuracoes',icon: 'Settings' },
 ];
@@ -32,92 +32,144 @@ const ICON_MAP = {
   Users, Building2, Store, Download, Settings
 };
 
-// Carrega ordem salva ou usa padrão
-function loadNavOrder() {
-  try {
-    const saved = localStorage.getItem('docflow_nav_order');
-    if (saved) {
-      const ids = JSON.parse(saved);
-      // Reconstrói a lista na ordem salva, adicionando itens novos no final
-      const ordered = ids
-        .map(id => BASE_NAV.find(n => n.id === id))
-        .filter(Boolean);
-      const missing = BASE_NAV.filter(n => !ids.includes(n.id));
-      return [...ordered, ...missing];
-    }
-  } catch (_) {}
-  return BASE_NAV;
-}
+// Logo Component
+const Logo = ({ size = 'default' }) => (
+  <div className="flex items-center gap-3">
+    <div className={cn(
+      'relative flex items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30',
+      size === 'default' ? 'w-9 h-9' : 'w-8 h-8'
+    )}>
+      <Sparkles className={cn(
+        'text-white',
+        size === 'default' ? 'w-5 h-5' : 'w-4 h-4'
+      )} />
+      {/* Glow effect */}
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-indigo-400 to-violet-500 opacity-0 blur-sm group-hover:opacity-40 transition-opacity" />
+    </div>
+    <div>
+      <span className={cn(
+        'font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent',
+        size === 'default' ? 'text-lg' : 'text-base'
+      )}>
+        SysTarhget
+      </span>
+      <span className={cn(
+        'font-light text-indigo-300 ml-1',
+        size === 'default' ? 'text-lg' : 'text-base'
+      )}>
+        Pro
+      </span>
+    </div>
+  </div>
+);
 
-function saveNavOrder(items) {
-  localStorage.setItem('docflow_nav_order', JSON.stringify(items.map(i => i.id)));
-}
+// User Avatar Component
+const UserAvatar = () => (
+  <div className="flex items-center gap-3">
+    <div className="relative">
+      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-indigo-500/20">
+        U
+      </div>
+      {/* Status ring */}
+      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900 shadow-sm" />
+    </div>
+    <div className="text-sm min-w-0">
+      <p className="font-medium text-slate-200 truncate">Usuário</p>
+      <p className="text-[10px] text-slate-500 font-mono mt-0.5" title="Data e hora da última atualização do sistema">
+        v. {typeof __APP_VERSION_DATE__ !== 'undefined' ? __APP_VERSION_DATE__ : ''}
+      </p>
+    </div>
+  </div>
+);
+
+const NavItem = ({ item, onClose }) => {
+  const IconComp = ICON_MAP[item.icon];
+
+  return (
+    <NavLink
+      to={item.href}
+      onClick={onClose}
+      draggable={false}
+      className={({ isActive }) =>
+        cn(
+          'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+          isActive
+            ? 'bg-white/10 text-white shadow-lg shadow-indigo-500/10'
+            : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]'
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {/* Indicador lateral animado */}
+          <div
+            className={cn(
+              'absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full transition-all duration-300',
+              isActive
+                ? 'h-6 bg-gradient-to-b from-indigo-400 to-violet-400 opacity-100'
+                : 'h-0 bg-indigo-400 opacity-0 group-hover:h-4 group-hover:opacity-50'
+            )}
+          />
+
+          {/* Ícone */}
+          {IconComp && (
+            <div className={cn(
+              'flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200',
+              isActive
+                ? 'bg-gradient-to-br from-indigo-500/30 to-violet-500/20 text-indigo-300'
+                : 'text-slate-500 group-hover:text-slate-300'
+            )}>
+              <IconComp className="h-[18px] w-[18px]" aria-hidden="true" />
+            </div>
+          )}
+
+          {/* Nome */}
+          <span className={cn(
+            'truncate transition-colors duration-200',
+            isActive ? 'text-white' : ''
+          )}>
+            {item.name}
+          </span>
+
+          {/* Seta no hover */}
+          <ChevronRight className={cn(
+            'ml-auto h-3.5 w-3.5 transition-all duration-200',
+            isActive
+              ? 'text-indigo-300 opacity-100'
+              : 'opacity-0 group-hover:opacity-40 text-slate-500'
+          )} />
+        </>
+      )}
+    </NavLink>
+  );
+};
+
+const NavItems = ({ onClose }) => (
+  <div className="space-y-1">
+    {BASE_NAV.map((item) => (
+      <NavItem
+        key={item.id}
+        item={item}
+        onClose={onClose || (() => {})}
+      />
+    ))}
+  </div>
+);
 
 export default function Layout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const navItems = BASE_NAV; // Organização fixa
-
-  const NavItem = ({ item, onClose }) => {
-    const IconComp = ICON_MAP[item.icon];
-
-    return (
-      <div className="group relative flex items-center rounded-lg transition-all duration-150 select-none">
-        <NavLink
-          to={item.href}
-          onClick={onClose}
-          draggable={false}
-          className={({ isActive }) =>
-            cn(
-              isActive
-                ? 'bg-indigo-50 text-indigo-600'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
-              'flex items-center w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-colors'
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              {IconComp && (
-                <IconComp
-                  className={cn(
-                    isActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-500',
-                    'mr-3 flex-shrink-0 h-5 w-5 transition-colors'
-                  )}
-                  aria-hidden="true"
-                />
-              )}
-              {item.name}
-            </>
-          )}
-        </NavLink>
-      </div>
-    );
-  };
-
-  const NavItems = ({ onClose }) => (
-    <div className="space-y-0.5">
-      {navItems.map((item) => (
-        <NavItem
-          key={item.id}
-          item={item}
-          onClose={onClose || (() => {})}
-        />
-      ))}
-    </div>
-  );
 
   return (
-    <div className="h-screen w-screen bg-gray-50/50 flex flex-col md:flex-row overflow-hidden">
+    <div className="h-screen w-screen flex flex-col md:flex-row overflow-hidden" style={{ background: '#f7f8fc' }}>
 
       {/* Header Mobile */}
-      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:hidden shrink-0 z-20 shadow-sm">
-        <div className="flex items-center gap-2 text-indigo-600 font-bold text-lg">
-          <FileText className="w-5 h-5" />
-          <span>DocFlow Hub</span>
-        </div>
+      <header className="h-16 flex items-center justify-between px-4 md:hidden shrink-0 z-20" style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
+      }}>
+        <Logo size="small" />
         <button
           onClick={() => setIsMobileMenuOpen(true)}
-          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg focus:outline-none"
+          className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg focus:outline-none transition-colors"
           aria-label="Abrir menu"
         >
           <Menu className="w-6 h-6" />
@@ -127,8 +179,10 @@ export default function Layout() {
       {/* Backdrop Mobile */}
       <div
         className={cn(
-          "fixed inset-0 bg-black/50 z-40 transition-opacity duration-300 md:hidden",
-          isMobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          "fixed inset-0 z-40 transition-all duration-300 md:hidden",
+          isMobileMenuOpen
+            ? "opacity-100 pointer-events-auto backdrop-blur-sm bg-black/60"
+            : "opacity-0 pointer-events-none"
         )}
         onClick={() => setIsMobileMenuOpen(false)}
       />
@@ -136,63 +190,56 @@ export default function Layout() {
       {/* Drawer Mobile */}
       <div
         className={cn(
-          "fixed top-0 bottom-0 left-0 w-64 bg-white z-50 flex flex-col shadow-xl transition-transform duration-300 ease-in-out md:hidden",
+          "fixed top-0 bottom-0 left-0 w-72 z-50 flex flex-col shadow-2xl transition-transform duration-300 ease-out md:hidden",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
+        style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)' }}
       >
-        <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 shrink-0">
-          <div className="flex items-center gap-2 text-indigo-600 font-bold text-lg">
-            <FileText className="w-5 h-5" />
-            <span>DocFlow Hub</span>
-          </div>
+        <div className="h-16 flex items-center justify-between px-5 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <Logo size="small" />
           <button
             onClick={() => setIsMobileMenuOpen(false)}
-            className="p-1 text-gray-500 hover:bg-gray-100 rounded-full"
+            className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             aria-label="Fechar menu"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <nav className="flex-1 px-4 py-4 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 overflow-y-auto sidebar-scroll">
           <NavItems onClose={() => setIsMobileMenuOpen(false)} />
         </nav>
-        <div className="p-4 border-t border-gray-200 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">U</div>
-            <div className="text-sm">
-              <p className="font-medium text-gray-900">Usuário</p>
-              <p className="text-gray-500">Plano Pro</p>
-            </div>
-          </div>
+        <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <UserAvatar />
         </div>
       </div>
 
       {/* Sidebar Desktop */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm hidden md:flex shrink-0 z-10">
-        <div className="h-16 flex items-center px-6 border-b border-gray-200 shrink-0">
-          <div className="flex items-center gap-2 text-indigo-600 font-bold text-xl">
-            <FileText className="w-6 h-6" />
-            <span>DocFlow Hub</span>
-          </div>
+      <div
+        className="w-[260px] hidden md:flex flex-col shrink-0 z-10"
+        style={{
+          background: 'linear-gradient(180deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)',
+        }}
+      >
+        {/* Logo */}
+        <div className="h-16 flex items-center px-5 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <Logo />
         </div>
-        <nav className="flex-1 px-4 py-4 overflow-y-auto">
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-4 overflow-y-auto sidebar-scroll">
           <NavItems />
         </nav>
-        <div className="p-4 border-t border-gray-200 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">U</div>
-            <div className="text-sm">
-              <p className="font-medium text-gray-900">Usuário</p>
-              <p className="text-gray-500">Plano Pro</p>
-            </div>
-          </div>
+
+        {/* User */}
+        <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <UserAvatar />
         </div>
       </div>
 
       {/* Conteúdo Principal */}
-      <div className="flex-1 flex flex-col overflow-hidden h-full">
+      <div className="flex-1 flex flex-col overflow-hidden h-full mesh-bg">
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-6xl mx-auto" style={{ animation: 'fade-in 0.3s ease-out' }}>
             <Outlet />
           </div>
         </main>

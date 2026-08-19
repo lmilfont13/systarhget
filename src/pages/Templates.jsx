@@ -32,10 +32,6 @@ export default function Templates() {
     ...extraFields.map(field => ({ value: field, label: `Extra: ${field}` }))
   ];
 
-  useEffect(() => {
-    fetchTemplates();
-  }, []);
-
   const fetchTemplates = async () => {
     try {
       const [pData, tData, fData] = await Promise.all([
@@ -68,6 +64,11 @@ export default function Templates() {
       toast.error('Erro ao carregar templates.');
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line
+    fetchTemplates();
+  }, []);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -258,7 +259,7 @@ export default function Templates() {
         </div>
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-lg border border-gray-100 overflow-hidden">
         {templates.length === 0 ? (
           <div className="text-center py-16 text-gray-500 text-sm">Nenhum template salvo.</div>
         ) : (
@@ -324,7 +325,7 @@ export default function Templates() {
       {/* Modal de Edição de Texto */}
       {textModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-indigo-600" />
@@ -469,7 +470,7 @@ export default function Templates() {
       {/* Modal de Mapeamento */}
       {mappingModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-7xl h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-7xl h-[90vh] flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <Settings className="w-5 h-5 text-indigo-600" />

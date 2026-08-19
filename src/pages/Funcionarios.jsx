@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Edit2, Loader2, X, Save, FileText, Copy, Search, Building2, Link2, BarChart3, Tag, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
+import { formatExcelDate } from '../lib/formatters';
 
 // Cores distintas para badges de empresas (empresa vinculada - CDC/POP/SPAR etc.)
 const EMPRESA_COLORS = [
@@ -50,30 +51,54 @@ export default function Funcionarios() {
 
   // Busca e filtros
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterEmpresaId, setFilterEmpresaId] = useState('');
-  const [showSemEmpresa, setShowSemEmpresa] = useState(false);
+  const [filterCdc, setFilterCdc] = useState('');
+  const [showSemCdc, setShowSemCdc] = useState(false);
 
   // Normaliza texto removendo acentos para busca sensitiva
   const norm = (str) =>
     String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
+  const getExtraToleranteHelper = (extras, possiveisChaves) => {
+    if (!extras) return '';
+    const entries = Object.entries(extras).map(([k, v]) => [String(k).toUpperCase().trim(), v]);
+    for (const chave of possiveisChaves) {
+      const found = entries.find(([k]) => k === chave);
+      if (found) return String(found[1]);
+    }
+    return '';
+  };
+
   const filteredFuncionarios = funcionarios
     .filter(func => {
       if (!func) return false;
       const q = norm(searchTerm);
+
+      const cdc = getExtraToleranteHelper(func.dados_extras, ['NC FUNCIONARIO', 'CDC', 'Nº CDC', 'N° CDC', 'NC_FUNCIONARIO', 'NC']);
+      const cdcStr = cdc ? String(cdc).toUpperCase().trim() : '';
+      const cdcNorm = norm(cdcStr);
+
+      const cliente = getExtraToleranteHelper(func.dados_extras, ['EMPRESA', 'CONTA', 'CLIENTE']);
+      const clienteNorm = norm(cliente);
+
+      const coligada = empresas.find(e => e.id === func.empresa_id);
+      const coligadaNorm = coligada ? norm(coligada.nome) : '';
+
       const matchesTerm = !q || (
         norm(func.nome).includes(q) ||
         norm(func.dados_extras?.CPF).includes(q) ||
         norm(func.dados_extras?.Empresa).includes(q) ||
-        norm(func.cargo).includes(q)
+        norm(func.cargo).includes(q) ||
+        cdcNorm.includes(q) ||
+        clienteNorm.includes(q) ||
+        coligadaNorm.includes(q)
       );
-      if (showSemEmpresa) return matchesTerm && !func.empresa_id;
-      const matchesEmpresa = !filterEmpresaId || func.empresa_id === filterEmpresaId;
-      return matchesTerm && matchesEmpresa;
+
+      if (showSemCdc) return matchesTerm && !cdcStr;
+      const matchesCdc = !filterCdc || cdcStr === filterCdc;
+      
+      return matchesTerm && matchesCdc;
     })
     .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
-
-  useEffect(() => { fetchFuncionarios(); }, []);
 
   const fetchFuncionarios = async () => {
     try {
@@ -98,6 +123,11 @@ export default function Funcionarios() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line
+    fetchFuncionarios();
+  }, []);
 
   const handleDelete = async (id) => {
     if (!window.confirm('Tem certeza que deseja excluir este funcionário?')) return;
@@ -167,8 +197,10 @@ export default function Funcionarios() {
     
     const getExtraTolerante = (extras, possiveisChaves) => {
       if (!extras) return '';
-      for (const [k, v] of Object.entries(extras)) {
-        if (possiveisChaves.includes(String(k).toUpperCase().trim())) return v;
+      const entries = Object.entries(extras).map(([k, v]) => [String(k).toUpperCase().trim(), v]);
+      for (const chave of possiveisChaves) {
+        const found = entries.find(([k]) => k === chave);
+        if (found) return String(found[1]);
       }
       return '';
     };
@@ -207,13 +239,27 @@ export default function Funcionarios() {
     }
   };
 
-  // Resumo por empresa
-  const resumoPorEmpresa = empresas.map(emp => ({
-    ...emp,
-    total: funcionarios.filter(f => f.empresa_id === emp.id).length,
-    color: getEmpresaColor(emp.id, empresas)
+  // Resumo por CDC
+  const cdcCounts = {};
+  let semCdcCount = 0;
+  funcionarios.forEach(f => {
+    const cdc = getExtraToleranteHelper(f.dados_extras, ['NC FUNCIONARIO', 'CDC', 'Nº CDC', 'N° CDC', 'NC_FUNCIONARIO', 'NC']);
+    const cdcStr = cdc ? String(cdc).toUpperCase().trim() : '';
+    if (cdcStr) {
+      cdcCounts[cdcStr] = (cdcCounts[cdcStr] || 0) + 1;
+    } else {
+      semCdcCount++;
+    }
+  });
+
+  const resumoPorCdc = Object.keys(cdcCounts)
+    .filter(cdc => !/^\d+$/.test(cdc.trim()))
+    .map((cdc, idx) => ({
+    id: cdc,
+    nome: `${cdc}`,
+    total: cdcCounts[cdc],
+    color: EMPRESA_COLORS[idx % EMPRESA_COLORS.length]
   })).sort((a, b) => b.total - a.total);
-  const semEmpresaCount = funcionarios.filter(f => !f.empresa_id).length;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-300">
@@ -227,14 +273,14 @@ export default function Funcionarios() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowResumo(v => !v)}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold shadow-sm transition-all ${showResumo ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+            className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-bold shadow-sm transition-all ${showResumo ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
           >
             <BarChart3 className="w-4 h-4" />
-            Resumo por Empresa
+            Resumo por CDC
           </button>
           <button
             onClick={() => setEditModal({ isOpen: true, data: { nome: '', cargo: '', empresa_id: '', dados_extras: { CPF: '', RG: '', CTPS: '', SERIE: '', MATRICULA: '', 'NC FUNCIONARIO': '', 'Empresa': '' } } })}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 py-2.5 shadow-md transition-all"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 py-2.5 shadow-md transition-all"
           >
             <Plus className="w-4 h-4" />
             Novo Funcionário
@@ -242,50 +288,50 @@ export default function Funcionarios() {
         </div>
       </div>
 
-      {/* Painel Resumo por Empresa */}
+      {/* Painel Resumo por CDC */}
       {showResumo && (
-        <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden animate-in slide-in-from-top-2 duration-200">
+        <div className="bg-white border border-slate-200/80 rounded-lg shadow-sm overflow-hidden animate-in slide-in-from-top-2 duration-200">
           <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-indigo-600" />
-            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Distribuição por Empresa</h3>
+            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Distribuição por CDC</h3>
             <span className="ml-auto text-xs text-slate-400 font-medium">{funcionarios.length} funcionários no total</span>
           </div>
           <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {resumoPorEmpresa.map((emp) => {
-              const pct = funcionarios.length > 0 ? Math.round((emp.total / funcionarios.length) * 100) : 0;
-              const col = emp.color;
+            {resumoPorCdc.map((cdc) => {
+              const pct = funcionarios.length > 0 ? Math.round((cdc.total / funcionarios.length) * 100) : 0;
+              const col = cdc.color;
               return (
-                <button key={emp.id} onClick={() => { setFilterEmpresaId(emp.id); setShowSemEmpresa(false); setShowResumo(false); }}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border ${col.border} ${col.bg} hover:opacity-80 transition-all text-left`}>
+                <button key={cdc.id} onClick={() => { setFilterCdc(cdc.id); setShowSemCdc(false); setShowResumo(false); }}
+                  className={`flex items-center gap-3 p-3.5 rounded-lg border ${col.border} ${col.bg} hover:opacity-80 transition-all text-left`}>
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${col.bg} border ${col.border}`}>
-                    <Building2 className={`w-4 h-4 ${col.text}`} />
+                    <Hash className={`w-4 h-4 ${col.text}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-extrabold uppercase truncate ${col.text}`}>{emp.nome}</p>
+                    <p className={`text-xs font-extrabold uppercase truncate ${col.text}`}>CDC {cdc.nome}</p>
                     <div className="mt-1 h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
                       <div className={`h-full ${col.dot} rounded-full`} style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className={`text-xl font-black ${col.text}`}>{emp.total}</p>
+                    <p className={`text-xl font-black ${col.text}`}>{cdc.total}</p>
                     <p className={`text-[9px] font-bold uppercase ${col.text} opacity-60`}>{pct}%</p>
                   </div>
                 </button>
               );
             })}
-            <button onClick={() => { setShowSemEmpresa(true); setFilterEmpresaId(''); setShowResumo(false); }}
-              className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-all text-left">
+            <button onClick={() => { setShowSemCdc(true); setFilterCdc(''); setShowResumo(false); }}
+              className="flex items-center gap-3 p-3.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-all text-left">
               <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-slate-100 border border-slate-200">
                 <Link2 className="w-4 h-4 text-slate-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-extrabold uppercase text-slate-500">Sem Empresa</p>
+                <p className="text-xs font-extrabold uppercase text-slate-500">Sem CDC</p>
                 <p className="text-[10px] text-slate-400 mt-0.5">Não associados</p>
               </div>
               <div className="shrink-0 text-right">
-                <p className="text-xl font-black text-slate-600">{semEmpresaCount}</p>
+                <p className="text-xl font-black text-slate-600">{semCdcCount}</p>
                 <p className="text-[9px] font-bold uppercase text-slate-400">
-                  {funcionarios.length > 0 ? Math.round((semEmpresaCount / funcionarios.length) * 100) : 0}%
+                  {funcionarios.length > 0 ? Math.round((semCdcCount / funcionarios.length) * 100) : 0}%
                 </p>
               </div>
             </button>
@@ -294,15 +340,15 @@ export default function Funcionarios() {
       )}
 
       {/* Lista de Funcionários */}
-      <div className="bg-white border border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
+      <div className="bg-white border border-slate-200/80 shadow-sm rounded-lg overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
               Funcionários Cadastrados
-              {(filterEmpresaId || showSemEmpresa) && (
-                <button onClick={() => { setFilterEmpresaId(''); setShowSemEmpresa(false); }}
+              {(filterCdc || showSemCdc) && (
+                <button onClick={() => { setFilterCdc(''); setShowSemCdc(false); }}
                   className="ml-1 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold hover:bg-indigo-200 transition-all">
-                  {showSemEmpresa ? 'Sem empresa' : (empresas.find(e => e.id === filterEmpresaId)?.nome || '')} ✕
+                  {showSemCdc ? 'Sem CDC' : `CDC ${filterCdc}`} ✕
                 </button>
               )}
             </h3>
@@ -311,14 +357,14 @@ export default function Funcionarios() {
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              <input type="text" placeholder="Buscar por nome, CPF ou conta..." value={searchTerm}
+              <input type="text" placeholder="Buscar por nome, CDC, cliente, coligada, CPF..." value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="block w-full rounded-xl border-0 py-2 pl-9 pr-3 text-slate-900 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-600 sm:text-sm" />
+                className="block w-full rounded-lg border-0 py-2 pl-9 pr-3 text-slate-900 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-600 sm:text-sm" />
             </div>
-            <select value={filterEmpresaId} onChange={e => { setFilterEmpresaId(e.target.value); setShowSemEmpresa(false); }}
-              className="block w-full sm:w-48 rounded-xl border-0 py-2 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-600 sm:text-sm bg-white">
-              <option value="">Todas as Empresas</option>
-              {empresas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+            <select value={filterCdc} onChange={e => { setFilterCdc(e.target.value); setShowSemCdc(false); }}
+              className="block w-full sm:w-48 rounded-lg border-0 py-2 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-indigo-600 sm:text-sm bg-white">
+              <option value="">Todos os CDCs</option>
+              {Object.keys(cdcCounts).filter(c => !/^\d+$/.test(c.trim())).sort().map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
         </div>
@@ -328,15 +374,16 @@ export default function Funcionarios() {
         ) : filteredFuncionarios.length === 0 ? (
           <div className="p-12 text-center text-sm text-slate-500 font-medium">Nenhum funcionário encontrado.</div>
         ) : (
-          <ul className="divide-y divide-slate-100 max-h-[680px] overflow-y-auto">
+          <ul className="divide-y divide-slate-100 max-h-[85vh] overflow-y-auto">
             {filteredFuncionarios.map((func) => {
               const cpf = func?.dados_extras?.CPF || 'Sem CPF';
 
               const getExtraTolerante = (extras, possiveisChaves) => {
                 if (!extras) return '';
-                for (const [k, v] of Object.entries(extras)) {
-                  const keyNorm = String(k).toUpperCase().trim();
-                  if (possiveisChaves.includes(keyNorm)) return v;
+                const entries = Object.entries(extras).map(([k, v]) => [String(k).toUpperCase().trim(), v]);
+                for (const chave of possiveisChaves) {
+                  const found = entries.find(([k]) => k === chave);
+                  if (found) return String(found[1]);
                 }
                 return '';
               };
@@ -362,7 +409,7 @@ export default function Funcionarios() {
                   <div className="flex items-start justify-between gap-3">
                     {/* Avatar + Info */}
                     <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-extrabold uppercase shrink-0 mt-0.5">
+                      <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 font-extrabold uppercase shrink-0 mt-0.5">
                         {String(func.nome || '?').charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -421,23 +468,23 @@ export default function Funcionarios() {
                     {/* Ações */}
                     <div className="flex gap-1 shrink-0">
                       <button onClick={() => setTemplateModal({ isOpen: true, funcId: func.id, empresaId: func.empresa_id })}
-                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all" title="Gerar Documento">
+                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Gerar Documento">
                         <FileText className="w-4 h-4" />
                       </button>
                       <button onClick={() => openAssocModal(func)}
-                        className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-all" title="Associar Empresa / Conta / CDC">
+                        className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-all" title="Associar Empresa / Conta / CDC">
                         <Building2 className="w-4 h-4" />
                       </button>
                       <button onClick={() => handleDuplicate(func)}
-                        className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all" title="Duplicar">
+                        className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Duplicar">
                         <Copy className="w-4 h-4" />
                       </button>
                       <button onClick={() => openEdit(func)}
-                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" title="Editar">
+                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Editar">
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button onClick={() => handleDelete(func.id)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all" title="Excluir">
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Excluir">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -454,7 +501,7 @@ export default function Funcionarios() {
           ============================================ */}
       {assocModal.isOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-slate-50 to-indigo-50/40">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                 <Link2 className="w-4 h-4 text-indigo-600" />
@@ -467,7 +514,7 @@ export default function Funcionarios() {
 
             <div className="p-6 space-y-5">
               {/* Nome do funcionário */}
-              <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 border border-slate-100">
+              <div className="flex items-center gap-3 bg-slate-50 rounded-lg p-3 border border-slate-100">
                 <div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-black text-sm">
                   {String(assocModal.func?.nome || '?').charAt(0)}
                 </div>
@@ -485,7 +532,7 @@ export default function Funcionarios() {
                 </label>
                 <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                   <button onClick={() => setAssocEmpresaId('')}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all flex items-center gap-2.5 text-sm ${assocEmpresaId === '' ? 'border-slate-400 bg-slate-100 ring-2 ring-slate-200' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all flex items-center gap-2.5 text-sm ${assocEmpresaId === '' ? 'border-slate-400 bg-slate-100 ring-2 ring-slate-200' : 'border-slate-200 hover:bg-slate-50'}`}>
                     <Link2 className="w-4 h-4 text-slate-400 shrink-0" />
                     <span className="font-semibold text-slate-500">Sem empresa</span>
                     {assocEmpresaId === '' && <span className="ml-auto text-slate-500 font-black text-xs">✓</span>}
@@ -495,7 +542,7 @@ export default function Funcionarios() {
                     const isSelected = assocEmpresaId === emp.id;
                     return (
                       <button key={emp.id} onClick={() => setAssocEmpresaId(emp.id)}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all flex items-center gap-2.5 text-sm ${isSelected ? `${col.border} ${col.bg} ring-2 ring-offset-1 ring-indigo-200` : 'border-slate-200 hover:bg-slate-50'}`}>
+                        className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all flex items-center gap-2.5 text-sm ${isSelected ? `${col.border} ${col.bg} ring-2 ring-offset-1 ring-indigo-200` : 'border-slate-200 hover:bg-slate-50'}`}>
                         <div className={`w-6 h-6 rounded-md flex items-center justify-center ${col.bg} border ${col.border} shrink-0`}>
                           <Building2 className={`w-3 h-3 ${col.text}`} />
                         </div>
@@ -519,7 +566,7 @@ export default function Funcionarios() {
                   value={assocConta}
                   onChange={e => setAssocConta(e.target.value)}
                   placeholder="Ex: COLGATE"
-                  className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 text-sm py-2.5 px-3 border shadow-sm uppercase"
+                  className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 text-sm py-2.5 px-3 border shadow-sm uppercase"
                 />
               </div>
 
@@ -535,18 +582,18 @@ export default function Funcionarios() {
                   value={assocCdc}
                   onChange={e => setAssocCdc(e.target.value)}
                   placeholder="Ex: 10045"
-                  className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-slate-400 focus:border-slate-400 text-sm py-2.5 px-3 border shadow-sm uppercase"
+                  className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-slate-400 focus:border-slate-400 text-sm py-2.5 px-3 border shadow-sm uppercase"
                 />
               </div>
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
               <button onClick={() => setAssocModal({ isOpen: false, func: null })}
-                className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">
+                className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
                 Cancelar
               </button>
               <button onClick={saveAssociacao} disabled={isSavingAssoc}
-                className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 border border-transparent rounded-xl shadow-md transition-all disabled:opacity-60">
+                className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 border border-transparent rounded-lg shadow-md transition-all disabled:opacity-60">
                 {isSavingAssoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 Salvar Associações
               </button>
@@ -560,7 +607,7 @@ export default function Funcionarios() {
           ============================================ */}
       {templateModal.isOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                 <FileText className="w-5 h-5 text-indigo-600" />
@@ -577,8 +624,8 @@ export default function Funcionarios() {
                 {templates.map(t => (
                   <button key={t.id}
                     onClick={() => navigate(`/documentos?func=${templateModal.funcId}&tpl=${t.id}${templateModal.empresaId ? `&emp=${templateModal.empresaId}` : ''}`)}
-                    className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all flex items-center gap-3 group">
-                    <div className="w-9 h-9 rounded-xl bg-slate-50 group-hover:bg-indigo-100 flex items-center justify-center transition-colors">
+                    className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all flex items-center gap-3 group">
+                    <div className="w-9 h-9 rounded-lg bg-slate-50 group-hover:bg-indigo-100 flex items-center justify-center transition-colors">
                       <FileText className={`w-4 h-4 ${t.type === 'pdf' ? 'text-indigo-500' : 'text-orange-500'}`} />
                     </div>
                     <div className="flex flex-col">
@@ -604,7 +651,7 @@ export default function Funcionarios() {
           ============================================ */}
       {editModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 shrink-0">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                 {editModal.data?.id ? <Edit2 className="w-5 h-5 text-indigo-600" /> : <Plus className="w-5 h-5 text-emerald-600" />}
@@ -623,17 +670,17 @@ export default function Funcionarios() {
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Nome Completo</label>
                     <input type="text" value={editModal.data.nome || ''} onChange={e => handleEditChange('nome', e.target.value)}
-                      className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
+                      className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cargo</label>
                     <input type="text" value={editModal.data.cargo || ''} onChange={e => handleEditChange('cargo', e.target.value)}
-                      className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
+                      className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Vínculo Empresa</label>
                     <select value={editModal.data.empresa_id || ''} onChange={e => handleEditChange('empresa_id', e.target.value)}
-                      className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border bg-white shadow-sm">
+                      className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border bg-white shadow-sm">
                       <option value="">Nenhum Vínculo...</option>
                       {empresas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
                     </select>
@@ -648,41 +695,41 @@ export default function Funcionarios() {
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">CPF</label>
                     <input type="text" value={editModal.data.dados_extras?.CPF || ''} onChange={e => handleExtraChange('CPF', e.target.value)}
-                      className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
+                      className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">RG</label>
                     <input type="text" value={editModal.data.dados_extras?.RG || ''} onChange={e => handleExtraChange('RG', e.target.value)}
-                      className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
+                      className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">CTPS (Nº Carteira)</label>
                     <input type="text" value={editModal.data.dados_extras?.CTPS || ''} onChange={e => handleExtraChange('CTPS', e.target.value)}
-                      className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
+                      className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Série CTPS</label>
                     <input type="text" value={editModal.data.dados_extras?.SERIE || ''} onChange={e => handleExtraChange('SERIE', e.target.value)}
-                      className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
+                      className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Matrícula</label>
                     <input type="text" value={editModal.data.dados_extras?.MATRICULA || ''} onChange={e => handleExtraChange('MATRICULA', e.target.value)}
-                      className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
+                      className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
                       <span className="flex items-center gap-1"><Hash className="w-3 h-3 text-slate-400" />CDC / Centro de Custo</span>
                     </label>
                     <input type="text" value={editModal.data.dados_extras?.['NC FUNCIONARIO'] || ''} onChange={e => handleExtraChange('NC FUNCIONARIO', e.target.value)}
-                      className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" placeholder="Ex: 10045" />
+                      className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" placeholder="Ex: 10045" />
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
                       <span className="flex items-center gap-1"><Tag className="w-3 h-3 text-amber-400" />Conta / Cliente / Empresa</span>
                     </label>
                     <input type="text" value={editModal.data.dados_extras?.Empresa || ''} onChange={e => handleExtraChange('Empresa', e.target.value)}
-                      className="block w-full rounded-xl border-slate-200 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 sm:text-sm py-2 px-3 border shadow-sm" placeholder="Ex: COLGATE, UNILEVER, NESTLE" />
+                      className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 sm:text-sm py-2 px-3 border shadow-sm" placeholder="Ex: COLGATE, UNILEVER, NESTLE" />
                   </div>
                 </div>
               </div>
@@ -695,10 +742,10 @@ export default function Funcionarios() {
                     .filter(([key]) => !['CPF', 'RG', 'CTPS', 'SERIE', 'MATRICULA', 'NC FUNCIONARIO', 'Empresa'].includes(key))
                     .map(([key, val]) => (
                       <div key={key} className="flex items-center gap-2">
-                        <input type="text" readOnly value={key} className="block w-1/3 rounded-xl border-slate-200 bg-slate-50 sm:text-sm py-2 px-3 border text-slate-500" />
+                        <input type="text" readOnly value={key} className="block w-1/3 rounded-lg border-slate-200 bg-slate-50 sm:text-sm py-2 px-3 border text-slate-500" />
                         <input type="text" value={val || ''} onChange={e => handleExtraChange(key, e.target.value)}
-                          className="block w-full rounded-xl border-slate-200 sm:text-sm py-2 px-3 border" />
-                        <button onClick={() => removeExtraField(key)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl">
+                          className="block w-full rounded-lg border-slate-200 sm:text-sm py-2 px-3 border" />
+                        <button onClick={() => removeExtraField(key)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -707,14 +754,14 @@ export default function Funcionarios() {
                     <p className="text-xs text-slate-400 italic">Nenhum campo personalizado cadastrado.</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
                   <input type="text" placeholder="Nome do Campo" value={newExtraKey} onChange={e => setNewExtraKey(e.target.value)}
-                    className="block w-1/3 rounded-xl border-slate-200 sm:text-sm py-2 px-3 border" />
+                    className="block w-1/3 rounded-lg border-slate-200 sm:text-sm py-2 px-3 border" />
                   <input type="text" placeholder="Valor" value={newExtraValue} onChange={e => setNewExtraValue(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addExtraField()}
-                    className="block w-full rounded-xl border-slate-200 sm:text-sm py-2 px-3 border" />
+                    className="block w-full rounded-lg border-slate-200 sm:text-sm py-2 px-3 border" />
                   <button onClick={addExtraField} type="button"
-                    className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shrink-0">
+                    className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shrink-0">
                     <Plus className="w-4 h-4" /> Add
                   </button>
                 </div>
@@ -723,11 +770,11 @@ export default function Funcionarios() {
 
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
               <button onClick={() => setEditModal({ isOpen: false, data: null })}
-                className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">
+                className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
                 Cancelar
               </button>
               <button onClick={saveEdit}
-                className={`inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white rounded-xl shadow-md transition-all ${editModal.data?.id ? 'bg-indigo-600 hover:bg-indigo-500' : editModal.data?.nome?.startsWith('(COPIA)') ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+                className={`inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white rounded-lg shadow-md transition-all ${editModal.data?.id ? 'bg-indigo-600 hover:bg-indigo-500' : editModal.data?.nome?.startsWith('(COPIA)') ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
                 {editModal.data?.id ? <Save className="w-4 h-4" /> : editModal.data?.nome?.startsWith('(COPIA)') ? <Copy className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                 {editModal.data?.id ? 'Salvar Alterações' : editModal.data?.nome?.startsWith('(COPIA)') ? 'Confirmar Duplicação' : 'Cadastrar Funcionário'}
               </button>

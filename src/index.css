@@ -1,65 +1,419 @@
 @import "tailwindcss";
 
+/* ============================================================
+   SYSTARHGET PRO — PREMIUM DESIGN SYSTEM
+   ============================================================ */
+
+/* === Font Import === */
 html {
   font-size: 15px;
 }
 
 @media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
+  html { font-size: 16px; }
 }
 
 @media (min-width: 1280px) {
-  html {
-    font-size: 17px;
-  }
+  html { font-size: 17px; }
 }
 
 @media (min-width: 1920px) {
-  html {
-    font-size: 19px;
-  }
+  html { font-size: 19px; }
 }
 
+/* ============================================================
+   CSS VARIABLES — PREMIUM PALETTE
+   ============================================================ */
 :root {
-  --background: 210 40% 98%;
-  --foreground: 222.2 84% 4.9%;
+  /* Core Colors */
+  --background: 220 20% 97%;
+  --foreground: 224 71% 4%;
 
   --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
+  --card-foreground: 224 71% 4%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
+  --popover-foreground: 224 71% 4%;
 
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
+  --primary: 243 75% 59%;
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
+  --secondary: 240 5% 96%;
+  --secondary-foreground: 224 71% 4%;
 
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
+  --muted: 220 15% 95%;
+  --muted-foreground: 220 9% 46%;
 
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
+  --accent: 262 83% 58%;
+  --accent-foreground: 0 0% 100%;
 
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
 
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 243 75% 59%;
 
-  --radius: 0.5rem;
+  --radius: 0.75rem;
+
+  /* Premium Extras */
+  --sidebar-bg: linear-gradient(180deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+  --sidebar-text: #cbd5e1;
+  --sidebar-text-active: #ffffff;
+  --sidebar-hover: rgba(255, 255, 255, 0.08);
+  --sidebar-active: rgba(99, 102, 241, 0.25);
+  --sidebar-indicator: #818cf8;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+
+  --glow-primary: 0 0 20px rgba(99, 102, 241, 0.3);
+  --glow-accent: 0 0 20px rgba(139, 92, 246, 0.3);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.04);
 }
 
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
 body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01';
 }
 
+/* Tabular nums for counters */
+.tabular-nums, [data-count], .counter, td:nth-child(1) {
+  font-variant-numeric: tabular-nums;
+}
+
+/* === Placeholder Enhancement === */
+::placeholder {
+  color: #94a3b8 !important;
+  font-weight: 400 !important;
+  opacity: 1 !important;
+}
+
+/* ============================================================
+   PREMIUM SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 100px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* Sidebar scrollbar — lighter */
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 5px rgba(99, 102, 241, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.4); }
+}
+
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(12px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ============================================================
+   PREMIUM CARDS
+   ============================================================ */
+/* Any div/section with rounded corners and white bg */
+.bg-white,
+[class*="bg-white"] {
+  transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================================
+   PREMIUM TABLES
+   ============================================================ */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+thead th {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: #64748b !important;
+  padding: 0.875rem 1rem !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+thead th:first-child {
+  border-radius: 0.5rem 0 0 0;
+}
+
+thead th:last-child {
+  border-radius: 0 0.5rem 0 0;
+}
+
+tbody tr {
+  transition: all 0.15s ease;
+}
+
+tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+tbody tr:nth-child(even) {
+  background-color: rgba(248, 250, 252, 0.5);
+}
+
+tbody td {
+  padding: 0.75rem 1rem !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+/* ============================================================
+   PREMIUM BUTTONS
+   ============================================================ */
+button, [role="button"] {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Primary action buttons */
+button.bg-indigo-600,
+button.bg-primary,
+button[class*="bg-indigo-6"],
+a[class*="bg-indigo-6"] {
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%) !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3), 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  border: none !important;
+}
+
+button.bg-indigo-600:hover,
+button.bg-primary:hover,
+button[class*="bg-indigo-6"]:hover,
+a[class*="bg-indigo-6"]:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #6d28d9 100%) !important;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4), 0 2px 4px rgba(0, 0, 0, 0.08) !important;
+  transform: translateY(-1px);
+}
+
+button.bg-indigo-600:active,
+button.bg-primary:active,
+button[class*="bg-indigo-6"]:active,
+a[class*="bg-indigo-6"]:active {
+  transform: translateY(0px);
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.3) !important;
+}
+
+/* Destructive buttons */
+button[class*="bg-red-"],
+button[class*="bg-rose-"] {
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25) !important;
+}
+
+button[class*="bg-red-"]:hover,
+button[class*="bg-rose-"]:hover {
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35) !important;
+  transform: translateY(-1px);
+}
+
+/* Ghost / outline buttons */
+button[class*="border"] {
+  transition: all 0.2s ease;
+}
+
+button[class*="border"]:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* ============================================================
+   PREMIUM INPUTS
+   ============================================================ */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
+input[type="date"],
+textarea,
+select {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border: 1.5px solid #e2e8f0 !important;
+  border-radius: 0.5rem !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #818cf8 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  outline: none !important;
+}
+
+/* ============================================================
+   PREMIUM BADGES
+   ============================================================ */
+span[class*="bg-sky-100"],
+span[class*="bg-violet-100"],
+span[class*="bg-emerald-100"],
+span[class*="bg-orange-100"],
+span[class*="bg-rose-100"],
+span[class*="bg-cyan-100"],
+span[class*="bg-teal-100"],
+span[class*="bg-indigo-100"],
+span[class*="bg-green-100"],
+span[class*="bg-blue-100"],
+span[class*="bg-yellow-100"],
+span[class*="bg-red-100"],
+span[class*="bg-purple-100"] {
+  font-weight: 500 !important;
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* ============================================================
+   PREMIUM MODALS / OVERLAYS
+   ============================================================ */
+[class*="fixed"][class*="inset-0"][class*="bg-black"] {
+  backdrop-filter: blur(4px);
+}
+
+/* Modal cards */
+[class*="fixed"][class*="bg-white"][class*="rounded"] {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25),
+              0 0 0 1px rgba(0, 0, 0, 0.03) !important;
+  animation: float-in 0.2s ease-out;
+}
+
+/* ============================================================
+   PAGE TITLE TYPOGRAPHY
+   ============================================================ */
+h1, h2 {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #0f172a;
+}
+
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+
+h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #1e293b;
+}
+
+/* ============================================================
+   MESH GRADIENT BACKGROUND (content area)
+   ============================================================ */
+.mesh-bg {
+  position: relative;
+  background-color: hsl(var(--background));
+}
+
+.mesh-bg::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 40% 80%, rgba(59, 130, 246, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mesh-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   LOADING SKELETON
+   ============================================================ */
+.skeleton {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 0.5rem;
+}
+
+/* ============================================================
+   SELECTION
+   ============================================================ */
+::selection {
+  background-color: rgba(99, 102, 241, 0.15);
+  color: #312e81;
+}
+
+/* ============================================================
+   TAILWIND THEME TOKENS
+   ============================================================ */
 @theme {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));

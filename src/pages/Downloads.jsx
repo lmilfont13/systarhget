@@ -16,7 +16,7 @@ export default function Downloads() {
         </p>
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-lg border border-gray-100 overflow-hidden">
         <ul role="list" className="divide-y divide-gray-100">
           {documents.map((doc) => (
             <li key={doc.id} className="flex items-center justify-between gap-x-6 p-6 hover:bg-gray-50/50 transition-colors">

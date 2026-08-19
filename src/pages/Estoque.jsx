@@ -106,13 +106,14 @@ export default function Estoque() {
         imei: '',
         detalhes: '',
         tipoAssociacao: '',
-        nomeAssociacao: ''
+        nomeAssociacao: '',
+        quantidade: 1
       }
     });
   };
 
   const handleSaveItem = async () => {
-    const { id, nomeNovo, tipo, foto, tamanho, modelo, empresa, imei, detalhes, tipoAssociacao, nomeAssociacao } = itemModal.data;
+    const { id, nomeNovo, tipo, foto, tamanho, modelo, empresa, imei, detalhes, tipoAssociacao, nomeAssociacao, quantidade } = itemModal.data;
 
     if (!nomeNovo.trim()) {
       toast.error('O nome do item é obrigatório.');
@@ -141,9 +142,12 @@ export default function Estoque() {
         toast.success('Item de estoque atualizado com sucesso!');
       } else {
         // Inserir
-        const { error } = await supabase.from('estoque').insert([payload]);
+        const qtd = parseInt(quantidade, 10) || 1;
+        const payloads = Array.from({ length: qtd }).map(() => ({ ...payload }));
+        
+        const { error } = await supabase.from('estoque').insert(payloads);
         if (error) throw error;
-        toast.success('Item adicionado ao estoque com sucesso!');
+        toast.success(`${qtd} item(ns) adicionado(s) ao estoque com sucesso!`);
       }
 
       setItemModal({ isOpen: false, data: null });
@@ -156,16 +160,41 @@ export default function Estoque() {
     }
   };
 
-  const handleDeleteItem = async (id) => {
-    if (!window.confirm('Tem certeza de que deseja excluir este item do estoque?')) return;
+  const handleDeleteItem = async (itemGroup) => {
+    let idsToDelete = [];
+    
+    // Fallback if just an ID is passed by mistake somewhere
+    if (typeof itemGroup === 'string' || typeof itemGroup === 'number') {
+      if (!window.confirm('Tem certeza de que deseja excluir este item do estoque?')) return;
+      idsToDelete.push(itemGroup);
+    } else {
+      if (itemGroup.itensOriginais && itemGroup.itensOriginais.length > 1) {
+        const qtd = itemGroup.itensOriginais.length;
+        const resp = window.prompt(`Este item possui ${qtd} unidades agrupadas.\n\nDigite "1" para apagar APENAS UMA unidade.\nDigite "TODAS" para apagar TODAS as ${qtd} unidades de uma vez.`);
+        
+        if (resp === '1') {
+          idsToDelete.push(itemGroup.itensOriginais[0].id); // Delete just the first one
+        } else if (resp && resp.trim().toUpperCase() === 'TODAS') {
+          idsToDelete = itemGroup.itensOriginais.map(i => i.id);
+        } else {
+          return; // Cancelled or invalid
+        }
+      } else {
+        if (!window.confirm('Tem certeza de que deseja excluir este item do estoque?')) return;
+        idsToDelete.push(itemGroup.id);
+      }
+    }
 
     try {
-      const { error } = await supabase.from('estoque').delete().eq('id', id);
+      toast.loading(`Excluindo ${idsToDelete.length} item(ns)...`, { id: 'del-estoque' });
+      const { error } = await supabase.from('estoque').delete().in('id', idsToDelete);
       if (error) throw error;
-      toast.success('Item de estoque removido com sucesso.');
+      toast.dismiss('del-estoque');
+      toast.success(`${idsToDelete.length} item(ns) removido(s) com sucesso.`);
       fetchData();
     } catch (error) {
       console.error(error);
+      toast.dismiss('del-estoque');
       toast.error('Erro ao excluir item de estoque.');
     }
   };
@@ -341,7 +370,7 @@ export default function Estoque() {
 
       {/* Cards de Métricas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-gray-150 shadow-sm flex items-center gap-4">
+        <div className="bg-white p-5 rounded-lg border border-gray-150 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
             <Layers className="w-6 h-6" />
           </div>
@@ -351,7 +380,7 @@ export default function Estoque() {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-gray-150 shadow-sm flex items-center gap-4">
+        <div className="bg-white p-5 rounded-lg border border-gray-150 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
             <Smartphone className="w-6 h-6" />
           </div>
@@ -361,7 +390,7 @@ export default function Estoque() {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-gray-150 shadow-sm flex items-center gap-4">
+        <div className="bg-white p-5 rounded-lg border border-gray-150 shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
             <Shirt className="w-6 h-6" />
           </div>
@@ -371,7 +400,7 @@ export default function Estoque() {
           </div>
         </div>
 
-        <div className={`p-5 rounded-xl border shadow-sm flex items-center gap-4 transition-colors ${
+        <div className={`p-5 rounded-lg border shadow-sm flex items-center gap-4 transition-colors ${
           produtosAbaixoMinimo > 0 
             ? 'bg-amber-50/70 border-amber-200 text-amber-900' 
             : 'bg-white border-gray-150 text-gray-900'
@@ -454,14 +483,14 @@ export default function Estoque() {
 
       {/* Listagem */}
       {isLoading ? (
-        <div className="p-12 bg-white rounded-xl border border-gray-100 flex justify-center items-center gap-3 text-indigo-600 shadow-sm">
+        <div className="p-12 bg-white rounded-lg border border-gray-100 flex justify-center items-center gap-3 text-indigo-600 shadow-sm">
           <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
           <span className="text-sm font-medium">Carregando dados do estoque...</span>
         </div>
       ) : activeTab === 'itens' ? (
         // ABA: ITENS NO ESTOQUE
         filteredItens.length === 0 ? (
-          <div className="p-16 bg-white rounded-xl border border-gray-100 text-center text-sm text-gray-500 flex flex-col items-center justify-center gap-3 shadow-sm">
+          <div className="p-16 bg-white rounded-lg border border-gray-100 text-center text-sm text-gray-500 flex flex-col items-center justify-center gap-3 shadow-sm">
             <Package className="w-12 h-12 text-gray-300 stroke-[1.5]" />
             <div>
               <p className="font-semibold text-gray-700 text-base">Nenhum item de estoque encontrado</p>
@@ -475,7 +504,7 @@ export default function Estoque() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {groupedItens.map((item) => (
-              <div key={item.id} className="bg-white rounded-xl border border-gray-150 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all">
+              <div key={item.id} className="bg-white rounded-lg border border-gray-150 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all">
                 {/* Imagem do Item */}
                 <div className="h-44 bg-gray-50 relative flex items-center justify-center overflow-hidden border-b border-gray-100">
                   {item.foto ? (
@@ -565,7 +594,7 @@ export default function Estoque() {
                       Editar
                     </button>
                     <button
-                      onClick={() => handleDeleteItem(item.id)}
+                      onClick={() => handleDeleteItem(item)}
                       className="inline-flex items-center justify-center p-2 text-red-600 bg-white border border-red-100 rounded-lg hover:bg-red-50 transition-all shadow-sm"
                       title="Excluir item"
                     >
@@ -580,7 +609,7 @@ export default function Estoque() {
       ) : (
         // ABA: CATÁLOGO DE PRODUTOS
         filteredProdutos.length === 0 ? (
-          <div className="p-16 bg-white rounded-xl border border-gray-100 text-center text-sm text-gray-500 flex flex-col items-center justify-center gap-3 shadow-sm">
+          <div className="p-16 bg-white rounded-lg border border-gray-100 text-center text-sm text-gray-500 flex flex-col items-center justify-center gap-3 shadow-sm">
             <Layers className="w-12 h-12 text-gray-300 stroke-[1.5]" />
             <div>
               <p className="font-semibold text-gray-700 text-base">Nenhum produto cadastrado no catálogo</p>
@@ -598,7 +627,7 @@ export default function Estoque() {
               const isBelowMin = currentStock < (prod.estoque_minimo || 0);
 
               return (
-                <div key={prod.id} className="bg-white rounded-xl border border-gray-150 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all">
+                <div key={prod.id} className="bg-white rounded-lg border border-gray-150 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all">
                   {/* Imagem do Produto */}
                   <div className="h-44 bg-gray-50 relative flex items-center justify-center overflow-hidden border-b border-gray-100">
                     {prod.foto ? (
@@ -687,7 +716,7 @@ export default function Estoque() {
           ========================================== */}
       {itemModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             {/* Cabeçalho */}
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
@@ -705,7 +734,7 @@ export default function Estoque() {
             {/* Conteúdo Formulário */}
             <div className="p-6 overflow-y-auto space-y-4">
               {/* Preview e Upload de Imagem */}
-              <div className="flex flex-col sm:flex-row items-center gap-4 bg-gray-50/70 p-4 rounded-xl border border-gray-150">
+              <div className="flex flex-col sm:flex-row items-center gap-4 bg-gray-50/70 p-4 rounded-lg border border-gray-150">
                 <div className="w-24 h-24 rounded-lg bg-white border border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {itemModal.data.foto ? (
                     <img src={itemModal.data.foto} alt="Preview" className="w-full h-full object-cover" />
@@ -804,7 +833,23 @@ export default function Estoque() {
                   />
                 </div>
 
-                <div>
+                {!itemModal.data.id && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                      Quantidade <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={itemModal.data.quantidade || 1}
+                      onChange={e => setItemModal(p => ({ ...p, data: { ...p.data, quantidade: e.target.value } }))}
+                      className="mt-1.5 block w-full rounded-lg border-gray-200 py-2.5 px-3 border focus:border-indigo-500 focus:ring-indigo-500 text-sm shadow-sm bg-white"
+                      placeholder="1"
+                    />
+                  </div>
+                )}
+
+                <div className={!itemModal.data.id ? "sm:col-span-2" : ""}>
                   <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                     Modelo
                   </label>
@@ -852,7 +897,7 @@ export default function Estoque() {
                   <UserCheck className="w-4 h-4 text-indigo-650" />
                   Alocação / Associação
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-indigo-50/20 p-4 rounded-xl border border-indigo-100/50">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-indigo-50/20 p-4 rounded-lg border border-indigo-100/50">
                   <div>
                     <label className="block text-[10px] font-bold text-indigo-750 uppercase tracking-wider">
                       Tipo de Associação
@@ -920,7 +965,7 @@ export default function Estoque() {
           ========================================== */}
       {produtoModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             {/* Cabeçalho */}
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
@@ -938,7 +983,7 @@ export default function Estoque() {
             {/* Formulário */}
             <div className="p-6 overflow-y-auto space-y-4">
               {/* Upload da foto */}
-              <div className="flex items-center gap-4 bg-gray-50/70 p-4 rounded-xl border border-gray-150">
+              <div className="flex items-center gap-4 bg-gray-50/70 p-4 rounded-lg border border-gray-150">
                 <div className="w-20 h-20 rounded-lg bg-white border border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {produtoModal.data.foto ? (
                     <img src={produtoModal.data.foto} alt="Preview" className="w-full h-full object-cover" />

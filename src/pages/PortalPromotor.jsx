@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { FileEdit, CheckCircle2, Loader2, FileText, Eye, Info, Search, Lock, LogOut, MessageSquare, Copy, Download, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { PDFGenerator } from '../pdf/PDFGenerator';
+import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
 
-// Funções Auxiliares de Limpeza de Rodapé e Geração de Carimbo
 const cleanFooterText = (text) => {
   if (!text) return '';
   let clean = text.trim();
@@ -90,6 +90,8 @@ const generateCarimboImage = (signatureDataUrl, name) => {
   });
 };
 
+const generateUniqueId = () => Date.now().toString();
+
 export default function PortalPromotor() {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -105,6 +107,7 @@ export default function PortalPromotor() {
   const [selectedEmpresa, setSelectedEmpresa] = useState('');
   
   const [formData, setFormData] = useState({});
+  const [includedFields, setIncludedFields] = useState({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lojas, setLojas] = useState([]);
@@ -129,6 +132,7 @@ export default function PortalPromotor() {
   // Ao carregar a página ou redefinir a autenticação, limpamos a assinatura
   useEffect(() => {
     if (!isAuthenticated) {
+      // eslint-disable-next-line
       setSignatureImage(null);
       setSupervisorName('SUPERVISOR');
       setCarimboSupervisor(null);
@@ -142,6 +146,7 @@ export default function PortalPromotor() {
         setCarimboSupervisor(dataUrl);
       });
     } else {
+      // eslint-disable-next-line
       setCarimboSupervisor(null);
     }
   }, [signatureImage, supervisorName]);
@@ -255,7 +260,7 @@ export default function PortalPromotor() {
       canvas.removeEventListener('touchmove', handleTouchMove);
       canvas.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [isDrawing, canvasRef.current]);
+  }, [isDrawing]);
 
   // Senha do portal
   const PORTAL_PASSWORD = '123';
@@ -280,12 +285,6 @@ export default function PortalPromotor() {
     setFormData({});
   };
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchData();
-    }
-  }, [isAuthenticated]);
-
   const fetchData = async () => {
     try {
       setIsLoading(true);
@@ -296,8 +295,7 @@ export default function PortalPromotor() {
         supabase.from('funcionarios').select('*').order('criado_em', { ascending: false }),
         supabase.from('empresas').select('*').order('criado_em', { ascending: false })
       ]);
-
-      // Combina os templates
+      
       const allTemplates = [
         ...(pData.data || []).map(t => ({ ...t, type: 'pdf' })),
         ...(tData.data || []).map(t => {
@@ -317,8 +315,10 @@ export default function PortalPromotor() {
               seen.add(nameLower);
               let mappedTo = '';
               if (nameLower === 'empresa') mappedTo = 'empresa_razao';
-              if (nameLower === 'nome') mappedTo = 'funcionario_nome';
-              if (nameLower === 'cpf') mappedTo = 'funcionario_cpf';
+              else if (nameLower.includes('cpf')) mappedTo = 'funcionario_cpf';
+              else if (nameLower.includes('rg')) mappedTo = 'funcionario_rg';
+              else if (nameLower.includes('cargo')) mappedTo = 'funcionario_cargo';
+              else if (nameLower.includes('nome') || nameLower.includes('promotor') || nameLower.includes('funcionario')) mappedTo = 'funcionario_nome';
               fields.push({ name, mappedTo });
             }
           });
@@ -361,6 +361,13 @@ export default function PortalPromotor() {
     }
   };
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      // eslint-disable-next-line
+      fetchData();
+    }
+  }, [isAuthenticated]);
+
   const activeTemplate = templates.find(t => String(t.id) === String(selectedTemplate));
   const activeEmpresa = empresas.find(e => String(e.id) === String(selectedEmpresa));
   
@@ -386,53 +393,43 @@ export default function PortalPromotor() {
     if (activeTemplate && activeFuncionario) {
       try {
         const newData = { ...formData };
+        const newIncluded = { ...includedFields };
         const dataAtual = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
         activeTemplate.fields?.forEach(field => {
           if (!field || !field.name) return;
+          if (!(field.name in newIncluded)) newIncluded[field.name] = true;
           if (field.mappedTo) {
             switch (field.mappedTo) {
               case 'empresa_razao': newData[field.name] = activeEmpresa?.nome || ''; break;
               case 'empresa_cnpj': newData[field.name] = activeEmpresa?.cnpj || ''; break;
               case 'empresa_rodape': newData[field.name] = cleanFooterText(activeEmpresa?.rodape); break;
               case 'funcionario_nome': newData[field.name] = (activeFuncionario?.nome || '').toUpperCase(); break;
-              case 'funcionario_cpf': newData[field.name] = activeFuncionario?.dados_extras?.CPF || ''; break;
+              case 'funcionario_cpf': newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF); break;
               case 'funcionario_cargo': newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toLowerCase() : ''; break;
               case 'data_atual': newData[field.name] = dataAtual; break;
               default: 
                 if (activeFuncionario?.dados_extras && activeFuncionario.dados_extras[field.mappedTo] !== undefined) {
-                  newData[field.name] = activeFuncionario.dados_extras[field.mappedTo];
+                  newData[field.name] = formatExcelDate(activeFuncionario.dados_extras[field.mappedTo], field.mappedTo);
                 } else {
                   newData[field.name] = '';
                 }
             }
           } else {
             const displayNameLower = (field.displayName || '').toLowerCase();
-            const fieldNameLower = field.name.toLowerCase();
+            const fieldNameLower = (field.name || '').toLowerCase();
             
-            if (displayNameLower.includes('data')) newData[field.name] = dataAtual;
-             else if (displayNameLower.includes('rg')) newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
-            else if (displayNameLower.includes('cpf')) newData[field.name] = activeFuncionario?.dados_extras?.CPF || '';
-            else if (displayNameLower.includes('cargo')) newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toLowerCase() : '';
-            else if (displayNameLower.includes('empresa') || displayNameLower.includes('nc') || displayNameLower.includes('cdc')) {
-              newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
-            }
-            else if (displayNameLower.includes('nome')) newData[field.name] = (activeFuncionario?.nome || '').toUpperCase();
-            else if (displayNameLower.includes('carteira') || displayNameLower.includes('ctps')) newData[field.name] = activeFuncionario?.dados_extras?.['CTPS'] || '';
-            else if (displayNameLower.includes('serie')) newData[field.name] = activeFuncionario?.dados_extras?.['SERIE'] || '';
-            else if (displayNameLower.includes('matricula')) newData[field.name] = activeFuncionario?.dados_extras?.['MATRICULA'] || '';
-            
-            else if (fieldNameLower === 'empresa' || fieldNameLower === 'empresa_nome') newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
-            else if (fieldNameLower === 'promotor' || fieldNameLower === 'funcionario' || fieldNameLower === 'nome') newData[field.name] = (activeFuncionario?.nome || '').toUpperCase();
-            else if (fieldNameLower === 'cargo') newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toLowerCase() : '';
-            else if (fieldNameLower === 'cpf') newData[field.name] = activeFuncionario?.dados_extras?.CPF || '';
-            else if (fieldNameLower === 'rg') newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
-            else if (fieldNameLower === 'numero_carteira_trabalho' || fieldNameLower === 'ctps') newData[field.name] = activeFuncionario?.dados_extras?.['CTPS'] || '';
-            else if (fieldNameLower === 'série' || fieldNameLower === 'serie') newData[field.name] = activeFuncionario?.dados_extras?.['SERIE'] || '';
-            else if (fieldNameLower === 'matricula') newData[field.name] = activeFuncionario?.dados_extras?.['MATRICULA'] || '';
-            else if (fieldNameLower === 'loja' || fieldNameLower === 'estabelecimento') newData[field.name] = formData[field.name] || ''; 
-            else if (fieldNameLower === 'data' || fieldNameLower === 'data_emissao') newData[field.name] = dataAtual;
-            else if (fieldNameLower === 'nc' || fieldNameLower === 'cdc') newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
+            if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF);
+            else if (fieldNameLower.includes('rg') || displayNameLower.includes('rg')) newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
+            else if (fieldNameLower.includes('nome') || displayNameLower.includes('nome') || fieldNameLower.includes('promotor') || displayNameLower.includes('promotor') || fieldNameLower.includes('funcionario') || displayNameLower.includes('funcionario')) newData[field.name] = (activeFuncionario?.nome || '').toUpperCase();
+            else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toUpperCase() : '';
+            else if (fieldNameLower.includes('data') || displayNameLower.includes('data')) newData[field.name] = dataAtual;
+            else if (fieldNameLower.includes('empresa') || displayNameLower.includes('empresa')) newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
+            else if (fieldNameLower.includes('nc') || displayNameLower.includes('nc') || fieldNameLower.includes('cdc') || displayNameLower.includes('cdc')) newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
+            else if (fieldNameLower.includes('carteira') || displayNameLower.includes('carteira') || fieldNameLower.includes('ctps') || displayNameLower.includes('ctps')) newData[field.name] = activeFuncionario?.dados_extras?.['CTPS'] || '';
+            else if (fieldNameLower.includes('serie') || displayNameLower.includes('serie') || fieldNameLower.includes('série') || displayNameLower.includes('série')) newData[field.name] = activeFuncionario?.dados_extras?.['SERIE'] || '';
+            else if (fieldNameLower.includes('matricula') || displayNameLower.includes('matricula')) newData[field.name] = activeFuncionario?.dados_extras?.['MATRICULA'] || '';
+            else if (fieldNameLower === 'loja' || fieldNameLower === 'estabelecimento') newData[field.name] = formData[field.name] || '';
             else {
               newData[field.name] = formData[field.name] || '';
             }
@@ -450,7 +447,10 @@ export default function PortalPromotor() {
         newData['rg'] = rgValue;
         newData['RG'] = rgValue;
         
+        // eslint-disable-next-line
         setFormData(newData);
+        // eslint-disable-next-line
+        setIncludedFields(newIncluded);
       } catch (err) {
         console.error(err);
       }
@@ -469,6 +469,53 @@ export default function PortalPromotor() {
     if (!signatureImage) {
       toast.error('Por favor, assine digitalmente no campo de assinatura do supervisor.');
       return;
+    }
+
+    // Validação de Loja
+    if (activeTemplate.fields) {
+      const lojaField = activeTemplate.fields.find(f => {
+        const name = (f.name || '').toLowerCase();
+        const display = (f.displayName || '').toLowerCase();
+        return name === 'loja' || name === 'lojas' || name === 'estabelecimento' ||
+               display === 'loja' || display === 'lojas' || display === 'estabelecimento';
+      });
+      
+      if (lojaField) {
+        let lojaValue = String(formData[lojaField.name] || '').trim();
+        if (!lojaValue) {
+          toast.error('Por favor, selecione ou digite a loja antes de gerar a carta.');
+          return;
+        }
+
+        // Se veio do select usando `old-`, remove o prefixo
+        if (lojaValue.startsWith('old-')) {
+          lojaValue = lojaValue.replace('old-', '');
+          setFormData(prev => ({ ...prev, [lojaField.name]: lojaValue }));
+        }
+
+        const isKnownLoja = lojas.some(l => String(l.id) === lojaValue || l.nome.toLowerCase() === lojaValue.toLowerCase());
+
+        // We don't have allLojas in PortalPromotor to check isOldLoja! So any new store is saved directly.
+        if (!isKnownLoja && lojaValue) {
+          const capitalizedName = capitalizeStoreName(lojaValue);
+          const newLoja = {
+            id: generateUniqueId(),
+            nome: capitalizedName,
+            endereco: '',
+            cidadeUf: '',
+            cnpj: ''
+          };
+          const updatedLojas = [newLoja, ...lojas];
+          localStorage.setItem('docflow_lojas', JSON.stringify(updatedLojas));
+          setLojas(updatedLojas);
+          
+          setFormData(prev => ({ ...prev, [lojaField.name]: capitalizedName }));
+        } else {
+          // Apenas capitaliza o valor no form, para o PDF sair bonitinho
+          const capitalizedName = capitalizeStoreName(lojaValue);
+          setFormData(prev => ({ ...prev, [lojaField.name]: capitalizedName }));
+        }
+      }
     }
     
     setIsGenerating(true);
@@ -515,21 +562,51 @@ export default function PortalPromotor() {
       if (activeTemplate.type === 'text') {
         let content = activeTemplate.conteudo || '';
 
-        Object.keys(formData).forEach(key => {
-          let value = String(formData[key] || '').toUpperCase().trim();
-          const keyLower = key.toLowerCase();
-          
-          // Se for Nome, RG ou CPF, envolvemos com a tag <b> no PDF
-          if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
-            if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
-              value = `<b>${value}</b>`;
-            }
-          }
+        const finalFormDataForFunc = { ...formData };
+        const sortedKeys = Object.keys(finalFormDataForFunc).sort((a, b) => b.length - a.length);
 
-          const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const regexCurly = new RegExp(`{{${escapedKey}}}`, 'gi');
-          const regexSquare = new RegExp(`\\[${escapedKey}\\]`, 'gi');
-          content = content.replace(regexCurly, value).replace(regexSquare, value);
+        sortedKeys.forEach(key => {
+          if (includedFields[key] === false) {
+            const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const keyLower = key.toLowerCase();
+            
+            if (keyLower === 'rg') {
+              content = content.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?R\\.?G\\.?\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+              content = content.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?R\\.?G\\.?\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+            } else if (keyLower === 'cpf') {
+              content = content.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?CPF\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+              content = content.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?CPF\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+            } else if (keyLower === 'carteira' || keyLower === 'ctps') {
+              content = content.replace(new RegExp(`(?:da\\s+|de\\s+)?(?:CTPS|Carteira(?: de Trabalho)?)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+              content = content.replace(new RegExp(`(?:da\\s+|de\\s+)?(?:CTPS|Carteira(?: de Trabalho)?)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+            } else if (keyLower === 'serie' || keyLower === 'série') {
+              content = content.replace(new RegExp(`(?:s[eé]rie)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+              content = content.replace(new RegExp(`(?:s[eé]rie)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+            }
+            
+            const genericRegex1 = new RegExp(`(?:do\\s+|da\\s+|de\\s+)?(?:${escapedKey})\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi');
+            content = content.replace(genericRegex1, '');
+            
+            const genericRegex2 = new RegExp(`(?:do\\s+|da\\s+|de\\s+)?(?:${escapedKey})\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi');
+            content = content.replace(genericRegex2, '');
+            
+            content = content.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), '');
+            content = content.replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), '');
+          } else {
+            let value = String(finalFormDataForFunc[key] || '').toUpperCase().trim();
+            if (value) {
+              const keyLower = key.toLowerCase();
+              if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
+                if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
+                  value = `<b>${value}</b>`;
+                }
+              }
+            }
+            const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regexCurly = new RegExp(`{{${escapedKey}}}`, 'gi');
+            const regexSquare = new RegExp(`\\[${escapedKey}\\]`, 'gi');
+            content = content.replace(regexCurly, value).replace(regexSquare, value);
+          }
         });
         
         const assets = {
@@ -554,8 +631,12 @@ export default function PortalPromotor() {
 
         const finalFormData = {};
         Object.keys(formData).forEach(key => {
-          const val = formData[key];
-          finalFormData[key] = typeof val === 'string' ? val.toUpperCase().trim() : val;
+          if (includedFields[key] !== false) {
+            const val = formData[key];
+            finalFormData[key] = typeof val === 'string' ? val.toUpperCase().trim() : val;
+          } else {
+            finalFormData[key] = '';
+          }
         });
         finalFormData.img_logo = logoBase64;
         finalFormData.img_carimbo = carimboBase64;
@@ -604,16 +685,15 @@ export default function PortalPromotor() {
       setGeneratedCartaId(cartaId);
       setGeneratedCartaName(nomePromotor);
       setGeneratedBlobUrl(blobUrl);
-      setShareModalOpen(true);
+      // setShareModalOpen(true);
 
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      toast.success('Documento gerado e registrado no histórico com sucesso!');
+      toast.success('Documento gerado e registrado com sucesso!', {
+        duration: 10000,
+        action: {
+          label: '📱 Enviar WhatsApp',
+          onClick: () => handleWhatsAppShareDirect(blobUrl, nomePromotor)
+        }
+      });
     } catch (error) {
       console.error(error);
       toast.error('Erro ao gerar o PDF final.');
@@ -629,19 +709,71 @@ export default function PortalPromotor() {
     toast.success('Link da carta copiado para a área de transferência!');
   };
 
-  const handleWhatsAppShare = () => {
-    if (!generatedCartaId) return;
-    const shareUrl = `${window.location.origin}/carta/${generatedCartaId}`;
-    const text = `Olá, segue a carta de apresentação de *${generatedCartaName}*: ${shareUrl}`;
-    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(whatsappUrl, '_blank');
+  const handleWhatsAppShareDirect = async (blobUrl, cartaName) => {
+    if (!blobUrl) return;
+    try {
+      toast.loading('Preparando arquivo para envio...', { id: 'share-wa' });
+      const res = await fetch(blobUrl);
+      const blob = await res.blob();
+      const fileName = `CARTA ${cartaName.trim().toUpperCase()}.pdf`;
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        toast.dismiss('share-wa');
+        await navigator.share({
+          files: [file],
+          title: fileName,
+          text: `Olá, segue o documento de ${cartaName}`
+        });
+      } else {
+        const linkUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = linkUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(linkUrl);
+
+        toast.dismiss('share-wa');
+        toast.success('Arquivo baixado! O WhatsApp Web será aberto para você anexar o PDF.', { duration: 5000 });
+        
+        setTimeout(() => {
+          const text = `Olá, estou enviando o documento de ${cartaName} em anexo.`;
+          const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+          window.open(whatsappUrl, '_blank');
+        }, 1500);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.dismiss('share-wa');
+      toast.error('Erro ao compartilhar arquivo pelo WhatsApp.');
+    }
   };
+
+  const handleWhatsAppShare = () => {
+    handleWhatsAppShareDirect(generatedBlobUrl, generatedCartaName);
+  };
+
+  const allLojas = useMemo(() => {
+    const lojasMap = new Map();
+    empresas.forEach(empresa => {
+      if (Array.isArray(empresa.lojas)) {
+        empresa.lojas.forEach(loja => {
+          if (!loja) return;
+          const key = String(loja).trim().toLowerCase();
+          if (!lojasMap.has(key)) lojasMap.set(key, capitalizeStoreName(String(loja).trim()));
+        });
+      }
+    });
+    return Array.from(lojasMap.values()).sort();
+  }, [empresas]);
 
   // Se não estiver autenticado, exibe a tela de senha
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-800 via-red-650 to-red-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden p-8 space-y-6 border border-red-100 animate-in zoom-in-95 duration-200">
+        <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden p-8 space-y-6 border border-red-100 animate-in zoom-in-95 duration-200">
           <div className="text-center space-y-2">
             <div className="mb-4 flex justify-center">
               <svg viewBox="0 0 200 150" className="w-44 h-auto mx-auto drop-shadow-md">
@@ -663,13 +795,13 @@ export default function PortalPromotor() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Digite a senha..."
-                className="block w-full rounded-xl border-0 py-3 px-4 text-slate-900 ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-[#e31b23] sm:text-sm transition-all"
+                className="block w-full rounded-lg border-0 py-3 px-4 text-slate-900 ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-[#e31b23] sm:text-sm transition-all"
                 autoFocus
               />
             </div>
             <button
               type="submit"
-              className="w-full bg-[#e31b23] hover:bg-[#c3121a] text-white rounded-xl py-3 text-sm font-bold shadow-lg shadow-red-500/20 active:scale-[0.98] transition-all"
+              className="w-full bg-[#e31b23] hover:bg-[#c3121a] text-white rounded-lg py-3 text-sm font-bold shadow-lg shadow-red-500/20 active:scale-[0.98] transition-all"
             >
               Acessar Portal
             </button>
@@ -696,7 +828,7 @@ export default function PortalPromotor() {
       {/* Top Navbar */}
       <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center text-[#e31b23] font-bold">
+          <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center text-[#e31b23] font-bold">
             <svg viewBox="0 0 200 150" className="w-8 h-auto">
               <path d="M 15,15 L 185,15 L 185,75 C 185,120 148,140 100,140 C 52,140 15,120 15,75 Z" fill="#e31b23" />
               <text x="100" y="80" fill="white" fontFamily="'Arial Black', sans-serif" fontSize="30" fontWeight="900" fontStyle="italic" textAnchor="middle" letterSpacing="-1">C</text>
@@ -710,7 +842,7 @@ export default function PortalPromotor() {
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2 text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100/50 px-3.5 py-2 rounded-xl transition-all"
+          className="flex items-center gap-2 text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100/50 px-3.5 py-2 rounded-lg transition-all"
         >
           <LogOut className="w-4 h-4" />
           Sair
@@ -721,7 +853,7 @@ export default function PortalPromotor() {
       <main className="flex-1 overflow-y-auto p-6 md:p-8">
         <div className="max-w-6xl mx-auto">
           {colgateFuncionarios.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-3">
+            <div className="bg-white border border-slate-200 rounded-lg p-12 text-center max-w-xl mx-auto space-y-3">
               <FileText className="w-12 h-12 text-slate-300 mx-auto" />
               <h2 className="text-lg font-bold text-slate-800">Nenhum promotor Colgate cadastrado</h2>
               <p className="text-sm text-slate-400">
@@ -729,10 +861,10 @@ export default function PortalPromotor() {
               </p>
             </div>
           ) : (
-            <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm p-6 md:p-8 space-y-8">
+            <div className="bg-white border border-slate-200/80 rounded-lg shadow-sm p-6 md:p-8 space-y-8">
               
               {/* Seleção do Promotor */}
-              <div className="bg-slate-50/50 rounded-2xl border border-slate-100 p-6 space-y-4">
+              <div className="bg-slate-50/50 rounded-lg border border-slate-100 p-6 space-y-4">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-full bg-red-50 text-[#e31b23] flex items-center justify-center text-[10px] font-bold">1</span>
                   Selecione o Promotor Colgate
@@ -753,14 +885,14 @@ export default function PortalPromotor() {
                         setSearchFuncionario(e.target.value);
                         setIsSearchFocused(true);
                       }}
-                      className="block w-full rounded-xl border-0 py-2.5 pl-10 pr-4 text-slate-900 ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-[#e31b23] sm:text-sm bg-white transition-all"
+                      className="block w-full rounded-lg border-0 py-2.5 pl-10 pr-4 text-slate-900 ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-[#e31b23] sm:text-sm bg-white transition-all"
                     />
                     
                     {/* Autocomplete Dropdown List */}
                     {isSearchFocused && searchFuncionario.trim() !== '' && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setIsSearchFocused(false)} />
-                        <div className="absolute z-20 w-full bg-white border border-slate-200 rounded-2xl shadow-xl mt-1.5 max-h-60 overflow-y-auto divide-y divide-slate-100 animate-in fade-in slide-in-from-top-2 duration-150">
+                        <div className="absolute z-20 w-full bg-white border border-slate-200 rounded-lg shadow-xl mt-1.5 max-h-60 overflow-y-auto divide-y divide-slate-100 animate-in fade-in slide-in-from-top-2 duration-150">
                           {filteredFuncionarios.length === 0 ? (
                             <div className="p-4 text-sm text-slate-400 text-center">Nenhum promotor encontrado</div>
                           ) : (
@@ -797,7 +929,7 @@ export default function PortalPromotor() {
                     id="funcionario"
                     value={selectedFuncionario}
                     onChange={(e) => setSelectedFuncionario(e.target.value)}
-                    className="block w-full rounded-xl border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-[#e31b23] sm:text-sm bg-white"
+                    className="block w-full rounded-lg border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-[#e31b23] sm:text-sm bg-white"
                   >
                     <option value="">-- Clique aqui e escolha o promotor na lista --</option>
                     {colgateFuncionarios.map(f => {
@@ -863,14 +995,22 @@ export default function PortalPromotor() {
                         return (
                           <div key={field.name} className="space-y-1.5">
                             <label htmlFor={field.name} className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center">
-                              <span className="flex items-center gap-1">
-                                {labelName} 
-                                {isAutoFilled && (
-                                  <span className="text-[9px] text-[#e31b23] bg-red-50 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide">
-                                    Preenchido
-                                  </span>
-                                )}
-                              </span>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input 
+                                  type="checkbox" 
+                                  className="rounded border-slate-300 text-[#e31b23] focus:ring-[#e31b23] h-3 w-3"
+                                  checked={includedFields[field.name] !== false} 
+                                  onChange={(e) => setIncludedFields(prev => ({ ...prev, [field.name]: e.target.checked }))} 
+                                />
+                                <span className="flex items-center gap-1">
+                                  {labelName} 
+                                  {isAutoFilled && (
+                                    <span className="text-[9px] text-[#e31b23] bg-red-50 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide">
+                                      Preenchido
+                                    </span>
+                                  )}
+                                </span>
+                              </label>
                               {isLojaField && lojas.length > 0 && (
                                 <button
                                   type="button"
@@ -891,7 +1031,7 @@ export default function PortalPromotor() {
                                     id={field.name}
                                     value={formData[field.name] || ''}
                                     onChange={handleInputChange}
-                                    className="block w-full rounded-xl border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-[#e31b23] sm:text-sm text-slate-900 bg-white"
+                                    className="block w-full rounded-lg border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-[#e31b23] sm:text-sm text-slate-900 bg-white"
                                     placeholder="Digite o nome da loja..."
                                   />
                                 ) : manualLojas[field.name] ? (
@@ -901,36 +1041,50 @@ export default function PortalPromotor() {
                                     id={field.name}
                                     value={formData[field.name] || ''}
                                     onChange={handleInputChange}
-                                    className="block w-full rounded-xl border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-[#e31b23] sm:text-sm text-slate-900 bg-white"
+                                    className="block w-full rounded-lg border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-[#e31b23] sm:text-sm text-slate-900 bg-white"
                                     placeholder="Digite a loja manualmente..."
                                   />
                                 ) : (
                                   <select
                                     name={field.name}
                                     id={field.name}
-                                    value={lojas.some(l => l.nome === formData[field.name] || (l.endereco ? `${l.nome} (${l.endereco})` : l.nome) === formData[field.name]) ? lojas.find(l => l.nome === formData[field.name] || (l.endereco ? `${l.nome} (${l.endereco})` : l.nome) === formData[field.name]).id : ''}
+                                    value={
+                                      formData[field.name]?.startsWith('old-') 
+                                        ? formData[field.name] 
+                                        : (lojas.find(l => l.nome === formData[field.name] || (l.endereco ? `${l.nome} (${l.endereco})` : l.nome) === formData[field.name])?.id || '')
+                                    }
                                     onChange={(e) => {
                                       const selectedId = e.target.value;
                                       if (selectedId === 'manual') {
                                         setManualLojas(prev => ({ ...prev, [field.name]: true }));
                                         setFormData(prev => ({ ...prev, [field.name]: '' }));
+                                      } else if (selectedId.startsWith('old-')) {
+                                        setFormData(prev => ({ ...prev, [field.name]: selectedId }));
                                       } else {
-                                        const selectedLoja = lojas.find(l => l.id === selectedId);
+                                        const selectedLoja = lojas.find(l => String(l.id) === String(selectedId));
                                         setFormData(prev => ({ 
                                           ...prev, 
-                                          [field.name]: selectedLoja ? (selectedLoja.endereco ? `${selectedLoja.nome} (${selectedLoja.endereco})` : selectedLoja.nome) : '' 
+                                          [field.name]: selectedLoja ? (selectedLoja.endereco ? `${capitalizeStoreName(selectedLoja.nome)} (${selectedLoja.endereco})` : capitalizeStoreName(selectedLoja.nome)) : '' 
                                         }));
                                       }
                                     }}
-                                    className="block w-full rounded-xl border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-[#e31b23] sm:text-sm bg-white"
+                                    className="block w-full rounded-lg border-0 py-2.5 pl-3 pr-10 text-slate-800 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-[#e31b23] sm:text-sm bg-white"
                                   >
                                     <option value="">Selecione uma loja...</option>
                                     {lojas.map(l => (
                                       <option key={l.id} value={l.id}>
-                                        {l.nome} {l.cidadeUf ? `(${l.cidadeUf})` : ''}
+                                        {capitalizeStoreName(l.nome)} {l.cidadeUf ? `(${l.cidadeUf})` : ''}
                                       </option>
                                     ))}
-                                    <option value="manual">-- Outra (Digitar Manualmente) --</option>
+                                    {allLojas.filter(nome => {
+                                      const cleanNome = (nome || '').trim().toLowerCase();
+                                      return !lojas.some(l => (l.nome || '').trim().toLowerCase() === cleanNome);
+                                    }).map(nome => (
+                                      <option key={`old-${nome}`} value={`old-${nome}`}>
+                                        {nome}
+                                      </option>
+                                    ))}
+                                    <option value="manual">+ Digitar Manualmente</option>
                                   </select>
                                 )
                               ) : (
@@ -942,7 +1096,7 @@ export default function PortalPromotor() {
                                     readOnly={isAutoFilled}
                                     value={formData[field.name] || ''}
                                     onChange={handleInputChange}
-                                    className={`block w-full rounded-xl border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset sm:text-sm sm:leading-6 transition-all ${
+                                    className={`block w-full rounded-lg border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset sm:text-sm sm:leading-6 transition-all ${
                                       isAutoFilled 
                                         ? 'bg-slate-50/80 text-slate-500 ring-slate-100 pr-10 cursor-not-allowed font-medium' 
                                         : 'bg-white text-slate-900 ring-slate-200 focus:ring-2 focus:ring-[#e31b23]'
@@ -972,7 +1126,7 @@ export default function PortalPromotor() {
                         id="supervisorName"
                         value={supervisorName}
                         onChange={e => setSupervisorName(e.target.value.toUpperCase())}
-                        className="block w-full rounded-xl border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-[#e31b23] sm:text-sm text-slate-900 bg-white"
+                        className="block w-full rounded-lg border-0 py-2.5 px-3.5 shadow-sm ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-[#e31b23] sm:text-sm text-slate-900 bg-white"
                         placeholder="SUPERVISOR"
                       />
                     </div>
@@ -996,7 +1150,7 @@ export default function PortalPromotor() {
                           </button>
                         )}
                       </label>
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col items-center gap-2">
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col items-center gap-2">
                         <canvas
                           ref={canvasRef}
                           width={400}
@@ -1018,7 +1172,7 @@ export default function PortalPromotor() {
                       <button
                         type="submit"
                         disabled={isGenerating}
-                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#e31b23] px-6 py-3 text-sm font-bold text-white shadow-lg hover:bg-[#c3121a] hover:shadow-red-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#e31b23] px-6 py-3 text-sm font-bold text-white shadow-lg hover:bg-[#c3121a] hover:shadow-red-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
                       >
                         {isGenerating ? (
                           <><Loader2 className="w-5 h-5 animate-spin" /> Gerando Carta...</>
@@ -1030,7 +1184,7 @@ export default function PortalPromotor() {
                   </form>
 
                   {/* Coluna da Direita: Pré-visualização da Folha de Papel */}
-                  <div className="bg-slate-100/60 rounded-2xl border border-slate-200/80 p-6 flex flex-col h-fit min-h-[600px] shadow-sm lg:sticky lg:top-4 animate-in fade-in slide-in-from-right-3 duration-300">
+                  <div className="bg-slate-100/60 rounded-lg border border-slate-200/80 p-6 flex flex-col h-fit min-h-[600px] shadow-sm lg:sticky lg:top-4 animate-in fade-in slide-in-from-right-3 duration-300">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                         <Eye className="w-4 h-4 text-[#e31b23]" />
@@ -1073,16 +1227,45 @@ export default function PortalPromotor() {
 
                             const keys = Object.keys(formData).sort((a, b) => b.length - a.length);
                             keys.forEach(key => {
-                              let value = String(formData[key] || `[${key}]`).toUpperCase().trim();
-                              const keyLower = key.toLowerCase();
-                              
-                              if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
-                                if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
-                                  value = `<b>${value}</b>`;
+                              if (includedFields[key] === false) {
+                                const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                const keyLower = key.toLowerCase();
+                                
+                                if (keyLower === 'rg') {
+                                  preview = preview.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?R\\.?G\\.?\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                                  preview = preview.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?R\\.?G\\.?\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+                                } else if (keyLower === 'cpf') {
+                                  preview = preview.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?CPF\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                                  preview = preview.replace(new RegExp(`(?:do\\s+|da\\s+|de\\s+)?CPF\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+                                } else if (keyLower === 'carteira' || keyLower === 'ctps') {
+                                  preview = preview.replace(new RegExp(`(?:da\\s+|de\\s+)?(?:CTPS|Carteira(?: de Trabalho)?)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                                  preview = preview.replace(new RegExp(`(?:da\\s+|de\\s+)?(?:CTPS|Carteira(?: de Trabalho)?)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
+                                } else if (keyLower === 'serie' || keyLower === 'série') {
+                                  preview = preview.replace(new RegExp(`(?:s[eé]rie)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi'), '');
+                                  preview = preview.replace(new RegExp(`(?:s[eé]rie)\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi'), '');
                                 }
+                                
+                                const genericRegex1 = new RegExp(`(?:do\\s+|da\\s+|de\\s+)?(?:${escapedKey})\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\{\\{${escapedKey}\\}\\}[,\\s-]*`, 'gi');
+                                preview = preview.replace(genericRegex1, '');
+                                
+                                const genericRegex2 = new RegExp(`(?:do\\s+|da\\s+|de\\s+)?(?:${escapedKey})\\s*(?:n[ºo]\\.?\\s*)?:?\\s*\\[${escapedKey}\\][,\\s-]*`, 'gi');
+                                preview = preview.replace(genericRegex2, '');
+                                
+                                preview = preview.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), '');
+                                preview = preview.replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), '');
+                              } else {
+                                let value = String(formData[key] || `[${key}]`).toUpperCase().trim();
+                                const keyLower = key.toLowerCase();
+                                
+                                if (keyLower.includes('nome') || keyLower.includes('cpf') || keyLower.includes('rg') || keyLower.includes('funcionario')) {
+                                  if (value && !String(value).startsWith('<b>') && !String(value).startsWith('[')) {
+                                    value = `<b>${value}</b>`;
+                                  }
+                                }
+                                const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                preview = preview.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), value)
+                                                 .replace(new RegExp(`\\[${escapedKey}\\]`, 'gi'), value);
                               }
-
-                              preview = preview.split(`{{${key}}}`).join(value);
                             });
                             return preview;
                           })()
@@ -1121,7 +1304,7 @@ export default function PortalPromotor() {
               )}
 
               {(!selectedFuncionario || !activeFuncionario) && (
-                <div className="p-12 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center gap-3">
+                <div className="p-12 text-center text-slate-400 bg-slate-50/50 rounded-lg border border-dashed border-slate-200 flex flex-col items-center gap-3">
                   <FileText className="w-12 h-12 opacity-30 text-[#e31b23] animate-bounce" />
                   <p className="font-semibold text-slate-600">Aguardando seleção de promotor</p>
                   <p className="text-xs text-slate-400 max-w-xs leading-normal">
@@ -1136,7 +1319,7 @@ export default function PortalPromotor() {
       {/* Modal de Compartilhamento Premium */}
       {shareModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden p-6 md:p-8 space-y-6 border border-slate-100 animate-in zoom-in-95 duration-200 relative">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden p-6 md:p-8 space-y-6 border border-slate-100 animate-in zoom-in-95 duration-200 relative">
             <button
               onClick={() => setShareModalOpen(false)}
               className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
@@ -1160,7 +1343,7 @@ export default function PortalPromotor() {
               <button
                 onClick={handleWhatsAppShare}
                 disabled={!generatedCartaId}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba56] active:scale-[0.99] text-white py-3.5 text-sm font-bold shadow-lg shadow-emerald-500/10 transition-all disabled:opacity-50"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-[#25D366] hover:bg-[#20ba56] active:scale-[0.99] text-white py-3.5 text-sm font-bold shadow-lg shadow-emerald-500/10 transition-all disabled:opacity-50"
               >
                 <MessageSquare className="w-5 h-5 fill-white" />
                 Enviar pelo WhatsApp
@@ -1169,7 +1352,7 @@ export default function PortalPromotor() {
               <button
                 onClick={handleCopyLink}
                 disabled={!generatedCartaId}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 active:scale-[0.99] py-3.5 text-sm font-bold transition-all disabled:opacity-50"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 active:scale-[0.99] py-3.5 text-sm font-bold transition-all disabled:opacity-50"
               >
                 <Copy className="w-4 h-4" />
                 Copiar Link da Carta
@@ -1186,7 +1369,7 @@ export default function PortalPromotor() {
                     document.body.removeChild(link);
                   }
                 }}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white py-3.5 text-sm font-bold transition-all"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white py-3.5 text-sm font-bold transition-all"
               >
                 <Download className="w-4 h-4" />
                 Baixar Novamente
