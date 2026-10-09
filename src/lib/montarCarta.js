@@ -71,9 +71,10 @@ export function montarCarta({ template, funcionario, empresa, loja, cargo, data 
       valor = `<b>${valor}</b>`;
     }
     const e = escapar(chave);
+    // Função em vez de texto: "$&" num nome de loja não vira padrão de substituição
     texto = texto
-      .replace(new RegExp(`\\{\\{\\s*${e}\\s*\\}\\}`, 'gi'), valor)
-      .replace(new RegExp(`\\[${e}\\]`, 'gi'), valor);
+      .replace(new RegExp(`\\{\\{\\s*${e}\\s*\\}\\}`, 'gi'), () => valor)
+      .replace(new RegExp(`\\[${e}\\]`, 'gi'), () => valor);
   }
 
   return texto.replace(/\{\{[^}]+\}\}/g, '').replace(/\[[^\]]+\]/g, '');

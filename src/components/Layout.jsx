@@ -7,6 +7,7 @@ import AtalhosDialog from './AtalhosDialog';
 import { useAuth, displayName } from '../lib/auth';
 import { adiantarTela, adiantarTelasPrincipais } from '../lib/rotas';
 import { NAV_GROUPS, findNavItem } from '../lib/navigation';
+import { contarPendentes, acompanharPedidos } from '../lib/pedidos';
 import { cn } from '../lib/cn';
 import { BrandMark, Wordmark, PageSkeleton } from './ui';
 import CommandPalette from './CommandPalette';
@@ -27,7 +28,19 @@ function Brand({ collapsed }) {
   );
 }
 
+/** Quantos pedidos de carta esperam revisão (atualiza sozinho). */
+function usePedidosPendentes() {
+  const [total, setTotal] = useState(0);
+  useEffect(() => {
+    const atualizar = () => contarPendentes().then(setTotal).catch(() => {});
+    atualizar();
+    return acompanharPedidos(atualizar);
+  }, []);
+  return total;
+}
+
 function SidebarNav({ collapsed, onNavigate }) {
+  const pendentes = usePedidosPendentes();
   return (
     <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-4" aria-label="Navegação principal">
       {NAV_GROUPS.map((group, gi) => (
@@ -70,6 +83,14 @@ function SidebarNav({ collapsed, onNavigate }) {
                         />
                         <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? 'text-brand-200' : 'text-white/45 group-hover:text-white/70')} aria-hidden="true" />
                         {!collapsed && <span className="truncate">{item.name}</span>}
+                        {item.href === '/solicitacoes' && pendentes > 0 && (
+                          <span
+                            className={cn('rounded-full bg-brand-500 px-1.5 text-[11px] font-semibold leading-5 text-white tabular-nums', collapsed ? 'absolute right-1 top-0.5 min-w-4 text-center leading-4' : 'ml-auto')}
+                            aria-label={`${pendentes} pedidos para revisar`}
+                          >
+                            {pendentes}
+                          </span>
+                        )}
                       </>
                     )}
                   </NavLink>

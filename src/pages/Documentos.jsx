@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { CheckCircle2, Copy, Download, Eye, FileEdit, FileText, Info, Loader2, Search, Wand2, X, Lock, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { celebrarCarta } from '../lib/celebrar';
+import { marcarPedidoAprovado } from '../lib/pedidos';
 import { PDFGenerator } from '../pdf/PDFGenerator';
 import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
 import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
@@ -34,6 +35,8 @@ export default function Documentos() {
   const [cargoEscolhido, setCargoEscolhido] = useState('');
   const [origemLojas, setOrigemLojas] = useState('navegador');
   const [manualLojas, setManualLojas] = useState({});
+  const resultadoLojasRef = useRef([]);
+  const pedidoDaUrl = new URLSearchParams(location.search).get('pedido');
 
   const [searchFuncionario] = useState('');
   const [filterEmpresa] = useState('');
@@ -128,6 +131,7 @@ export default function Documentos() {
       // Lojas cadastradas (banco; enquanto a migração não existir, do navegador)
       try {
         const resultadoLojas = await carregarLojas();
+        resultadoLojasRef.current = resultadoLojas.lojas;
         setLojas(resultadoLojas.lojas);
         setOrigemLojas(resultadoLojas.origem);
       } catch (e) {
@@ -156,6 +160,16 @@ export default function Documentos() {
       if (empId && eData.data?.find(e => String(e.id) === String(empId))) {
         setSelectedEmpresa(empId);
       }
+      // Vindo da caixa de pedidos ("Corrigir"): já traz loja e cargo
+      const lojaParam = params.get('loja');
+      if (lojaParam) {
+        const chaves = ['loja', 'Loja', 'LOJA'];
+        setFormData((prev) => ({ ...prev, ...Object.fromEntries(chaves.map((k) => [k, lojaParam])) }));
+        const conhecida = resultadoLojasRef.current.some((l) => l.nome === lojaParam || (l.endereco ? `${l.nome} (${l.endereco})` : l.nome) === lojaParam);
+        if (!conhecida) setManualLojas(Object.fromEntries(chaves.map((k) => [k, true])));
+      }
+      const cargoParam = params.get('cargo');
+      if (cargoParam) setCargoEscolhido(cargoParam);
     } catch (error) {
       console.error('Erro geral no fetchData:', error);
       toast.error('Erro ao carregar dados do banco.');
@@ -792,6 +806,7 @@ export default function Documentos() {
           nomeFuncionario: baseFileName.replace('CARTA ', ''),
           nomeArquivo: `${baseFileName} - Admin`,
           pdfBlob: blob,
+          solicitacaoId: pedidoDaUrl || undefined,
         });
         if (registroError) falhasHistorico++;
 
@@ -811,6 +826,13 @@ export default function Documentos() {
       }
 
       if (falhasHistorico > 0) avisarFalhaHistorico();
+
+      // Veio de um pedido de supervisor ("Corrigir"): a carta corrigida conclui o pedido
+      if (pedidoDaUrl && generatedCount > 0 && falhasHistorico === 0) {
+        marcarPedidoAprovado(pedidoDaUrl)
+          .then(() => toast.success('Pedido do supervisor concluído com esta carta.'))
+          .catch(() => toast.error('A carta saiu, mas o pedido não foi marcado como concluído. Aprove na caixa de pedidos.'));
+      }
 
       if (generatedCount === 1) {
         setGeneratedCartaId(lastCartaId);

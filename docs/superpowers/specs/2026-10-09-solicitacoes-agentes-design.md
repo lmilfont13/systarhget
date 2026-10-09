@@ -41,9 +41,11 @@ templates de PDF com campos (só templates de texto, que são as cartas de apres
 `ativo` (bool, admin pode bloquear), `criado_em`.
 
 `solicitacoes` — `id`, `solicitante_id`, `texto`, `status`
-(`recebida` → `processando` → `revisao` → `aprovada` | `recusada` | `erro`),
-`itens` jsonb (uma entrada por carta pedida, ver abaixo), `motivo_recusa`,
+(`recebida` → `processando` → `revisao` → `aprovada` | `recusada` | `erro`), `motivo_recusa`,
 `erro`, `criado_em`, `atualizado_em`, `aprovado_por`, `aprovado_em`.
+
+`solicitacoes_analise` — `solicitacao_id`, `itens` jsonb (uma entrada por carta pedida).
+Tabela separada e só do admin, porque os itens trazem nomes e CPFs de outros promotores.
 
 Item: `{ trecho, promotor: {id, nome, confianca, alternativas[]}, loja: {id|null, nome,
 confianca, nova}, template_id, cargo, avisos[], confianca: 'alta'|'media'|'revisar',

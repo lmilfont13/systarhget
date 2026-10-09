@@ -33,6 +33,11 @@ describe('montarCarta', () => {
     expect(t).toContain('Apresentação de <b>REPOSITOR(A)</b>');
   });
 
+  it('não interpreta "$&" no nome da loja', () => {
+    const t = montarCarta({ template, funcionario, empresa, loja: 'Loja $& Cia', cargo: '' });
+    expect(t).toContain('LOJA $& CIA');
+  });
+
   it('remove placeholders sem valor', () => {
     expect(texto).not.toMatch(/\{\{|\[extra\]/);
   });

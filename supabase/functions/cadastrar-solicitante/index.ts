@@ -28,6 +28,12 @@ Deno.serve(async (req) => {
   if (whatsapp.length < 10 || whatsapp.length > 13) return resposta({ erro: 'Informe o WhatsApp com DDD.' }, 400);
 
   const admin = clienteServico();
+
+  // Freio contra cadastro em massa: no máximo 30 novos supervisores por hora
+  const umaHoraAtras = new Date(Date.now() - 3600_000).toISOString();
+  const { count } = await admin.from('solicitantes').select('user_id', { count: 'exact', head: true }).gt('criado_em', umaHoraAtras);
+  if ((count ?? 0) >= 30) return resposta({ erro: 'Muitos cadastros agora. Tente de novo em uma hora.' }, 429);
+
   const { data, error } = await admin.auth.admin.createUser({
     email: `${usuario}@${DOMINIO}`,
     password: senha,

@@ -30,11 +30,21 @@ Deno.serve(async (req) => {
   const recente = Date.now() - new Date(pedido.atualizado_em).getTime() < 120_000;
   if (pedido.status === 'processando' && recente) return resposta({ ok: true, status: 'processando' });
 
-  await db.from('solicitacoes').update({ status: 'processando', erro: null }).eq('id', id);
+  // Troca para "processando" só se ninguém mudou o pedido desde a leitura (atômico)
+  const { data: tomado, error: erroTomar } = await db.from('solicitacoes')
+    .update({ status: 'processando', erro: null })
+    .eq('id', id).eq('status', pedido.status).eq('atualizado_em', pedido.atualizado_em)
+    .select('id');
+  if (erroTomar) return resposta({ erro: 'Não foi possível iniciar o processamento.' }, 500);
+  if (!tomado?.length) return resposta({ ok: true, status: 'processando' });
 
   try {
     const itens = await resolverPedido(db, pedido.texto);
-    await db.from('solicitacoes').update({ status: 'revisao', itens, erro: null }).eq('id', id);
+    const { error: erroAnalise } = await db.from('solicitacoes_analise')
+      .upsert({ solicitacao_id: id, itens, atualizado_em: new Date().toISOString() });
+    if (erroAnalise) throw erroAnalise;
+    const { error: erroStatus } = await db.from('solicitacoes').update({ status: 'revisao', erro: null }).eq('id', id);
+    if (erroStatus) throw erroStatus;
     return resposta({ ok: true, status: 'revisao' });
   } catch (e) {
     console.error('processar', e);

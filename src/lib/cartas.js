@@ -79,7 +79,7 @@ export async function assetToDataUrl(url) {
  * Registra a carta no histórico. Devolve { id, error } em vez de engolir a falha,
  * para a tela avisar quando o documento foi gerado mas não ficou salvo.
  */
-export async function registrarCarta({ funcionarioId, templateId, empresaId, nomeFuncionario, nomeArquivo, pdfBlob }) {
+export async function registrarCarta({ funcionarioId, templateId, empresaId, nomeFuncionario, nomeArquivo, pdfBlob, solicitacaoId }) {
   try {
     const urlStorage = await blobToDataUrl(pdfBlob);
     const { data, error } = await supabase
@@ -92,6 +92,7 @@ export async function registrarCarta({ funcionarioId, templateId, empresaId, nom
         nome_arquivo: nomeArquivo,
         url_storage: urlStorage,
         data_geracao: new Date().toISOString(),
+        ...(solicitacaoId ? { solicitacao_id: solicitacaoId } : {}),
       })
       .select('id')
       .single();

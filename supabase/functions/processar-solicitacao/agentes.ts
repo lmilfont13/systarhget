@@ -51,6 +51,10 @@ async function perguntar(sistema: string, conteudo: string): Promise<Record<stri
       system: sistema,
       messages: [{ role: 'user', content: conteudo }],
     }),
+    signal: AbortSignal.timeout(45_000),
+  }).catch((e) => {
+    console.error('anthropic fetch', e);
+    throw new ErroAgente('A IA demorou demais para responder. Use "Reprocessar".');
   });
 
   if (!r.ok) {
