@@ -28,7 +28,7 @@ export const emailSchema = z
 // Schema para telefone
 export const phoneSchema = z
   .string()
-  .regex(/^[\d\s\-\(\)+]+$/, 'Telefone inválido')
+  .regex(/^[\d\s\-()+]+$/, 'Telefone inválido')
   .or(z.string().length(0)); // Permite vazio
 
 /**

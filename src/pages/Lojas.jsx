@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Store, Plus, Trash2, Edit2, X, Save, Search, MapPin, FileText } from 'lucide-react';
+import { Store, Plus, Trash2, Edit2, X, Save, Search, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { capitalizeStoreName } from '../lib/formatters';
@@ -130,7 +130,7 @@ export default function Lojas() {
       localStorage.setItem('docflow_lojas', JSON.stringify(updatedLojas));
       setLojas(updatedLojas);
       toast.success('Loja excluída com sucesso.');
-    } catch (error) {
+    } catch {
       toast.error('Erro ao excluir a loja.');
     }
   };

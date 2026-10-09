@@ -15,11 +15,20 @@ export default function VisualizadorCarta() {
       setLoading(true);
       setError(null);
       
-      const { data, error: dbError } = await supabase
-        .from('cartas_geradas')
-        .select('*')
-        .eq('id', id)
-        .single();
+      // Link público: a função carta_publica devolve só a carta deste id,
+      // sem expor o restante da tabela para quem não está logado.
+      let { data, error: dbError } = await supabase
+        .rpc('carta_publica', { p_id: id })
+        .maybeSingle();
+
+      // Compatibilidade enquanto a migração de segurança não foi aplicada no banco
+      if (dbError && (dbError.code === 'PGRST202' || dbError.code === '42883')) {
+        ({ data, error: dbError } = await supabase
+          .from('cartas_geradas')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle());
+      }
 
       if (dbError) throw dbError;
       if (!data) throw new Error('Carta não encontrada.');
