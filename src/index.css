@@ -1,92 +1,93 @@
 @import "tailwindcss";
 
 /* ============================================================
-   SYSTARHGET — DESIGN SYSTEM
-   Papel, tinta e carimbo: um back-office de documentos.
+   TARHGET — DESIGN SYSTEM
+   Vinho da marca sobre papel cinza-claro, tipografia serifada só na marca.
    ============================================================ */
 
 /* ------------------------------------------------------------
    TOKENS
    As escalas indigo/violet/purple são remapeadas para o
-   verde-petróleo da marca, e slate/gray para um neutro único.
+   vinho da marca, e slate/gray para um neutro único.
    Assim todas as telas existentes herdam a nova identidade.
    ------------------------------------------------------------ */
 @theme {
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-marca: 'Cinzel', 'Trajan Pro', Georgia, serif;
 
-  /* Marca — verde-petróleo */
-  --color-brand-50:  #EEF6F4;
-  --color-brand-100: #D6EBE7;
-  --color-brand-200: #ADD6CF;
-  --color-brand-300: #7DBBB1;
-  --color-brand-400: #4C9D91;
-  --color-brand-500: #2A8276;
-  --color-brand-600: #0E6B61;
-  --color-brand-700: #0B564F;
-  --color-brand-800: #0A4540;
-  --color-brand-900: #093934;
-  --color-brand-950: #04201D;
+  /* Marca — vinho Tarhget (do logo: #580A05) */
+  --color-brand-50:  #FBF3F2;
+  --color-brand-100: #F6E2E0;
+  --color-brand-200: #ECC3BF;
+  --color-brand-300: #DC9891;
+  --color-brand-400: #C4665D;
+  --color-brand-500: #A03E35;
+  --color-brand-600: #7E1F17;
+  --color-brand-700: #66130C;
+  --color-brand-800: #580A05;
+  --color-brand-900: #3F0603;
+  --color-brand-950: #240302;
 
-  --color-indigo-50:  #EEF6F4;
-  --color-indigo-100: #D6EBE7;
-  --color-indigo-200: #ADD6CF;
-  --color-indigo-300: #7DBBB1;
-  --color-indigo-400: #4C9D91;
-  --color-indigo-500: #2A8276;
-  --color-indigo-600: #0E6B61;
-  --color-indigo-700: #0B564F;
-  --color-indigo-800: #0A4540;
-  --color-indigo-900: #093934;
-  --color-indigo-950: #04201D;
+  --color-indigo-50:  #FBF3F2;
+  --color-indigo-100: #F6E2E0;
+  --color-indigo-200: #ECC3BF;
+  --color-indigo-300: #DC9891;
+  --color-indigo-400: #C4665D;
+  --color-indigo-500: #A03E35;
+  --color-indigo-600: #7E1F17;
+  --color-indigo-700: #66130C;
+  --color-indigo-800: #580A05;
+  --color-indigo-900: #3F0603;
+  --color-indigo-950: #240302;
 
-  --color-violet-50:  #EEF6F4;
-  --color-violet-100: #D6EBE7;
-  --color-violet-200: #ADD6CF;
-  --color-violet-300: #7DBBB1;
-  --color-violet-400: #4C9D91;
-  --color-violet-500: #2A8276;
-  --color-violet-600: #0E6B61;
-  --color-violet-700: #0B564F;
-  --color-violet-800: #0A4540;
-  --color-violet-900: #093934;
-  --color-violet-950: #04201D;
+  --color-violet-50:  #FBF3F2;
+  --color-violet-100: #F6E2E0;
+  --color-violet-200: #ECC3BF;
+  --color-violet-300: #DC9891;
+  --color-violet-400: #C4665D;
+  --color-violet-500: #A03E35;
+  --color-violet-600: #7E1F17;
+  --color-violet-700: #66130C;
+  --color-violet-800: #580A05;
+  --color-violet-900: #3F0603;
+  --color-violet-950: #240302;
 
-  --color-purple-50:  #EEF6F4;
-  --color-purple-100: #D6EBE7;
-  --color-purple-200: #ADD6CF;
-  --color-purple-300: #7DBBB1;
-  --color-purple-400: #4C9D91;
-  --color-purple-500: #2A8276;
-  --color-purple-600: #0E6B61;
-  --color-purple-700: #0B564F;
-  --color-purple-800: #0A4540;
-  --color-purple-900: #093934;
-  --color-purple-950: #04201D;
+  --color-purple-50:  #FBF3F2;
+  --color-purple-100: #F6E2E0;
+  --color-purple-200: #ECC3BF;
+  --color-purple-300: #DC9891;
+  --color-purple-400: #C4665D;
+  --color-purple-500: #A03E35;
+  --color-purple-600: #7E1F17;
+  --color-purple-700: #66130C;
+  --color-purple-800: #580A05;
+  --color-purple-900: #3F0603;
+  --color-purple-950: #240302;
 
   /* Neutro — tinta sobre papel */
-  --color-slate-50:  #F7F8F6;
-  --color-slate-100: #EFF1EE;
-  --color-slate-200: #E1E5E1;
-  --color-slate-300: #CBD1CC;
-  --color-slate-400: #9AA39D;
-  --color-slate-500: #6E7872;
-  --color-slate-600: #535C57;
-  --color-slate-700: #3E4642;
-  --color-slate-800: #29302D;
-  --color-slate-900: #1A201E;
-  --color-slate-950: #0F1412;
+  --color-slate-50:  #F8F7F6;
+  --color-slate-100: #F1EFEE;
+  --color-slate-200: #E4E1DF;
+  --color-slate-300: #CFCAC7;
+  --color-slate-400: #A39D99;
+  --color-slate-500: #6B6460;
+  --color-slate-600: #57504C;
+  --color-slate-700: #433D3A;
+  --color-slate-800: #2D2826;
+  --color-slate-900: #1E1A19;
+  --color-slate-950: #120F0E;
 
-  --color-gray-50:  #F7F8F6;
-  --color-gray-100: #EFF1EE;
-  --color-gray-200: #E1E5E1;
-  --color-gray-300: #CBD1CC;
-  --color-gray-400: #9AA39D;
-  --color-gray-500: #6E7872;
-  --color-gray-600: #535C57;
-  --color-gray-700: #3E4642;
-  --color-gray-800: #29302D;
-  --color-gray-900: #1A201E;
-  --color-gray-950: #0F1412;
+  --color-gray-50:  #F8F7F6;
+  --color-gray-100: #F1EFEE;
+  --color-gray-200: #E4E1DF;
+  --color-gray-300: #CFCAC7;
+  --color-gray-400: #A39D99;
+  --color-gray-500: #6B6460;
+  --color-gray-600: #57504C;
+  --color-gray-700: #433D3A;
+  --color-gray-800: #2D2826;
+  --color-gray-900: #1E1A19;
+  --color-gray-950: #120F0E;
 
   /* Sinal — âmbar de atenção */
   --color-signal-50:  #FCF4E8;
@@ -96,33 +97,33 @@
   --color-signal-700: #864C12;
 
   /* Superfícies semânticas */
-  --color-paper: #F4F5F2;
+  --color-paper: #F4F4F4;
   --color-surface: #FFFFFF;
-  --color-ink: #16211F;
-  --color-ink-soft: #1F2C29;
-  --color-line: #DFE3DF;
-  --color-line-soft: #ECEFEC;
+  --color-ink: #1F1110;
+  --color-ink-soft: #2B1715;
+  --color-line: #E2DFDD;
+  --color-line-soft: #EDEBEA;
 
   /* Compatibilidade com tokens antigos (shadcn-like) */
-  --color-background: #F4F5F2;
-  --color-foreground: #16211F;
+  --color-background: #F4F4F4;
+  --color-foreground: #1E1A19;
   --color-card: #FFFFFF;
-  --color-card-foreground: #16211F;
+  --color-card-foreground: #1E1A19;
   --color-popover: #FFFFFF;
-  --color-popover-foreground: #16211F;
-  --color-primary: #0E6B61;
+  --color-popover-foreground: #1E1A19;
+  --color-primary: #7E1F17;
   --color-primary-foreground: #FFFFFF;
-  --color-secondary: #EFF1EE;
-  --color-secondary-foreground: #16211F;
-  --color-muted: #EFF1EE;
-  --color-muted-foreground: #6E7872;
-  --color-accent: #0E6B61;
+  --color-secondary: #F1EFEE;
+  --color-secondary-foreground: #1E1A19;
+  --color-muted: #F1EFEE;
+  --color-muted-foreground: #6B6460;
+  --color-accent: #7E1F17;
   --color-accent-foreground: #FFFFFF;
   --color-destructive: #C2412D;
   --color-destructive-foreground: #FFFFFF;
-  --color-border: #DFE3DF;
-  --color-input: #DFE3DF;
-  --color-ring: #0E6B61;
+  --color-border: #E2DFDD;
+  --color-input: #E2DFDD;
+  --color-ring: #7E1F17;
 
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
@@ -130,12 +131,12 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
 
-  --shadow-sm: 0 1px 2px rgb(22 33 31 / 0.05);
-  --shadow: 0 1px 2px rgb(22 33 31 / 0.05), 0 1px 3px rgb(22 33 31 / 0.04);
-  --shadow-md: 0 2px 4px rgb(22 33 31 / 0.04), 0 4px 12px rgb(22 33 31 / 0.05);
-  --shadow-lg: 0 4px 8px rgb(22 33 31 / 0.04), 0 12px 28px rgb(22 33 31 / 0.08);
-  --shadow-xl: 0 8px 16px rgb(22 33 31 / 0.06), 0 24px 48px rgb(22 33 31 / 0.10);
-  --shadow-2xl: 0 24px 64px rgb(22 33 31 / 0.18);
+  --shadow-sm: 0 1px 2px rgb(31 17 16 / 0.05);
+  --shadow: 0 1px 2px rgb(31 17 16 / 0.05), 0 1px 3px rgb(31 17 16 / 0.04);
+  --shadow-md: 0 2px 4px rgb(31 17 16 / 0.04), 0 4px 12px rgb(31 17 16 / 0.05);
+  --shadow-lg: 0 4px 8px rgb(31 17 16 / 0.04), 0 12px 28px rgb(31 17 16 / 0.08);
+  --shadow-xl: 0 8px 16px rgb(31 17 16 / 0.06), 0 24px 48px rgb(31 17 16 / 0.10);
+  --shadow-2xl: 0 24px 64px rgb(31 17 16 / 0.18);
 
   --animate-enter: enter 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
   --animate-overlay: overlay 0.15s ease-out;
@@ -215,7 +216,7 @@
   select:focus {
     outline: none;
     border-color: var(--color-brand-500);
-    box-shadow: 0 0 0 3px rgb(14 107 97 / 0.14);
+    box-shadow: 0 0 0 3px rgb(126 31 23 / 0.14);
   }
 
   input[type='checkbox'], input[type='radio'] { accent-color: var(--color-brand-600); }

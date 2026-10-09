@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { listarFuncionarios, listarEmpresas } from '../lib/dados';
+import { teclaMod, abrirBuscaRapida } from '../lib/atalhos';
 import { cn } from '../lib/cn';
 import { PageHeader, Panel, Button, Skeleton, EmptyState } from '../components/ui';
 
@@ -325,6 +326,22 @@ export default function Dashboard() {
 
         {/* Atalhos */}
         <Panel title="Atalhos" bodyClassName="p-2">
+          <button
+            type="button"
+            onClick={abrirBuscaRapida}
+            className="group mb-1 flex w-full items-center gap-3 rounded-lg border border-brand-100 bg-brand-50 p-3 text-left hover:border-brand-200"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+              <Search className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-brand-900">Busca rápida</span>
+              <span className="block text-xs leading-relaxed text-brand-700">Digite o nome do promotor e gere a carta direto</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1 text-brand-700">
+              <span className="kbd">{teclaMod}</span><span className="kbd">K</span>
+            </span>
+          </button>
           <ul>
             {ATALHOS.map((item) => (
               <li key={item.to}>

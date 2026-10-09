@@ -3,7 +3,10 @@ import { FileEdit, CheckCircle2, Loader2, FileText, Eye, Search, Lock, LogOut, M
 import { toast } from 'sonner';
 import { useAuth, PORTAL_EMAIL, authErrorMessage } from '../lib/auth';
 import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
-import { cleanFooterText, generateUniqueId, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
+import { carregarLojas, cadastrarSeNova } from '../lib/lojas';
+import { cargoParaCarta } from '../lib/cargos';
+import CargoSelect from '../components/CargoSelect';
+import { cleanFooterText, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
 import { PDFGenerator } from '../pdf/PDFGenerator';
 import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
 
@@ -87,6 +90,9 @@ export default function PortalPromotor() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lojas, setLojas] = useState([]);
+  // '' = automático (cargo do cadastro); senão a função escolhida para esta emissão
+  const [cargoEscolhido, setCargoEscolhido] = useState('');
+  const [origemLojas, setOrigemLojas] = useState('navegador');
   const [manualLojas, setManualLojas] = useState({});
 
   const [searchFuncionario, setSearchFuncionario] = useState('');
@@ -308,10 +314,13 @@ export default function PortalPromotor() {
       setFuncionarios(fData.data || []);
       setEmpresas(eData.data || []);
 
-      // Carrega lojas
-      const savedLojas = localStorage.getItem('docflow_lojas');
-      if (savedLojas) {
-        setLojas(JSON.parse(savedLojas));
+      // Lojas cadastradas (banco; enquanto a migração não existir, do navegador)
+      try {
+        const resultadoLojas = await carregarLojas();
+        setLojas(resultadoLojas.lojas);
+        setOrigemLojas(resultadoLojas.origem);
+      } catch (e) {
+        console.error('Erro ao carregar lojas:', e);
       }
 
       // 1. Força a seleção do template "Carta de Apresentação Geral"
@@ -396,7 +405,7 @@ export default function PortalPromotor() {
               case 'empresa_rodape': newData[field.name] = cleanFooterText(activeEmpresa?.rodape); break;
               case 'funcionario_nome': newData[field.name] = (activeFuncionario?.nome || '').toUpperCase(); break;
               case 'funcionario_cpf': newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF); break;
-              case 'funcionario_cargo': newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toLowerCase() : ''; break;
+              case 'funcionario_cargo': newData[field.name] = cargoParaCarta(cargoEscolhido, activeFuncionario).toLowerCase(); break;
               case 'data_atual': newData[field.name] = dataAtual; break;
               default: 
                 if (activeFuncionario?.dados_extras && activeFuncionario.dados_extras[field.mappedTo] !== undefined) {
@@ -412,7 +421,7 @@ export default function PortalPromotor() {
             if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF);
             else if (fieldNameLower.includes('rg') || displayNameLower.includes('rg')) newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
             else if (fieldNameLower.includes('nome') || displayNameLower.includes('nome') || fieldNameLower.includes('promotor') || displayNameLower.includes('promotor') || fieldNameLower.includes('funcionario') || displayNameLower.includes('funcionario')) newData[field.name] = (activeFuncionario?.nome || '').toUpperCase();
-            else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toUpperCase() : '';
+            else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) newData[field.name] = cargoParaCarta(cargoEscolhido, activeFuncionario);
             else if (fieldNameLower.includes('data') || displayNameLower.includes('data')) newData[field.name] = dataAtual;
             else if (fieldNameLower.includes('empresa') || displayNameLower.includes('empresa')) newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
             else if (fieldNameLower.includes('nc') || displayNameLower.includes('nc') || fieldNameLower.includes('cdc') || displayNameLower.includes('cdc')) newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
@@ -444,7 +453,7 @@ export default function PortalPromotor() {
         console.error(err);
       }
     }
-  }, [selectedFuncionario, selectedTemplate]);
+  }, [selectedFuncionario, selectedTemplate, cargoEscolhido]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -487,16 +496,9 @@ export default function PortalPromotor() {
         // We don't have allLojas in PortalPromotor to check isOldLoja! So any new store is saved directly.
         if (!isKnownLoja && lojaValue) {
           const capitalizedName = capitalizeStoreName(lojaValue);
-          const newLoja = {
-            id: generateUniqueId(),
-            nome: capitalizedName,
-            endereco: '',
-            cidadeUf: '',
-            cnpj: ''
-          };
-          const updatedLojas = [newLoja, ...lojas];
-          localStorage.setItem('docflow_lojas', JSON.stringify(updatedLojas));
-          setLojas(updatedLojas);
+          // Loja nova digitada na hora: entra no cadastro para as próximas vezes
+          const lojaSalva = await cadastrarSeNova(capitalizedName, lojas, origemLojas);
+          if (lojaSalva) setLojas(prev => [lojaSalva, ...prev]);
           
           setFormData(prev => ({ ...prev, [lojaField.name]: capitalizedName }));
         } else {
@@ -846,6 +848,17 @@ export default function PortalPromotor() {
                     })}
                   </select>
                 </div>
+
+                {/* Cargo: automático (cadastro) ou escolhido na lista */}
+                {selectedFuncionario && (
+                  <CargoSelect
+                    tone="portal"
+                    value={cargoEscolhido}
+                    onChange={setCargoEscolhido}
+                    funcionarios={funcionarios}
+                    cargoDoCadastro={activeFuncionario?.cargo}
+                  />
+                )}
 
                 {/* Status and detected branding */}
                 {selectedFuncionario && activeFuncionario && (

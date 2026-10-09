@@ -1,17 +1,26 @@
 import { cn } from '../lib/cn';
 
-/** Marca do sistema: um carimbo circular. */
-export function BrandMark({ className }) {
+/**
+ * Marca Tarhget: o "T" serifado dentro do círculo, como no logo.
+ * Usa currentColor — vinho em fundos claros, rosado claro no menu escuro.
+ */
+export function BrandMark({ className, title }) {
   return (
-    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true" className={cn('h-8 w-8 shrink-0', className)}>
-      <rect width="32" height="32" rx="8" fill="#0E6B61" />
-      <circle cx="16" cy="16" r="10.5" stroke="#fff" strokeWidth="1.6" />
-      <circle cx="16" cy="16" r="7.6" stroke="#fff" strokeWidth="0.9" strokeDasharray="1.4 1.6" />
+    <svg viewBox="0 0 32 32" fill="none" role={title ? 'img' : undefined} aria-hidden={title ? undefined : 'true'} aria-label={title} className={cn('h-8 w-8 shrink-0 text-brand-800', className)}>
+      <circle cx="16" cy="16" r="14.2" stroke="currentColor" strokeWidth="1.6" />
+      {/* T serifado: barra com serifas nas pontas, haste e base */}
       <path
-        d="M19.2 12.9c-.6-.9-1.7-1.4-3.1-1.4-1.8 0-3 .9-3 2.2 0 1.4 1.2 1.9 3 2.3 1.9.4 3.2 1 3.2 2.5 0 1.4-1.3 2.4-3.3 2.4-1.5 0-2.7-.6-3.3-1.6"
-        stroke="#fff" strokeWidth="1.7" strokeLinecap="round"
+        fill="currentColor"
+        d="M8.6 8.4h14.8v3.1h-.9c-.2-1-.6-1.6-1.6-1.7h-3.3v12.3c0 .8.4 1.1 1.4 1.2l.6.1v.9h-7.2v-.9l.6-.1c1-.1 1.4-.4 1.4-1.2V9.8h-3.3c-1 .1-1.4.7-1.6 1.7h-.9z"
       />
     </svg>
+  );
+}
+
+/** Nome da marca em letras serifadas, como no logo. */
+export function Wordmark({ className }) {
+  return (
+    <span className={cn('font-marca text-[1.05rem] font-semibold tracking-[0.18em]', className)}>TARHGET</span>
   );
 }
 

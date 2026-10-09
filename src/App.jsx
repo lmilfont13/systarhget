@@ -37,7 +37,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Toaster
-          position="top-right"
+          position="bottom-right"
           richColors
           closeButton
           toastOptions={{ style: { fontFamily: 'var(--font-sans)' } }}

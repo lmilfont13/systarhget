@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Download, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { dataUrlToBlob, baixarArquivo, codigoVerificacao } from '../lib/cartas';
-import { BrandMark } from '../components/ui';
+import { BrandMark, Wordmark } from '../components/ui';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const dataHora = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -116,7 +116,7 @@ export default function VisualizadorCarta() {
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-white px-4 sm:px-6">
         <div className="flex items-center gap-2.5">
           <BrandMark className="h-7 w-7" />
-          <span className="text-sm font-semibold text-ink">SysTarhget</span>
+          <Wordmark className="text-sm text-brand-800" />
           <span className="hidden text-sm text-slate-400 sm:inline">Verificação de documento</span>
         </div>
         <button
