@@ -29,3 +29,17 @@ describe('cargos', () => {
     expect(cargoParaCarta('', { cargo: '  ' })).toBe('');
   });
 });
+
+describe('ehCampoRg / ehCampoCargo', async () => {
+  const { ehCampoRg, ehCampoCargo } = await import('./cargos.js');
+  it('"cargo" não é RG (contém as letras rg)', () => {
+    expect(ehCampoRg('Cargo')).toBe(false);
+    expect(ehCampoRg('cargo_funcionario')).toBe(false);
+    expect(ehCampoCargo('Cargo')).toBe(true);
+  });
+  it('reconhece RG de verdade', () => {
+    expect(ehCampoRg('RG')).toBe(true);
+    expect(ehCampoRg('numero_rg')).toBe(true);
+    expect(ehCampoRg('RG do funcionário')).toBe(true);
+  });
+});

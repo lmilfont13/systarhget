@@ -5,7 +5,7 @@ import { celebrarCarta } from '../lib/celebrar';
 import { useAuth, PORTAL_EMAIL, authErrorMessage } from '../lib/auth';
 import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
 import { carregarLojas, cadastrarSeNova } from '../lib/lojas';
-import { cargoParaCarta } from '../lib/cargos';
+import { cargoParaCarta, ehCampoRg, ehCampoCargo } from '../lib/cargos';
 import CargoSelect from '../components/CargoSelect';
 import { cleanFooterText, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
 import { PDFGenerator } from '../pdf/PDFGenerator';
@@ -300,8 +300,8 @@ export default function PortalPromotor() {
               let mappedTo = '';
               if (nameLower === 'empresa') mappedTo = 'empresa_razao';
               else if (nameLower.includes('cpf')) mappedTo = 'funcionario_cpf';
-              else if (nameLower.includes('rg')) mappedTo = 'funcionario_rg';
-              else if (nameLower.includes('cargo')) mappedTo = 'funcionario_cargo';
+              else if (ehCampoCargo(nameLower)) mappedTo = 'funcionario_cargo';
+              else if (ehCampoRg(nameLower)) mappedTo = 'funcionario_rg';
               else if (nameLower.includes('nome') || nameLower.includes('promotor') || nameLower.includes('funcionario')) mappedTo = 'funcionario_nome';
               fields.push({ name, mappedTo });
             }
@@ -407,6 +407,7 @@ export default function PortalPromotor() {
               case 'funcionario_nome': newData[field.name] = (activeFuncionario?.nome || '').toUpperCase(); break;
               case 'funcionario_cpf': newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF); break;
               case 'funcionario_cargo': newData[field.name] = cargoParaCarta(cargoEscolhido, activeFuncionario).toLowerCase(); break;
+              case 'funcionario_rg': newData[field.name] = String(activeFuncionario?.dados_extras?.RG ?? activeFuncionario?.dados_extras?.rg ?? ''); break;
               case 'data_atual': newData[field.name] = dataAtual; break;
               default: 
                 if (activeFuncionario?.dados_extras && activeFuncionario.dados_extras[field.mappedTo] !== undefined) {
@@ -420,7 +421,7 @@ export default function PortalPromotor() {
             const fieldNameLower = (field.name || '').toLowerCase();
             
             if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF);
-            else if (fieldNameLower.includes('rg') || displayNameLower.includes('rg')) newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
+            else if (ehCampoRg(fieldNameLower) || ehCampoRg(displayNameLower)) newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
             else if (fieldNameLower.includes('nome') || displayNameLower.includes('nome') || fieldNameLower.includes('promotor') || displayNameLower.includes('promotor') || fieldNameLower.includes('funcionario') || displayNameLower.includes('funcionario')) newData[field.name] = (activeFuncionario?.nome || '').toUpperCase();
             else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) newData[field.name] = cargoParaCarta(cargoEscolhido, activeFuncionario);
             else if (fieldNameLower.includes('data') || displayNameLower.includes('data')) newData[field.name] = dataAtual;
@@ -851,7 +852,7 @@ export default function PortalPromotor() {
                 </div>
 
                 {/* Cargo: automático (cadastro) ou escolhido na lista */}
-                {selectedFuncionario && (
+                {selectedFuncionario && !activeTemplate?.fields?.some((f) => f.mappedTo === 'funcionario_cargo') && (
                   <CargoSelect
                     tone="portal"
                     value={cargoEscolhido}
@@ -924,7 +925,7 @@ export default function PortalPromotor() {
                                 />
                                 <span className="flex items-center gap-1">
                                   {labelName} 
-                                  {isAutoFilled && (
+                                  {isAutoFilled && !(field.mappedTo === 'funcionario_cargo' && cargoEscolhido) && (
                                     <span className="text-[9px] text-[#e31b23] bg-red-50 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide">
                                       Preenchido
                                     </span>
@@ -943,7 +944,9 @@ export default function PortalPromotor() {
                             </label>
                             
                             <div className="mt-1">
-                              {isLojaField ? (
+                              {field.mappedTo === 'funcionario_cargo' ? (
+                                <CargoSelect semRotulo id={field.name} tone="portal" value={cargoEscolhido} onChange={setCargoEscolhido} funcionarios={funcionarios} cargoDoCadastro={activeFuncionario?.cargo} />
+                              ) : isLojaField ? (
                                 lojas.length === 0 ? (
                                   <input
                                     type="text"
