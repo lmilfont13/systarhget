@@ -1,5 +1,4 @@
 import { Edit2, Trash2, Eye, Archive, Download, Share2, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
 
 /**
  * Componente para exibir lista de cartas de apresentação

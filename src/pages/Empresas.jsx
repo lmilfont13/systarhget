@@ -138,24 +138,24 @@ export default function Empresas() {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Empresas</h1>
+          <h1 className="text-[1.625rem] font-semibold tracking-tight text-ink">Empresas</h1>
           <p className="mt-1 text-sm text-gray-500">
             Gerencie as empresas para injetar automaticamente Logo, Carimbo e Rodapé nas cartas.
           </p>
         </div>
         <button 
           onClick={openNew}
-          className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+          className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
         >
           <Plus className="w-4 h-4" />
           Nova Empresa
         </button>
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-lg border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl border border-line overflow-hidden">
         {isLoading ? (
           <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-indigo-500" /></div>
         ) : empresas.length === 0 ? (
@@ -195,7 +195,7 @@ export default function Empresas() {
       </div>
 
       {editModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between bg-gray-50">
               <h3 className="text-lg font-semibold">{editModal.data.id ? 'Editar Empresa' : 'Nova Empresa'}</h3>
@@ -219,7 +219,7 @@ export default function Empresas() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
                 {/* Logo Upload */}
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Logomarca</label>
+                  <label className="block text-[11px] font-semibold text-gray-700 mb-2">Logomarca</label>
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-2 text-center hover:bg-gray-50 transition-colors h-32 flex flex-col justify-center">
                     {editModal.data.logo_url ? (
                       <div className="relative group h-full flex items-center justify-center">
@@ -233,19 +233,19 @@ export default function Empresas() {
                         {imageErrors.logo_url && (
                           <div className="flex flex-col items-center text-gray-400">
                             <ImageIcon className="w-6 h-6 mb-1" />
-                            <span className="text-[10px]">URL corrompida</span>
+                            <span className="text-xs">URL corrompida</span>
                           </div>
                         )}
                         <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity rounded-md">
                           <ImageIcon className="w-4 h-4 mb-1" />
-                          <span className="text-[10px]">Trocar</span>
+                          <span className="text-xs">Trocar</span>
                           <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={e => handleImageUpload(e, 'logo_url')} />
                         </label>
                       </div>
                     ) : (
                       <label className="cursor-pointer flex flex-col items-center">
                         <ImageIcon className="w-6 h-6 text-gray-400 mb-1" />
-                        <span className="text-[10px] text-indigo-600 font-medium">Upload Logo</span>
+                        <span className="text-xs text-indigo-600 font-medium">Upload Logo</span>
                         <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={e => handleImageUpload(e, 'logo_url')} />
                       </label>
                     )}
@@ -254,7 +254,7 @@ export default function Empresas() {
 
                 {/* Carimbo Empresa Upload */}
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Carimbo Empresa</label>
+                  <label className="block text-[11px] font-semibold text-gray-700 mb-2">Carimbo Empresa</label>
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-2 text-center hover:bg-gray-50 transition-colors h-32 flex flex-col justify-center">
                     {editModal.data.carimbo_url ? (
                       <div className="relative group h-full flex items-center justify-center">
@@ -268,19 +268,19 @@ export default function Empresas() {
                         {imageErrors.carimbo_url && (
                           <div className="flex flex-col items-center text-gray-400">
                             <ImageIcon className="w-6 h-6 mb-1" />
-                            <span className="text-[10px]">URL corrompida</span>
+                            <span className="text-xs">URL corrompida</span>
                           </div>
                         )}
                         <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity rounded-md">
                           <ImageIcon className="w-4 h-4 mb-1" />
-                          <span className="text-[10px]">Trocar</span>
+                          <span className="text-xs">Trocar</span>
                           <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={e => handleImageUpload(e, 'carimbo_url')} />
                         </label>
                       </div>
                     ) : (
                       <label className="cursor-pointer flex flex-col items-center">
                         <ImageIcon className="w-6 h-6 text-gray-400 mb-1" />
-                        <span className="text-[10px] text-indigo-600 font-medium">Upload Carimbo</span>
+                        <span className="text-xs text-indigo-600 font-medium">Upload Carimbo</span>
                         <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={e => handleImageUpload(e, 'carimbo_url')} />
                       </label>
                     )}
@@ -289,7 +289,7 @@ export default function Empresas() {
 
                 {/* Carimbo Responsável Upload */}
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Carimbo Resp.</label>
+                  <label className="block text-[11px] font-semibold text-gray-700 mb-2">Carimbo Resp.</label>
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-2 text-center hover:bg-gray-50 transition-colors h-32 flex flex-col justify-center">
                     {editModal.data.carimbo_funcionario_url ? (
                       <div className="relative group h-full flex items-center justify-center">
@@ -303,19 +303,19 @@ export default function Empresas() {
                         {imageErrors.carimbo_funcionario_url && (
                           <div className="flex flex-col items-center text-gray-400">
                             <ImageIcon className="w-6 h-6 mb-1" />
-                            <span className="text-[10px]">URL corrompida</span>
+                            <span className="text-xs">URL corrompida</span>
                           </div>
                         )}
                         <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity rounded-md">
                           <ImageIcon className="w-4 h-4 mb-1" />
-                          <span className="text-[10px]">Trocar</span>
+                          <span className="text-xs">Trocar</span>
                           <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={e => handleImageUpload(e, 'carimbo_funcionario_url')} />
                         </label>
                       </div>
                     ) : (
                       <label className="cursor-pointer flex flex-col items-center">
                         <ImageIcon className="w-6 h-6 text-gray-400 mb-1" />
-                        <span className="text-[10px] text-indigo-600 font-medium">Upload Carimbo Resp</span>
+                        <span className="text-xs text-indigo-600 font-medium">Upload Carimbo Resp</span>
                         <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={e => handleImageUpload(e, 'carimbo_funcionario_url')} />
                       </label>
                     )}
@@ -324,7 +324,7 @@ export default function Empresas() {
 
                 {/* Assinatura Responsável Upload */}
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Assinatura Resp.</label>
+                  <label className="block text-[11px] font-semibold text-gray-700 mb-2">Assinatura Resp.</label>
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-2 text-center hover:bg-gray-50 transition-colors h-32 flex flex-col justify-center">
                     {editModal.data.assinatura_responsavel_url ? (
                       <div className="relative group h-full flex items-center justify-center">
@@ -338,19 +338,19 @@ export default function Empresas() {
                         {imageErrors.assinatura_responsavel_url && (
                           <div className="flex flex-col items-center text-gray-400">
                             <ImageIcon className="w-6 h-6 mb-1" />
-                            <span className="text-[10px]">URL corrompida</span>
+                            <span className="text-xs">URL corrompida</span>
                           </div>
                         )}
                         <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity rounded-md">
                           <ImageIcon className="w-4 h-4 mb-1" />
-                          <span className="text-[10px]">Trocar</span>
+                          <span className="text-xs">Trocar</span>
                           <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={e => handleImageUpload(e, 'assinatura_responsavel_url')} />
                         </label>
                       </div>
                     ) : (
                       <label className="cursor-pointer flex flex-col items-center">
                         <ImageIcon className="w-6 h-6 text-gray-400 mb-1" />
-                        <span className="text-[10px] text-indigo-600 font-medium">Upload Assinatura</span>
+                        <span className="text-xs text-indigo-600 font-medium">Upload Assinatura</span>
                         <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={e => handleImageUpload(e, 'assinatura_responsavel_url')} />
                       </label>
                     )}

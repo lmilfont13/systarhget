@@ -1,249 +1,249 @@
-import { useState } from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
-import {
-  LayoutDashboard, FileText, FileEdit, Download, Settings,
-  FileSignature, Users, Building2, Store, Menu, X, History,
-  Package, Sparkles, ChevronRight
-} from 'lucide-react';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
+import { Menu, X, Search, FilePlus2, PanelLeftClose, PanelLeftOpen, ExternalLink } from 'lucide-react';
+import { NAV_GROUPS, findNavItem } from '../lib/navigation';
+import { cn } from '../lib/cn';
+import { BrandMark, PageSkeleton } from './ui';
+import CommandPalette from './CommandPalette';
 
-function cn(...inputs) {
-  return twMerge(clsx(inputs));
+const COLLAPSE_KEY = 'systarhget:sidebar-collapsed';
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
+function readCollapsed() {
+  try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; }
 }
 
-// Lista base de itens de navegação
-const BASE_NAV = [
-  { id: 'dashboard',    name: 'Dashboard',            href: '/dashboard',    icon: 'LayoutDashboard' },
-  { id: 'templates',    name: 'Templates',            href: '/templates',    icon: 'FileSignature' },
-  { id: 'documentos',   name: 'Documentos',           href: '/documentos',   icon: 'FileEdit' },
-  { id: 'historico',    name: 'Histórico de Cartas',  href: '/historico',    icon: 'History' },
-  { id: 'funcionarios', name: 'Funcionários',         href: '/funcionarios', icon: 'Users' },
-  { id: 'empresas',     name: 'Empresas',             href: '/empresas',     icon: 'Building2' },
-  { id: 'lojas',        name: 'Lojas',                href: '/lojas',        icon: 'Store' },
-  { id: 'estoque',      name: 'Estoque',              href: '/estoque',      icon: 'Package' },
-  { id: 'auditoria',    name: 'Auditoria',            href: '/auditoria',    icon: 'History' },
-  { id: 'downloads',    name: 'Downloads',            href: '/downloads',    icon: 'Download' },
-  { id: 'configuracoes',name: 'Configurações',        href: '/configuracoes',icon: 'Settings' },
-];
-
-const ICON_MAP = {
-  Package, LayoutDashboard, FileSignature, FileEdit, History,
-  Users, Building2, Store, Download, Settings
-};
-
-// Logo Component
-const Logo = ({ size = 'default' }) => (
-  <div className="flex items-center gap-3">
-    <div className={cn(
-      'relative flex items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30',
-      size === 'default' ? 'w-9 h-9' : 'w-8 h-8'
-    )}>
-      <Sparkles className={cn(
-        'text-white',
-        size === 'default' ? 'w-5 h-5' : 'w-4 h-4'
-      )} />
-      {/* Glow effect */}
-      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-indigo-400 to-violet-500 opacity-0 blur-sm group-hover:opacity-40 transition-opacity" />
-    </div>
-    <div>
-      <span className={cn(
-        'font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent',
-        size === 'default' ? 'text-lg' : 'text-base'
-      )}>
-        SysTarhget
-      </span>
-      <span className={cn(
-        'font-light text-indigo-300 ml-1',
-        size === 'default' ? 'text-lg' : 'text-base'
-      )}>
-        Pro
-      </span>
-    </div>
-  </div>
-);
-
-// User Avatar Component
-const UserAvatar = () => (
-  <div className="flex items-center gap-3">
-    <div className="relative">
-      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-indigo-500/20">
-        U
-      </div>
-      {/* Status ring */}
-      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900 shadow-sm" />
-    </div>
-    <div className="text-sm min-w-0">
-      <p className="font-medium text-slate-200 truncate">Usuário</p>
-      <p className="text-[10px] text-slate-500 font-mono mt-0.5" title="Data e hora da última atualização do sistema">
-        v. {typeof __APP_VERSION_DATE__ !== 'undefined' ? __APP_VERSION_DATE__ : ''}
-      </p>
-    </div>
-  </div>
-);
-
-const NavItem = ({ item, onClose }) => {
-  const IconComp = ICON_MAP[item.icon];
-
+function Brand({ collapsed }) {
   return (
-    <NavLink
-      to={item.href}
-      onClick={onClose}
-      draggable={false}
-      className={({ isActive }) =>
-        cn(
-          'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
-          isActive
-            ? 'bg-white/10 text-white shadow-lg shadow-indigo-500/10'
-            : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]'
-        )
-      }
-    >
-      {({ isActive }) => (
-        <>
-          {/* Indicador lateral animado */}
-          <div
-            className={cn(
-              'absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full transition-all duration-300',
-              isActive
-                ? 'h-6 bg-gradient-to-b from-indigo-400 to-violet-400 opacity-100'
-                : 'h-0 bg-indigo-400 opacity-0 group-hover:h-4 group-hover:opacity-50'
-            )}
-          />
-
-          {/* Ícone */}
-          {IconComp && (
-            <div className={cn(
-              'flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200',
-              isActive
-                ? 'bg-gradient-to-br from-indigo-500/30 to-violet-500/20 text-indigo-300'
-                : 'text-slate-500 group-hover:text-slate-300'
-            )}>
-              <IconComp className="h-[18px] w-[18px]" aria-hidden="true" />
-            </div>
-          )}
-
-          {/* Nome */}
-          <span className={cn(
-            'truncate transition-colors duration-200',
-            isActive ? 'text-white' : ''
-          )}>
-            {item.name}
-          </span>
-
-          {/* Seta no hover */}
-          <ChevronRight className={cn(
-            'ml-auto h-3.5 w-3.5 transition-all duration-200',
-            isActive
-              ? 'text-indigo-300 opacity-100'
-              : 'opacity-0 group-hover:opacity-40 text-slate-500'
-          )} />
-        </>
+    <Link to="/dashboard" className="flex min-w-0 items-center gap-3 rounded-lg outline-offset-4" aria-label="SysTarhget — início">
+      <BrandMark />
+      {!collapsed && (
+        <span className="truncate text-[0.9375rem] font-semibold tracking-tight text-white">
+          SysTarhget
+        </span>
       )}
-    </NavLink>
+    </Link>
   );
-};
+}
 
-const NavItems = ({ onClose }) => (
-  <div className="space-y-1">
-    {BASE_NAV.map((item) => (
-      <NavItem
-        key={item.id}
-        item={item}
-        onClose={onClose || (() => {})}
-      />
-    ))}
-  </div>
-);
+function SidebarNav({ collapsed, onNavigate }) {
+  return (
+    <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-4" aria-label="Navegação principal">
+      {NAV_GROUPS.map((group, gi) => (
+        <div key={group.label} className={cn(gi > 0 && 'mt-6')}>
+          {collapsed ? (
+            gi > 0 && <div className="mx-3 mb-3 border-t border-white/10" />
+          ) : (
+            <p className="mb-1.5 px-3 text-xs font-medium text-white/40">{group.label}</p>
+          )}
+          <ul className="space-y-0.5">
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <li key={item.href}>
+                  <NavLink
+                    to={item.href}
+                    onClick={onNavigate}
+                    draggable={false}
+                    title={collapsed ? item.name : undefined}
+                    className={({ isActive }) =>
+                      cn(
+                        'group relative flex h-9 items-center gap-3 rounded-lg px-3 text-sm font-medium',
+                        collapsed && 'justify-center px-0',
+                        isActive
+                          ? 'bg-white/[0.08] text-white'
+                          : 'text-white/60 hover:bg-white/[0.05] hover:text-white',
+                      )
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'absolute -left-3 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-brand-300 transition-opacity',
+                            isActive ? 'opacity-100' : 'opacity-0',
+                          )}
+                        />
+                        <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? 'text-brand-200' : 'text-white/45 group-hover:text-white/70')} aria-hidden="true" />
+                        {!collapsed && <span className="truncate">{item.name}</span>}
+                      </>
+                    )}
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+function SidebarFooter({ collapsed }) {
+  const version = typeof __APP_VERSION_DATE__ !== 'undefined' ? __APP_VERSION_DATE__ : '';
+  return (
+    <div className="border-t border-white/[0.08] p-3">
+      <Link
+        to="/promotores"
+        className={cn(
+          'flex h-9 items-center gap-3 rounded-lg px-3 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white',
+          collapsed && 'justify-center px-0',
+        )}
+        title="Portal do promotor"
+      >
+        <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
+        {!collapsed && <span>Portal do promotor</span>}
+      </Link>
+      {!collapsed && version && (
+        <p className="mt-2 px-3 text-[11px] text-white/30" title="Data da última atualização do sistema">
+          Atualizado em {version}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function Layout() {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const current = findNavItem(location.pathname);
+
+  // Atualiza o título da aba conforme a página
+  useEffect(() => {
+    document.title = current ? `${current.name} · SysTarhget` : 'SysTarhget';
+  }, [current]);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0'); } catch { /* armazenamento indisponível */ }
+      return next;
+    });
+  }, []);
+
+  // Atalho Ctrl/⌘ + K para a busca rápida
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Trava a rolagem do fundo enquanto o menu mobile está aberto
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileOpen]);
 
   return (
-    <div className="h-screen w-screen flex flex-col md:flex-row overflow-hidden" style={{ background: '#f7f8fc' }}>
-
-      {/* Header Mobile */}
-      <header className="h-16 flex items-center justify-between px-4 md:hidden shrink-0 z-20" style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
-      }}>
-        <Logo size="small" />
-        <button
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg focus:outline-none transition-colors"
-          aria-label="Abrir menu"
-        >
-          <Menu className="w-6 h-6" />
-        </button>
-      </header>
-
-      {/* Backdrop Mobile */}
-      <div
+    <div className="flex h-dvh w-full overflow-hidden bg-paper">
+      {/* Menu lateral — desktop */}
+      <aside
         className={cn(
-          "fixed inset-0 z-40 transition-all duration-300 md:hidden",
-          isMobileMenuOpen
-            ? "opacity-100 pointer-events-auto backdrop-blur-sm bg-black/60"
-            : "opacity-0 pointer-events-none"
+          'hidden shrink-0 flex-col bg-ink transition-[width] duration-200 ease-out md:flex',
+          collapsed ? 'w-[68px]' : 'w-[248px]',
         )}
-        onClick={() => setIsMobileMenuOpen(false)}
-      />
-
-      {/* Drawer Mobile */}
-      <div
-        className={cn(
-          "fixed top-0 bottom-0 left-0 w-72 z-50 flex flex-col shadow-2xl transition-transform duration-300 ease-out md:hidden",
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-        style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)' }}
       >
-        <div className="h-16 flex items-center justify-between px-5 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <Logo size="small" />
+        <div className={cn('flex h-14 items-center border-b border-white/[0.08] px-4', collapsed && 'justify-center px-0')}>
+          <Brand collapsed={collapsed} />
+        </div>
+        <SidebarNav collapsed={collapsed} />
+        <SidebarFooter collapsed={collapsed} />
+      </aside>
+
+      {/* Menu lateral — mobile */}
+      <div
+        className={cn(
+          'fixed inset-0 z-40 bg-ink/50 transition-opacity duration-200 md:hidden',
+          mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
+        )}
+        onClick={() => setMobileOpen(false)}
+        aria-hidden="true"
+      />
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex w-[272px] flex-col bg-ink transition-[transform,visibility] duration-200 ease-out md:hidden',
+          mobileOpen ? 'translate-x-0 shadow-2xl' : 'invisible -translate-x-full',
+        )}
+        aria-hidden={!mobileOpen}
+      >
+        <div className="flex h-14 items-center justify-between border-b border-white/[0.08] px-4">
+          <Brand />
           <button
-            onClick={() => setIsMobileMenuOpen(false)}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            onClick={() => setMobileOpen(false)}
+            className="rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white"
             aria-label="Fechar menu"
           >
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
-        <nav className="flex-1 px-3 py-4 overflow-y-auto sidebar-scroll">
-          <NavItems onClose={() => setIsMobileMenuOpen(false)} />
-        </nav>
-        <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <UserAvatar />
-        </div>
-      </div>
+        <SidebarNav onNavigate={() => setMobileOpen(false)} />
+        <SidebarFooter />
+      </aside>
 
-      {/* Sidebar Desktop */}
-      <div
-        className="w-[260px] hidden md:flex flex-col shrink-0 z-10"
-        style={{
-          background: 'linear-gradient(180deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)',
-        }}
-      >
-        {/* Logo */}
-        <div className="h-16 flex items-center px-5 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <Logo />
-        </div>
+      {/* Área principal */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-white/80 px-3 backdrop-blur supports-[backdrop-filter]:bg-white/70 sm:px-4">
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-ink md:hidden"
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <button
+            onClick={toggleCollapsed}
+            className="hidden rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-ink md:inline-flex"
+            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+            title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          >
+            {collapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
+          </button>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 overflow-y-auto sidebar-scroll">
-          <NavItems />
-        </nav>
+          <div className="flex min-w-0 items-center gap-2 text-sm">
+            {current && <span className="hidden text-slate-400 sm:inline">{current.group}</span>}
+            {current && <span className="hidden text-slate-300 sm:inline" aria-hidden="true">/</span>}
+            <span className="truncate font-medium text-ink">{current?.name ?? 'SysTarhget'}</span>
+          </div>
 
-        {/* User */}
-        <div className="px-4 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <UserAvatar />
-        </div>
-      </div>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="flex h-9 items-center gap-2 rounded-lg border border-line bg-white px-3 text-sm text-slate-500 hover:border-slate-300 hover:text-slate-700 sm:w-64"
+              aria-label="Abrir busca rápida"
+            >
+              <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="hidden flex-1 text-left sm:inline">Buscar…</span>
+              <span className="kbd hidden sm:inline-flex">{isMac ? '⌘' : 'Ctrl'} K</span>
+            </button>
+            <Link
+              to="/documentos"
+              className="hidden h-9 items-center gap-2 rounded-lg bg-brand-600 px-3.5 text-sm font-medium text-white shadow-sm hover:bg-brand-700 sm:inline-flex"
+            >
+              <FilePlus2 className="h-4 w-4" aria-hidden="true" />
+              Gerar documento
+            </Link>
+          </div>
+        </header>
 
-      {/* Conteúdo Principal */}
-      <div className="flex-1 flex flex-col overflow-hidden h-full mesh-bg">
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="max-w-6xl mx-auto" style={{ animation: 'fade-in 0.3s ease-out' }}>
-            <Outlet />
+        <main className="flex-1 overflow-y-auto">
+          <div key={location.pathname} className="mx-auto w-full max-w-[1240px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+            <Suspense fallback={<PageSkeleton />}>
+              <Outlet />
+            </Suspense>
           </div>
         </main>
       </div>
+
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
     </div>
   );
 }

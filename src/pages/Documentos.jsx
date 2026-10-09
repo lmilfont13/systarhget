@@ -1098,36 +1098,36 @@ export default function Documentos() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Gerador de Documentos</h1>
+          <h1 className="text-[1.625rem] font-semibold tracking-tight text-ink">Gerador de Documentos</h1>
           <p className="text-sm text-slate-500 mt-1">Preencha templates de texto ou PDF e gere arquivos prontos para impressão.</p>
         </div>
         <button 
           onClick={() => setIsImportModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#8A2BE2] hover:bg-purple-700 text-white text-sm font-bold px-5 py-2.5 shadow-md transition-all">
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-5 py-2.5 shadow-md transition-all">
           <Wand2 className="w-4 h-4" />
           Importação Inteligente (Tabela SAP/TOTVS)
         </button>
       </div>
 
-      <div className="bg-white border border-slate-200/80 rounded-lg shadow-sm p-6 md:p-8 space-y-8">
+      <div className="bg-white border border-line rounded-lg shadow-sm p-6 md:p-8 space-y-8">
         
         {/* Painel de Configurações */}
         <div className="bg-slate-50/50 rounded-lg border border-slate-100 p-6 space-y-6">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60 pb-3">
+          <h2 className="text-xs font-semibold text-slate-500 border-b border-slate-200/60 pb-3">
             Configuração Inicial do Documento
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Selecionar Template */}
             <div className="space-y-2">
-              <label htmlFor="template" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5" data-required="true">
-                <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-bold">1</span>
+              <label htmlFor="template" className="block text-xs font-semibold text-slate-500 flex items-center gap-1.5" data-required="true">
+                <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-semibold">1</span>
                 1. Selecionar Template
                 <span style={{ color: '#EF4444' }}>*</span>
-                <span className="text-slate-400 font-normal text-[10px] lowercase">(obrigatório)</span>
+                <span className="text-slate-400 font-normal text-xs lowercase">(obrigatório)</span>
               </label>
               <div className="relative">
                 <select
@@ -1171,10 +1171,10 @@ export default function Documentos() {
 
             {/* Selecionar Empresa */}
             <div className="space-y-2">
-              <label htmlFor="empresa" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5" title="Selecione para pré-popular dados no documento">
-                <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-bold">2</span>
+              <label htmlFor="empresa" className="block text-xs font-semibold text-slate-500 flex items-center gap-1.5" title="Selecione para pré-popular dados no documento">
+                <span className="w-5 h-5 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-semibold">2</span>
                 2. Selecionar Empresa
-                <span className="text-slate-400 font-normal text-[10px] lowercase">(opcional)</span>
+                <span className="text-slate-400 font-normal text-xs lowercase">(opcional)</span>
                 <Info className="w-3.5 h-3.5 text-slate-400 ml-1 cursor-help" />
               </label>
               <select
@@ -1195,11 +1195,11 @@ export default function Documentos() {
           {!isNotaDebito && (
             <div className="grid grid-cols-1 gap-6 border-t border-slate-200/40 pt-6">
                 <div className="relative">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex justify-between items-center" data-required="true">
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5 flex justify-between items-center" data-required="true">
                   <span className="flex items-center gap-1">
                     Promotor(es)
                     <span style={{ color: '#EF4444' }}>*</span>
-                    <span className="text-slate-400 font-normal text-[10px] lowercase">(obrigatório)</span>
+                    <span className="text-slate-400 font-normal text-xs lowercase">(obrigatório)</span>
                   </span>
                   <span className="text-indigo-500 font-normal flex items-center gap-1 cursor-help" title="Pesquise por nome ou CPF do promotor">
                     <Info className="w-3.5 h-3.5" />
@@ -1308,7 +1308,7 @@ export default function Documentos() {
                               className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-50 last:border-0 flex flex-col transition-colors"
                             >
                               <span className="font-medium text-slate-800">{String(f.nome || '').toUpperCase()}</span>
-                              <span className="text-[10px] text-slate-500">{cpf} {badge}</span>
+                              <span className="text-xs text-slate-500">{cpf} {badge}</span>
                             </button>
                           );
                       })}
@@ -1328,7 +1328,7 @@ export default function Documentos() {
               {selectedFuncionarios.length > 0 && activeFuncionario && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
                   {/* Selo da Agência */}
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm border ${
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold shadow-sm border ${
                     (activeFuncionario.dados_extras?.['Empresa'] || '').toUpperCase().includes('POP') 
                       ? 'bg-sky-50 text-sky-700 border-sky-200' 
                       : 'bg-blue-50 text-blue-700 border-blue-200'
@@ -1341,18 +1341,18 @@ export default function Documentos() {
 
                   {/* Selo da Empresa Cliente / CDC */}
                   {(activeFuncionario.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario.dados_extras?.NC || activeFuncionario.dados_extras?.CDC || activeFuncionario.dados_extras?.Cdc || activeFuncionario.dados_extras?.['Cdc Superior']) && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm border bg-indigo-50 text-indigo-700 border-indigo-200 animate-in zoom-in-95 duration-200">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold shadow-sm border bg-indigo-50 text-indigo-700 border-indigo-200 animate-in zoom-in-95 duration-200">
                       <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
                       CLIENTE: {String(activeFuncionario.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario.dados_extras?.NC || activeFuncionario.dados_extras?.CDC || activeFuncionario.dados_extras?.Cdc || activeFuncionario.dados_extras?.['Cdc Superior']).toUpperCase()}
                     </span>
                   )}
                   
                   {!(formData['cdc'] || formData['CDC'] || formData['Cdc']) && (
-                    <div className="flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100">
+                    <div className="flex items-center gap-1 text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100">
                       <Info className="w-3 h-3 text-amber-500" /> CDC não localizado
                     </div>
                   )}
-                  <span className="text-[10px] text-slate-400 font-medium italic">Detectado automaticamente</span>
+                  <span className="text-xs text-slate-400 font-medium italic">Detectado automaticamente</span>
                 </div>
               )}
             </div>
@@ -1366,7 +1366,7 @@ export default function Documentos() {
                   <img src={activeEmpresa.logo_url} className="h-8 object-contain" alt="Logo Empresa" />
                 )}
                 <div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold text-white ${(activeEmpresa.nome || '').toUpperCase().includes('POP') ? 'bg-sky-500 shadow-sm' : 'bg-blue-900 shadow-sm'}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold text-white ${(activeEmpresa.nome || '').toUpperCase().includes('POP') ? 'bg-sky-500 shadow-sm' : 'bg-blue-900 shadow-sm'}`}>
                     {(activeEmpresa.nome || '').toUpperCase().includes('POP') ? 'POP TRADE' : 'SPAR BRASIL'}
                   </span>
                 </div>
@@ -1374,7 +1374,7 @@ export default function Documentos() {
               <button
                 type="button"
                 onClick={() => setShowBranding(!showBranding)}
-                className="text-[10px] flex items-center gap-1 text-slate-500 hover:text-indigo-600 font-semibold transition-colors uppercase tracking-wider"
+                className="text-xs flex items-center gap-1 text-slate-500 hover:text-indigo-600 font-semibold transition-colors"
               >
                 <Eye className="w-3 h-3" /> {showBranding ? 'Ocultar Identidade' : 'Ver Identidade Visual'}
               </button>
@@ -1384,19 +1384,19 @@ export default function Documentos() {
           {activeEmpresa && showBranding && (
             <div className="bg-slate-50/50 p-4 rounded-lg border border-slate-100 mt-3 grid grid-cols-3 gap-4 animate-in fade-in duration-300">
                 <div className="space-y-1">
-                  <p className="text-[9px] text-slate-400 font-bold text-center uppercase tracking-wider">Logo do Topo</p>
+                  <p className="text-xs text-slate-400 font-semibold text-center">Logo do Topo</p>
                   <div className="h-12 w-full bg-white rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
                     {activeEmpresa.logo_url ? <img src={activeEmpresa.logo_url} className="max-h-full max-w-full object-contain" /> : <Info className="w-4 h-4 text-slate-300" />}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[9px] text-slate-400 font-bold text-center uppercase tracking-wider">Carimbo e Assinatura</p>
+                  <p className="text-xs text-slate-400 font-semibold text-center">Carimbo e Assinatura</p>
                   <div className="h-12 w-full bg-white rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
                     {activeEmpresa.carimbo_url ? <img src={activeEmpresa.carimbo_url} className="max-h-full max-w-full object-contain" /> : <Info className="w-4 h-4 text-slate-300" />}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[9px] text-slate-400 font-bold text-center uppercase tracking-wider">Carimbo Responsável</p>
+                  <p className="text-xs text-slate-400 font-semibold text-center">Carimbo Responsável</p>
                   <div className="h-12 w-full bg-white rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
                     {activeEmpresa.carimbo_funcionario_url ? <img src={activeEmpresa.carimbo_funcionario_url} className="max-h-full max-w-full object-contain" /> : <Info className="w-4 h-4 text-slate-300" />}
                   </div>
@@ -1422,7 +1422,7 @@ export default function Documentos() {
                   <FileEdit className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Dados Variáveis</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Dados Variáveis</h3>
                   <p className="text-xs text-slate-400">Preencha os campos abaixo para injetar no documento final.</p>
                 </div>
               </div>
@@ -1430,7 +1430,7 @@ export default function Documentos() {
               {/* Opção de Continuidade (Hap Vida / NDI) */}
               {(activeTemplate.name?.includes('Hap Vida') || activeTemplate.name?.includes('Extensão NDI')) && (
                 <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100/60 space-y-3 animate-in slide-in-from-top-2 duration-300">
-                  <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider">Opção de Plano (Hap Vida / NDI)</p>
+                  <p className="text-xs font-semibold text-indigo-900">Opção de Plano (Hap Vida / NDI)</p>
                   <p className="text-xs text-slate-500">O colaborador opta pela continuidade do plano?</p>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <label className="flex items-center gap-2.5 cursor-pointer bg-white px-4 py-2.5 rounded-lg border border-slate-200 hover:border-indigo-300 transition-all select-none shadow-sm flex-1">
@@ -1475,7 +1475,7 @@ export default function Documentos() {
                   
                   return (
                     <div key={field.name} className="space-y-1.5">
-                      <label htmlFor={field.name} className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center" data-required={isLojaField ? "true" : "false"}>
+                      <label htmlFor={field.name} className="block text-xs font-semibold text-slate-500 flex justify-between items-center" data-required={isLojaField ? "true" : "false"}>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input 
                             type="checkbox" 
@@ -1488,11 +1488,11 @@ export default function Documentos() {
                             {isLojaField && (
                               <>
                                 <span style={{ color: '#EF4444' }}>*</span>
-                                <span className="text-slate-400 font-normal text-[10px] lowercase">(obrigatório)</span>
+                                <span className="text-slate-400 font-normal text-xs lowercase">(obrigatório)</span>
                               </>
                             )}
                             {isAutoFilled && (
-                              <span className="text-[9px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide flex items-center gap-1 cursor-help" title="Este campo é preenchido automaticamente">
+                              <span className="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-semibold flex items-center gap-1 cursor-help" title="Este campo é preenchido automaticamente">
                                 <Info className="w-3 h-3" />
                                 Automatizado
                               </span>
@@ -1503,7 +1503,7 @@ export default function Documentos() {
                           <button
                             type="button"
                             onClick={() => setManualLojas(prev => ({ ...prev, [field.name]: !prev[field.name] }))}
-                            className="text-[10px] text-indigo-600 hover:text-indigo-500 font-bold transition-colors uppercase tracking-wider"
+                            className="text-xs text-indigo-600 hover:text-indigo-500 font-semibold transition-colors"
                           >
                             {manualLojas[field.name] ? 'Lista de Lojas' : 'Digitar Manual'}
                           </button>
@@ -1536,9 +1536,9 @@ export default function Documentos() {
                                 }`}
                                 placeholder="Digite o nome da loja..."
                               />
-                              <p className="text-[10px] text-slate-400 leading-normal">
+                              <p className="text-xs text-slate-400 leading-normal">
                                 Dica: Cadastre suas lojas em{' '}
-                                <Link to="/lojas" className="text-indigo-600 hover:underline font-bold">
+                                <Link to="/lojas" className="text-indigo-600 hover:underline font-semibold">
                                   Lojas
                                 </Link>{' '}
                                 para seleção rápida com endereço automático.
@@ -1662,7 +1662,7 @@ export default function Documentos() {
                 <button
                   type="submit"
                   disabled={isGenerating}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg hover:bg-indigo-500 hover:shadow-indigo-500/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg hover:bg-indigo-700 hover:shadow-indigo-500/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? (
                     <><Loader2 className="w-5 h-5 animate-spin" /> Gerando Documento...</>
@@ -1674,13 +1674,13 @@ export default function Documentos() {
             </form>
 
             {/* Coluna da Direita: Pré-visualização Real-time (Apenas para Texto) */}
-            <div className="bg-slate-100/60 rounded-lg border border-slate-200/80 p-6 flex flex-col h-fit min-h-[600px] shadow-sm lg:sticky lg:top-4">
+            <div className="bg-slate-100/60 rounded-lg border border-line p-6 flex flex-col h-fit min-h-[600px] shadow-sm lg:sticky lg:top-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                   <Eye className="w-4 h-4 text-indigo-500" />
                   Visualização da Emissão
                 </h3>
-                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
                   {activeTemplate.type === 'text' ? 'Carta Dinâmica' : 'PDF Estático'}
                 </span>
               </div>
@@ -1769,13 +1769,13 @@ export default function Documentos() {
                       {activeEmpresa.carimbo_url && (
                         <div className="flex flex-col items-center gap-1.5">
                           <img src={activeEmpresa.carimbo_url} className="h-14 object-contain" alt="Carimbo" />
-                          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Carimbo Empresa</span>
+                          <span className="text-[8px] text-slate-400 font-semibold">Carimbo Empresa</span>
                         </div>
                       )}
                       {activeEmpresa.carimbo_funcionario_url && (
                         <div className="flex flex-col items-center gap-1.5">
                           <img src={activeEmpresa.carimbo_funcionario_url} className="h-14 object-contain" alt="Assinatura" />
-                          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Assinatura / Carimbo Resp.</span>
+                          <span className="text-[8px] text-slate-400 font-semibold">Assinatura / Carimbo Resp.</span>
                         </div>
                       )}
                     </div>
@@ -1783,7 +1783,7 @@ export default function Documentos() {
 
                   {/* Live Footer Text Preview inside paper */}
                   {activeEmpresa?.rodape && (
-                    <div className="text-center text-[9px] text-slate-400 mt-6 border-t border-slate-100 pt-3 leading-normal font-sans">
+                    <div className="text-center text-xs text-slate-400 mt-6 border-t border-slate-100 pt-3 leading-normal font-sans">
                       {cleanFooterText(activeEmpresa.rodape)}
                     </div>
                   )}
@@ -1814,7 +1814,7 @@ export default function Documentos() {
       
       {/* Modal de Importação SAP/TOTVS */}
       {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 animate-in fade-in duration-200">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-5 border-b border-slate-100">
               <div className="flex items-center gap-3">
@@ -1822,7 +1822,7 @@ export default function Documentos() {
                   <Wand2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-800">Importação SAP/TOTVS</h3>
+                  <h3 className="text-lg font-semibold text-slate-800">Importação SAP/TOTVS</h3>
                   <p className="text-xs text-slate-500">Cole os dados da Nota de Débito</p>
                 </div>
               </div>
@@ -1842,7 +1842,7 @@ export default function Documentos() {
                 <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-focus:scale-110 transition-transform">
                   <Wand2 className="w-6 h-6 text-purple-500" />
                 </div>
-                <h4 className="font-bold text-slate-700">Cole seus dados aqui</h4>
+                <h4 className="font-semibold text-slate-700">Cole seus dados aqui</h4>
                 <p className="text-sm text-slate-500 mt-1">O sistema irá separar as colunas magicamente.</p>
               </div>
 
@@ -1892,8 +1892,8 @@ export default function Documentos() {
                     </tbody>
                     <tfoot className="bg-purple-50/50 border-t border-purple-100">
                       <tr>
-                        <td className="px-4 py-3 font-bold text-right text-purple-900">Total:</td>
-                        <td className="px-4 py-3 font-bold font-mono text-purple-700">
+                        <td className="px-4 py-3 font-semibold text-right text-purple-900">Total:</td>
+                        <td className="px-4 py-3 font-semibold font-mono text-purple-700">
                            {importItems.reduce((acc, item) => acc + item.valor, 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </td>
                         <td></td>
@@ -1915,7 +1915,7 @@ export default function Documentos() {
                 onClick={() => {
                   handleProcessImport();
                 }}
-                className="px-5 py-2.5 rounded-lg bg-[#8A2BE2] hover:bg-purple-700 text-white font-bold shadow-sm transition-all flex items-center gap-2 text-sm"
+                className="px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold shadow-sm transition-all flex items-center gap-2 text-sm"
               >
                 <Wand2 className="w-4 h-4" /> Processar Dados
               </button>
@@ -1926,7 +1926,7 @@ export default function Documentos() {
 
 
       {shareModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 animate-in fade-in duration-200">
           <div className="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden p-6 md:p-8 space-y-6 border border-slate-100 animate-in zoom-in-95 duration-200 relative">
             <button
               onClick={() => setShareModalOpen(false)}
@@ -1940,7 +1940,7 @@ export default function Documentos() {
                 <CheckCircle2 className="w-10 h-10 animate-bounce" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-800">Documento Salvo & Pronto!</h3>
+                <h3 className="text-lg font-semibold text-slate-800">Documento Salvo & Pronto!</h3>
                 <p className="text-xs text-slate-400 mt-1">
                   A carta de {generatedCartaName} foi registrada no histórico com sucesso. Escolha uma opção para compartilhar:
                 </p>
@@ -1951,7 +1951,7 @@ export default function Documentos() {
               <button
                 onClick={handleWhatsAppShare}
                 disabled={!generatedCartaId}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-[#25D366] hover:bg-[#20ba56] active:scale-[0.99] text-white py-3.5 text-sm font-bold shadow-lg shadow-emerald-500/10 transition-all disabled:opacity-50"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-[#25D366] hover:bg-[#20ba56] active:scale-[0.99] text-white py-3.5 text-sm font-semibold shadow-lg shadow-emerald-500/10 transition-all disabled:opacity-50"
               >
                 <MessageSquare className="w-5 h-5 fill-white" />
                 Enviar pelo WhatsApp
@@ -1960,7 +1960,7 @@ export default function Documentos() {
               <button
                 onClick={handleCopyLink}
                 disabled={!generatedCartaId}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 active:scale-[0.99] py-3.5 text-sm font-bold transition-all disabled:opacity-50"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 active:scale-[0.99] py-3.5 text-sm font-semibold transition-all disabled:opacity-50"
               >
                 <Copy className="w-4 h-4" />
                 Copiar Link da Carta
@@ -1977,7 +1977,7 @@ export default function Documentos() {
                     document.body.removeChild(link);
                   }
                 }}
-                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-indigo-650 hover:bg-indigo-700 active:scale-[0.99] text-white py-3.5 text-sm font-bold transition-all"
+                className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg bg-indigo-650 hover:bg-indigo-700 active:scale-[0.99] text-white py-3.5 text-sm font-semibold transition-all"
               >
                 <Download className="w-4 h-4" />
                 Baixar Novamente
@@ -1987,7 +1987,7 @@ export default function Documentos() {
             <div className="pt-2 text-center">
               <button
                 onClick={() => setShareModalOpen(false)}
-                className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-wider"
+                className="text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors"
               >
                 Fechar Janela
               </button>
@@ -1997,7 +1997,7 @@ export default function Documentos() {
       )}
 
       {isMultiFuncModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 animate-in fade-in duration-200">
           <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div className="flex items-center gap-3">
@@ -2005,7 +2005,7 @@ export default function Documentos() {
                   <FileEdit className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-800">Dados dos Funcionários</h3>
+                  <h3 className="text-lg font-semibold text-slate-800">Dados dos Funcionários</h3>
                   <p className="text-xs text-slate-500">Preencha os dados específicos para os {selectedFuncionarios.length} funcionários selecionados.</p>
                 </div>
               </div>
@@ -2020,7 +2020,7 @@ export default function Documentos() {
                 if (!func) return null;
                 return (
                   <div key={func.id} className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                    <h4 className="font-bold text-slate-700 text-sm mb-3">{(func.nome || 'Desconhecido').toUpperCase()}</h4>
+                    <h4 className="font-semibold text-slate-700 text-sm mb-3">{(func.nome || 'Desconhecido').toUpperCase()}</h4>
                     <div className="grid grid-cols-2 gap-4">
                       {activeTemplate?.fields?.filter(f => {
                         const low = f.name.toLowerCase();
@@ -2029,7 +2029,7 @@ export default function Documentos() {
                             && low !== 'cdc' && !low.includes('assinatura') && !low.includes('carimbo');
                       }).map(field => (
                         <div key={field.name}>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          <label className="block text-xs font-semibold text-slate-500 mb-1">
                             {field.name.replace(/_/g, ' ')}
                           </label>
                           {field.name.toLowerCase() === 'loja' ? (
@@ -2075,7 +2075,7 @@ export default function Documentos() {
             <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
               <button
                 onClick={() => setIsMultiFuncModalOpen(false)}
-                className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
+                className="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
               >
                 Cancelar
               </button>
@@ -2083,7 +2083,7 @@ export default function Documentos() {
                 onClick={() => {
                   handleGenerate();
                 }}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-indigo-600/20 transition-all"
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow-lg shadow-indigo-600/20 transition-all"
               >
                 <CheckCircle2 className="w-4 h-4" /> Continuar e Gerar
               </button>

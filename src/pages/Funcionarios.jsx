@@ -262,25 +262,25 @@ export default function Funcionarios() {
   })).sort((a, b) => b.total - a.total);
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-300">
+    <div className="space-y-6">
 
       {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Funcionários</h1>
+          <h1 className="text-[1.625rem] font-semibold tracking-tight text-ink">Funcionários</h1>
           <p className="mt-1 text-sm text-slate-500">Gerencie promotores, contas e empresas vinculadas.</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowResumo(v => !v)}
-            className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-bold shadow-sm transition-all ${showResumo ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+            className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-semibold shadow-sm transition-all ${showResumo ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
           >
             <BarChart3 className="w-4 h-4" />
             Resumo por CDC
           </button>
           <button
             onClick={() => setEditModal({ isOpen: true, data: { nome: '', cargo: '', empresa_id: '', dados_extras: { CPF: '', RG: '', CTPS: '', SERIE: '', MATRICULA: '', 'NC FUNCIONARIO': '', 'Empresa': '' } } })}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 py-2.5 shadow-md transition-all"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-5 py-2.5 shadow-md transition-all"
           >
             <Plus className="w-4 h-4" />
             Novo Funcionário
@@ -290,10 +290,10 @@ export default function Funcionarios() {
 
       {/* Painel Resumo por CDC */}
       {showResumo && (
-        <div className="bg-white border border-slate-200/80 rounded-lg shadow-sm overflow-hidden animate-in slide-in-from-top-2 duration-200">
+        <div className="bg-white border border-line rounded-lg shadow-sm overflow-hidden animate-in slide-in-from-top-2 duration-200">
           <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-indigo-600" />
-            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Distribuição por CDC</h3>
+            <h3 className="text-sm font-semibold text-slate-700">Distribuição por CDC</h3>
             <span className="ml-auto text-xs text-slate-400 font-medium">{funcionarios.length} funcionários no total</span>
           </div>
           <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -307,14 +307,14 @@ export default function Funcionarios() {
                     <Hash className={`w-4 h-4 ${col.text}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-extrabold uppercase truncate ${col.text}`}>CDC {cdc.nome}</p>
+                    <p className={`text-xs font-semibold uppercase truncate ${col.text}`}>CDC {cdc.nome}</p>
                     <div className="mt-1 h-1.5 w-full bg-white/60 rounded-full overflow-hidden">
                       <div className={`h-full ${col.dot} rounded-full`} style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className={`text-xl font-black ${col.text}`}>{cdc.total}</p>
-                    <p className={`text-[9px] font-bold uppercase ${col.text} opacity-60`}>{pct}%</p>
+                    <p className={`text-xs font-semibold uppercase ${col.text} opacity-60`}>{pct}%</p>
                   </div>
                 </button>
               );
@@ -325,12 +325,12 @@ export default function Funcionarios() {
                 <Link2 className="w-4 h-4 text-slate-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-extrabold uppercase text-slate-500">Sem CDC</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Não associados</p>
+                <p className="text-xs font-semibold uppercase text-slate-500">Sem CDC</p>
+                <p className="text-xs text-slate-400 mt-0.5">Não associados</p>
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-xl font-black text-slate-600">{semCdcCount}</p>
-                <p className="text-[9px] font-bold uppercase text-slate-400">
+                <p className="text-xs font-semibold uppercase text-slate-400">
                   {funcionarios.length > 0 ? Math.round((semCdcCount / funcionarios.length) * 100) : 0}%
                 </p>
               </div>
@@ -340,14 +340,14 @@ export default function Funcionarios() {
       )}
 
       {/* Lista de Funcionários */}
-      <div className="bg-white border border-slate-200/80 shadow-sm rounded-lg overflow-hidden">
+      <div className="bg-white border border-line shadow-sm rounded-lg overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
               Funcionários Cadastrados
               {(filterCdc || showSemCdc) && (
                 <button onClick={() => { setFilterCdc(''); setShowSemCdc(false); }}
-                  className="ml-1 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold hover:bg-indigo-200 transition-all">
+                  className="ml-1 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold hover:bg-indigo-200 transition-all">
                   {showSemCdc ? 'Sem CDC' : `CDC ${filterCdc}`} ✕
                 </button>
               )}
@@ -409,12 +409,12 @@ export default function Funcionarios() {
                   <div className="flex items-start justify-between gap-3">
                     {/* Avatar + Info */}
                     <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 font-extrabold uppercase shrink-0 mt-0.5">
+                      <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 font-semibold uppercase shrink-0 mt-0.5">
                         {String(func.nome || '?').charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
                         {/* Nome */}
-                        <p className="text-sm font-bold text-slate-900 truncate">{String(func.nome || 'Sem Nome').toUpperCase()}</p>
+                        <p className="text-sm font-semibold text-slate-900 truncate">{String(func.nome || 'Sem Nome').toUpperCase()}</p>
                         {/* Sub-info */}
                         <p className="text-xs text-slate-400 font-medium mt-0.5 truncate">{func.cargo || 'Sem Cargo'} • CPF: {cpf}</p>
 
@@ -422,13 +422,13 @@ export default function Funcionarios() {
                         <div className="flex flex-wrap gap-1.5 mt-2">
                           {/* Selo 1: Empresa Vinculada (CDC, POP, SPAR etc.) */}
                           {empresaVinculada && cor ? (
-                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide border flex items-center gap-1 ${cor.bg} ${cor.text} ${cor.border}`}>
+                            <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border flex items-center gap-1 ${cor.bg} ${cor.text} ${cor.border}`}>
                               <Building2 className="w-2.5 h-2.5" />
                               {empresaVinculada.nome}
                             </span>
                           ) : semEmp ? (
                             <button onClick={() => openAssocModal(func)}
-                              className="px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide border border-dashed border-slate-300 text-slate-400 bg-slate-50 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-1"
+                              className="px-2 py-0.5 rounded-md text-xs font-semibold border border-dashed border-slate-300 text-slate-400 bg-slate-50 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-1"
                               title="Clique para associar empresa">
                               <Link2 className="w-2.5 h-2.5" /> Sem empresa
                             </button>
@@ -436,13 +436,13 @@ export default function Funcionarios() {
 
                           {/* Selo 2: Conta/Cliente — só aparece se diferente da empresa vinculada */}
                           {contaParaMostrar ? (
-                            <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide border border-amber-300 bg-amber-50 text-amber-800 flex items-center gap-1">
+                            <span className="px-2 py-0.5 rounded-md text-xs font-semibold border border-amber-300 bg-amber-50 text-amber-800 flex items-center gap-1">
                               <Tag className="w-2.5 h-2.5" />
                               {contaParaMostrar}
                             </span>
                           ) : !contaERedundante ? (
                             <button onClick={() => openAssocModal(func)}
-                              className="px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide border border-dashed border-amber-300 text-amber-500 bg-amber-50/50 hover:bg-amber-100 hover:border-amber-400 transition-all flex items-center gap-1"
+                              className="px-2 py-0.5 rounded-md text-xs font-semibold border border-dashed border-amber-300 text-amber-500 bg-amber-50/50 hover:bg-amber-100 hover:border-amber-400 transition-all flex items-center gap-1"
                               title="Clique para associar conta (ex: COLGATE)">
                               <Tag className="w-2.5 h-2.5" /> Sem conta
                             </button>
@@ -450,13 +450,13 @@ export default function Funcionarios() {
 
                           {/* Selo 3: CDC */}
                           {cdc ? (
-                            <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide border border-slate-300 bg-slate-100 text-slate-600 flex items-center gap-1">
+                            <span className="px-2 py-0.5 rounded-md text-xs font-semibold border border-slate-300 bg-slate-100 text-slate-600 flex items-center gap-1">
                               <Hash className="w-2.5 h-2.5" />
                               CDC: {cdc}
                             </span>
                           ) : (
                             <button onClick={() => openAssocModal(func)}
-                              className="px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide border border-dashed border-slate-300 text-slate-400 bg-slate-50 hover:bg-slate-100 hover:border-slate-400 transition-all flex items-center gap-1"
+                              className="px-2 py-0.5 rounded-md text-xs font-semibold border border-dashed border-slate-300 text-slate-400 bg-slate-50 hover:bg-slate-100 hover:border-slate-400 transition-all flex items-center gap-1"
                               title="Clique para associar CDC">
                               <Hash className="w-2.5 h-2.5" /> Sem CDC
                             </button>
@@ -500,10 +500,10 @@ export default function Funcionarios() {
           MODAL: ASSOCIAÇÃO RÁPIDA (Empresa + Conta + CDC)
           ============================================ */}
       {assocModal.isOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-slate-50 to-indigo-50/40">
-              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <Link2 className="w-4 h-4 text-indigo-600" />
                 Associação Rápida
               </h3>
@@ -519,14 +519,14 @@ export default function Funcionarios() {
                   {String(assocModal.func?.nome || '?').charAt(0)}
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Funcionário</p>
-                  <p className="text-sm font-bold text-slate-900 uppercase">{assocModal.func?.nome}</p>
+                  <p className="text-xs text-slate-400 font-semibold uppercase">Funcionário</p>
+                  <p className="text-sm font-semibold text-slate-900 uppercase">{assocModal.func?.nome}</p>
                 </div>
               </div>
 
               {/* SEÇÃO 1: Empresa Vinculada */}
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-2">
                   <Building2 className="w-3.5 h-3.5 text-indigo-500" />
                   Empresa (CDC / POP / SPAR...)
                 </label>
@@ -546,7 +546,7 @@ export default function Funcionarios() {
                         <div className={`w-6 h-6 rounded-md flex items-center justify-center ${col.bg} border ${col.border} shrink-0`}>
                           <Building2 className={`w-3 h-3 ${col.text}`} />
                         </div>
-                        <span className={`font-bold uppercase ${isSelected ? col.text : 'text-slate-700'}`}>{emp.nome}</span>
+                        <span className={`font-semibold uppercase ${isSelected ? col.text : 'text-slate-700'}`}>{emp.nome}</span>
                         {isSelected && <span className={`ml-auto font-black text-xs ${col.text}`}>✓</span>}
                       </button>
                     );
@@ -556,10 +556,10 @@ export default function Funcionarios() {
 
               {/* SEÇÃO 2: Conta/Cliente */}
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-2">
                   <Tag className="w-3.5 h-3.5 text-amber-500" />
                   Conta / Cliente
-                  <span className="text-[9px] normal-case text-slate-400 font-normal ml-1">ex: COLGATE, UNILEVER, NESTLE</span>
+                  <span className="text-xs normal-case text-slate-400 font-normal ml-1">ex: COLGATE, UNILEVER, NESTLE</span>
                 </label>
                 <input
                   type="text"
@@ -572,10 +572,10 @@ export default function Funcionarios() {
 
               {/* SEÇÃO 3: CDC */}
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-2">
                   <Hash className="w-3.5 h-3.5 text-slate-500" />
                   CDC / Centro de Custo
-                  <span className="text-[9px] normal-case text-slate-400 font-normal ml-1">ex: 10045, 8821-SP</span>
+                  <span className="text-xs normal-case text-slate-400 font-normal ml-1">ex: 10045, 8821-SP</span>
                 </label>
                 <input
                   type="text"
@@ -589,11 +589,11 @@ export default function Funcionarios() {
 
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
               <button onClick={() => setAssocModal({ isOpen: false, func: null })}
-                className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
                 Cancelar
               </button>
               <button onClick={saveAssociacao} disabled={isSavingAssoc}
-                className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 border border-transparent rounded-lg shadow-md transition-all disabled:opacity-60">
+                className="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 border border-transparent rounded-lg shadow-md transition-all disabled:opacity-60">
                 {isSavingAssoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 Salvar Associações
               </button>
@@ -606,10 +606,10 @@ export default function Funcionarios() {
           MODAL: SELEÇÃO DE TEMPLATE
           ============================================ */}
       {templateModal.isOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
-              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-indigo-600" />
                 Gerar Documento Rápido
               </h3>
@@ -630,7 +630,7 @@ export default function Funcionarios() {
                     </div>
                     <div className="flex flex-col">
                       <span className="font-semibold text-slate-700 group-hover:text-indigo-700 text-sm">{t.name}</span>
-                      <span className="text-[9px] uppercase text-slate-400 font-extrabold tracking-wider">{t.type === 'pdf' ? 'Formulário PDF' : 'Carta de Texto'}</span>
+                      <span className="text-xs uppercase text-slate-400 font-semibold tracking-wider">{t.type === 'pdf' ? 'Formulário PDF' : 'Carta de Texto'}</span>
                     </div>
                   </button>
                 ))}
@@ -650,10 +650,10 @@ export default function Funcionarios() {
           MODAL: EDIÇÃO COMPLETA DE FUNCIONÁRIO
           ============================================ */}
       {editModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 shrink-0">
-              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
                 {editModal.data?.id ? <Edit2 className="w-5 h-5 text-indigo-600" /> : <Plus className="w-5 h-5 text-emerald-600" />}
                 {editModal.data?.id ? 'Editar Cadastro' : editModal.data?.nome?.startsWith('(COPIA)') ? 'Duplicar Cadastro' : 'Novo Cadastro'}
               </h3>
@@ -665,20 +665,20 @@ export default function Funcionarios() {
             <div className="p-6 overflow-y-auto flex-1 space-y-6">
               {/* Seção 1: Básico */}
               <div className="space-y-4">
-                <h4 className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-wider w-fit">1. Informações Básicas</h4>
+                <h4 className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded w-fit">1. Informações Básicas</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Nome Completo</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Nome Completo</label>
                     <input type="text" value={editModal.data.nome || ''} onChange={e => handleEditChange('nome', e.target.value)}
                       className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cargo</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Cargo</label>
                     <input type="text" value={editModal.data.cargo || ''} onChange={e => handleEditChange('cargo', e.target.value)}
                       className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Vínculo Empresa</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Vínculo Empresa</label>
                     <select value={editModal.data.empresa_id || ''} onChange={e => handleEditChange('empresa_id', e.target.value)}
                       className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border bg-white shadow-sm">
                       <option value="">Nenhum Vínculo...</option>
@@ -690,42 +690,42 @@ export default function Funcionarios() {
 
               {/* Seção 2: Documentação */}
               <div className="space-y-4 border-t border-slate-100 pt-4">
-                <h4 className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-wider w-fit">2. Documentação da Carta</h4>
+                <h4 className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded w-fit">2. Documentação da Carta</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">CPF</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">CPF</label>
                     <input type="text" value={editModal.data.dados_extras?.CPF || ''} onChange={e => handleExtraChange('CPF', e.target.value)}
                       className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">RG</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">RG</label>
                     <input type="text" value={editModal.data.dados_extras?.RG || ''} onChange={e => handleExtraChange('RG', e.target.value)}
                       className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">CTPS (Nº Carteira)</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">CTPS (Nº Carteira)</label>
                     <input type="text" value={editModal.data.dados_extras?.CTPS || ''} onChange={e => handleExtraChange('CTPS', e.target.value)}
                       className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Série CTPS</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Série CTPS</label>
                     <input type="text" value={editModal.data.dados_extras?.SERIE || ''} onChange={e => handleExtraChange('SERIE', e.target.value)}
                       className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Matrícula</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Matrícula</label>
                     <input type="text" value={editModal.data.dados_extras?.MATRICULA || ''} onChange={e => handleExtraChange('MATRICULA', e.target.value)}
                       className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
                       <span className="flex items-center gap-1"><Hash className="w-3 h-3 text-slate-400" />CDC / Centro de Custo</span>
                     </label>
                     <input type="text" value={editModal.data.dados_extras?.['NC FUNCIONARIO'] || ''} onChange={e => handleExtraChange('NC FUNCIONARIO', e.target.value)}
                       className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" placeholder="Ex: 10045" />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
                       <span className="flex items-center gap-1"><Tag className="w-3 h-3 text-amber-400" />Conta / Cliente / Empresa</span>
                     </label>
                     <input type="text" value={editModal.data.dados_extras?.Empresa || ''} onChange={e => handleExtraChange('Empresa', e.target.value)}
@@ -736,7 +736,7 @@ export default function Funcionarios() {
 
               {/* Seção 3: Custom Fields */}
               <div className="border-t border-slate-100 pt-4">
-                <h4 className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase tracking-wider w-fit mb-4">3. Outros Campos Personalizados</h4>
+                <h4 className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded w-fit mb-4">3. Outros Campos Personalizados</h4>
                 <div className="space-y-3 mb-4">
                   {Object.entries(editModal.data.dados_extras || {})
                     .filter(([key]) => !['CPF', 'RG', 'CTPS', 'SERIE', 'MATRICULA', 'NC FUNCIONARIO', 'Empresa'].includes(key))
@@ -761,7 +761,7 @@ export default function Funcionarios() {
                     onKeyDown={e => e.key === 'Enter' && addExtraField()}
                     className="block w-full rounded-lg border-slate-200 sm:text-sm py-2 px-3 border" />
                   <button onClick={addExtraField} type="button"
-                    className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shrink-0">
+                    className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all shrink-0">
                     <Plus className="w-4 h-4" /> Add
                   </button>
                 </div>
@@ -770,11 +770,11 @@ export default function Funcionarios() {
 
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
               <button onClick={() => setEditModal({ isOpen: false, data: null })}
-                className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
                 Cancelar
               </button>
               <button onClick={saveEdit}
-                className={`inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white rounded-lg shadow-md transition-all ${editModal.data?.id ? 'bg-indigo-600 hover:bg-indigo-500' : editModal.data?.nome?.startsWith('(COPIA)') ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+                className={`inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white rounded-lg shadow-md transition-all ${editModal.data?.id ? 'bg-indigo-600 hover:bg-indigo-700' : editModal.data?.nome?.startsWith('(COPIA)') ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
                 {editModal.data?.id ? <Save className="w-4 h-4" /> : editModal.data?.nome?.startsWith('(COPIA)') ? <Copy className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                 {editModal.data?.id ? 'Salvar Alterações' : editModal.data?.nome?.startsWith('(COPIA)') ? 'Confirmar Duplicação' : 'Cadastrar Funcionário'}
               </button>

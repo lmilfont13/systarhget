@@ -30,15 +30,15 @@ export default function Configuracoes() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Configurações da Empresa</h1>
+        <h1 className="text-[1.625rem] font-semibold tracking-tight text-ink">Configurações da Empresa</h1>
         <p className="mt-1 text-sm text-gray-500">
           Estes dados serão usados para preencher automaticamente os placeholders globais (ex: {'{{razao_social}}'}) nos seus templates.
         </p>
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-lg border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl border border-line overflow-hidden">
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
@@ -130,7 +130,7 @@ export default function Configuracoes() {
           <div className="pt-4 border-t border-gray-100 flex justify-end">
             <button
               type="submit"
-              className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 transition-colors"
+              className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 transition-colors"
             >
               <Save className="w-4 h-4" />
               Salvar Configurações
