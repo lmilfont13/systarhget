@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { CheckCircle2, Copy, Download, Eye, FileEdit, FileText, Info, Loader2, Search, Wand2, X, Lock, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
+import { celebrarCarta } from '../lib/celebrar';
 import { PDFGenerator } from '../pdf/PDFGenerator';
 import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
 import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
@@ -814,7 +815,8 @@ export default function Documentos() {
         setGeneratedCartaId(lastCartaId);
         setGeneratedCartaName(lastGeneratedName);
         setGeneratedBlobUrl(lastGeneratedBlobUrl);
-        
+        celebrarCarta({ nome: lastGeneratedName });
+
         toast.success(`Documento gerado com sucesso!`, {
           duration: 10000,
           action: {
@@ -823,6 +825,7 @@ export default function Documentos() {
           }
         });
       } else {
+        celebrarCarta({ quantidade: generatedCount });
         toast.success(`${generatedCount} documento(s) gerado(s) com sucesso!`, {
           duration: 15000,
           action: {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { FileEdit, CheckCircle2, Loader2, FileText, Eye, Search, Lock, LogOut, MessageSquare, Copy, Download, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { celebrarCarta } from '../lib/celebrar';
 import { useAuth, PORTAL_EMAIL, authErrorMessage } from '../lib/auth';
 import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
 import { carregarLojas, cadastrarSeNova } from '../lib/lojas';
@@ -627,7 +628,7 @@ export default function PortalPromotor() {
       setGeneratedCartaId(cartaId);
       setGeneratedCartaName(nomePromotor);
       setGeneratedBlobUrl(blobUrl);
-      // setShareModalOpen(true);
+      celebrarCarta({ nome: nomePromotor });
 
       toast.success('Documento gerado e registrado com sucesso!', {
         duration: 10000,

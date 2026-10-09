@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useAuth, authErrorMessage } from '../lib/auth';
-import { BrandMark, Wordmark, Button } from '../components/ui';
+import { Wordmark, Button } from '../components/ui';
+import { MarcaDesenhada } from '../components/Lacre';
 
 function Field({ label, id, ...props }) {
   return (
@@ -115,22 +116,33 @@ export default function Login() {
   }
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-paper px-4 py-10">
-      {/* Marca d'água: o T da marca, grande e quase invisível */}
-      <BrandMark className="pointer-events-none absolute -right-24 -bottom-24 h-[34rem] w-[34rem] text-brand-800/[0.05] sm:-right-10 sm:-bottom-16" />
+    <div className="grid min-h-dvh bg-paper lg:grid-cols-[1.05fr_1fr]">
+      {/* Lado da marca: vinho profundo, luz em movimento e o selo se desenhando */}
+      <section className="relative flex min-h-56 items-center justify-center overflow-hidden bg-brand-950 px-6 py-10 text-brand-100 lg:min-h-dvh">
+        <span className="luz-vinho left-[-10%] top-[-15%] h-[70%] w-[70%] bg-brand-700/70" aria-hidden="true" />
+        <span className="luz-vinho bottom-[-20%] right-[-15%] h-[65%] w-[65%] bg-brand-500/35 [animation-delay:-8s]" aria-hidden="true" />
+        <div className="relative flex flex-col items-center text-center">
+          <MarcaDesenhada className="h-24 w-24 text-brand-100 sm:h-32 sm:w-32 lg:h-56 lg:w-56" />
+          <div className="palavra-marca mt-6 lg:mt-10">
+            <Wordmark className="text-2xl tracking-[0.32em] text-white lg:text-[2.6rem]" />
+            <p className="mt-3 hidden max-w-xs text-sm leading-relaxed text-brand-200/80 lg:block">
+              Cartas de apresentação e gestão de promotores, emitidas e registradas num só lugar.
+            </p>
+          </div>
+        </div>
+      </section>
 
-      <div className="relative w-full max-w-sm">
-        <div className="mb-8 flex items-center gap-3">
-          <BrandMark className="h-10 w-10" />
-          <Wordmark className="text-xl text-brand-800" />
+      {/* Lado do formulário */}
+      <section className="flex items-start justify-center px-4 py-8 lg:items-center lg:py-10">
+        <div className="w-full max-w-sm animate-enter">
+          <div className="panel p-6 shadow-lg sm:p-8">
+            <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
+            <p className="mt-1 mb-6 text-sm text-slate-500">{subtitle}</p>
+            {body}
+          </div>
+          <p className="mt-6 text-center text-xs text-slate-400">Problemas para entrar? Fale com o administrador do sistema.</p>
         </div>
-        <div className="panel p-6 shadow-lg sm:p-8">
-          <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
-          <p className="mt-1 mb-6 text-sm text-slate-500">{subtitle}</p>
-          {body}
-        </div>
-        <p className="mt-6 text-center text-xs text-slate-400">Problemas para entrar? Fale com o administrador do sistema.</p>
-      </div>
+      </section>
     </div>
   );
 }

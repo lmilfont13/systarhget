@@ -6,6 +6,7 @@ import RequireAuth from './components/RequireAuth';
 import { AuthProvider } from './lib/auth';
 import { PageSkeleton } from './components/ui';
 import { telas } from './lib/rotas';
+import SeloCartaGerada from './components/Lacre';
 
 // Cada página vira um arquivo separado, baixado só quando é aberta.
 // Telas pesadas (gerador de PDF, portal) deixam de pesar no primeiro carregamento.
@@ -42,6 +43,7 @@ export default function App() {
           closeButton
           toastOptions={{ style: { fontFamily: 'var(--font-sans)' } }}
         />
+        <SeloCartaGerada />
         <Routes>
           <Route path="login" element={<Suspense fallback={null}><Login /></Suspense>} />
           <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
