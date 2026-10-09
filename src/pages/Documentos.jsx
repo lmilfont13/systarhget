@@ -7,7 +7,7 @@ import { PDFGenerator } from '../pdf/PDFGenerator';
 import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
 import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
 import { carregarLojas, cadastrarSeNova } from '../lib/lojas';
-import { cargoParaCarta } from '../lib/cargos';
+import { cargoParaCarta, ehCampoRg, ehCampoCargo } from '../lib/cargos';
 import CargoSelect from '../components/CargoSelect';
 import { cleanFooterText, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
 
@@ -110,8 +110,8 @@ export default function Documentos() {
               let mappedTo = '';
               if (nameLower === 'empresa') mappedTo = 'empresa_razao';
               else if (nameLower.includes('cpf')) mappedTo = 'funcionario_cpf';
-              else if (nameLower.includes('rg')) mappedTo = 'funcionario_rg';
-              else if (nameLower.includes('cargo')) mappedTo = 'funcionario_cargo';
+              else if (ehCampoCargo(nameLower)) mappedTo = 'funcionario_cargo';
+              else if (ehCampoRg(nameLower)) mappedTo = 'funcionario_rg';
               else if (nameLower.includes('nome') || nameLower.includes('promotor') || nameLower.includes('funcionario')) mappedTo = 'funcionario_nome';
               fields.push({ name, mappedTo });
             }
@@ -323,6 +323,7 @@ export default function Documentos() {
               case 'funcionario_nome': newData[field.name] = (activeFuncionario?.nome || '').toUpperCase(); break;
               case 'funcionario_cpf': newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF); break;
               case 'funcionario_cargo': newData[field.name] = cargoParaCarta(cargoEscolhido, activeFuncionario); break;
+              case 'funcionario_rg': newData[field.name] = String(activeFuncionario?.dados_extras?.RG ?? activeFuncionario?.dados_extras?.rg ?? ''); break;
               case 'data_atual': newData[field.name] = dataAtual; break;
               default: 
                 if (activeFuncionario?.dados_extras && activeFuncionario.dados_extras[field.mappedTo] !== undefined) {
@@ -336,7 +337,7 @@ export default function Documentos() {
             const fieldNameLower = (field.name || '').toLowerCase();
             
             if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF);
-            else if (fieldNameLower.includes('rg') || displayNameLower.includes('rg')) newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
+            else if (ehCampoRg(fieldNameLower) || ehCampoRg(displayNameLower)) newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
             else if (fieldNameLower.includes('nome') || displayNameLower.includes('nome') || fieldNameLower.includes('promotor') || displayNameLower.includes('promotor') || fieldNameLower.includes('funcionario') || displayNameLower.includes('funcionario')) newData[field.name] = (activeFuncionario?.nome || '').toUpperCase();
             else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) newData[field.name] = cargoParaCarta(cargoEscolhido, activeFuncionario);
             else if (fieldNameLower.includes('data') || displayNameLower.includes('data')) newData[field.name] = dataAtual;
@@ -602,7 +603,7 @@ export default function Documentos() {
               if (fieldNameLower.includes('nome') || displayNameLower.includes('nome') || fieldNameLower.includes('promotor') || displayNameLower.includes('promotor') || fieldNameLower.includes('funcionario') || displayNameLower.includes('funcionario')) finalFormDataForFunc[field.name] = (currentFunc.nome || '').toUpperCase();
               else if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) finalFormDataForFunc[field.name] = formatCpf(de['CPF']);
               else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) finalFormDataForFunc[field.name] = cargoParaCarta(cargoEscolhido, currentFunc);
-              else if (fieldNameLower.includes('rg') || displayNameLower.includes('rg')) finalFormDataForFunc[field.name] = rgValue;
+              else if (ehCampoRg(fieldNameLower) || ehCampoRg(displayNameLower)) finalFormDataForFunc[field.name] = rgValue;
               else if (fieldNameLower.includes('cdc') || displayNameLower.includes('cdc') || fieldNameLower.includes('nc')) finalFormDataForFunc[field.name] = cdcValue;
               else if (fieldNameLower.includes('empresa') || displayNameLower.includes('empresa')) finalFormDataForFunc[field.name] = funcEmpresa?.nome || '';
             });
@@ -1256,7 +1257,7 @@ export default function Documentos() {
               </div>
 
               {/* Cargo: automático (cadastro) ou escolhido na lista */}
-              {selectedFuncionarios.length > 0 && (
+              {selectedFuncionarios.length > 0 && !activeTemplate?.fields?.some((f) => f.mappedTo === 'funcionario_cargo') && (
                 <CargoSelect
                   className="mt-4 max-w-md"
                   value={cargoEscolhido}
@@ -1434,7 +1435,7 @@ export default function Documentos() {
                                 <span className="text-slate-400 font-normal text-xs lowercase">(obrigatório)</span>
                               </>
                             )}
-                            {isAutoFilled && (
+                            {isAutoFilled && !(field.mappedTo === 'funcionario_cargo' && cargoEscolhido) && (
                               <span className="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-semibold flex items-center gap-1 cursor-help" title="Este campo é preenchido automaticamente">
                                 <Info className="w-3 h-3" />
                                 Automatizado
@@ -1454,7 +1455,9 @@ export default function Documentos() {
                       </label>
                       
                       <div className="mt-1 relative">
-                        {isLojaField ? (
+                        {field.mappedTo === 'funcionario_cargo' ? (
+                          <CargoSelect semRotulo id={field.name} value={cargoEscolhido} onChange={setCargoEscolhido} funcionarios={funcionarios} cargoDoCadastro={activeFuncionario?.cargo} variosPromotores={selectedFuncionarios.length > 1} />
+                        ) : isLojaField ? (
                           lojas.length === 0 ? (
                             <div className="space-y-2">
                               <input

@@ -11,8 +11,9 @@ const OUTRA = '__outra__';
  *
  * value: '' para automático, ou o cargo escolhido.
  */
-export default function CargoSelect({ value, onChange, funcionarios, cargoDoCadastro, variosPromotores = false, className, tone = 'brand' }) {
-  const id = useId();
+export default function CargoSelect({ value, onChange, funcionarios, cargoDoCadastro, variosPromotores = false, className, tone = 'brand', semRotulo = false, id: idExterno }) {
+  const idGerado = useId();
+  const id = idExterno || idGerado;
   const opcoes = useMemo(() => listaDeCargos(funcionarios), [funcionarios]);
   const naLista = !value || opcoes.some((o) => o.cargo === value);
   const [digitando, setDigitando] = useState(!naLista);
@@ -27,14 +28,14 @@ export default function CargoSelect({ value, onChange, funcionarios, cargoDoCada
 
   return (
     <div className={cn('space-y-1.5', className)}>
-      <label htmlFor={id} className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+      {!semRotulo && <label htmlFor={id} className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
         Cargo na carta
         {!value && (
           <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium', tone === 'portal' ? 'bg-red-50 text-red-700' : 'bg-brand-50 text-brand-700')}>
             <Wand2 className="h-3 w-3" aria-hidden="true" /> automático
           </span>
         )}
-      </label>
+      </label>}
       <select
         id={id}
         value={selectValue}

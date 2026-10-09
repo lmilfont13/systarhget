@@ -22,3 +22,17 @@ export function listaDeCargos(funcionarios = []) {
 export function cargoParaCarta(cargoEscolhido, funcionario) {
   return normalizarCargo(cargoEscolhido) || normalizarCargo(funcionario?.cargo);
 }
+
+/**
+ * Campo de RG? Precisa ser a sigla isolada: "RG", "numero_rg", "RG do funcionário".
+ * (Antes "cargo" era confundido com RG por conter as letras "rg".)
+ */
+export function ehCampoRg(nome) {
+  return /(^|[^a-z])rg([^a-z]|$)/i.test(String(nome || ''));
+}
+
+/** Campo de cargo/função do promotor. */
+export function ehCampoCargo(nome) {
+  const n = String(nome || '').toLowerCase();
+  return n.includes('cargo') || n === 'funcao' || n === 'função';
+}
