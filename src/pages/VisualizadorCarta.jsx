@@ -1,88 +1,92 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { FileText, Download, Loader2, AlertCircle } from 'lucide-react';
+import { Download, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { dataUrlToBlob, baixarArquivo, codigoVerificacao } from '../lib/cartas';
+import { BrandMark } from '../components/ui';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const dataHora = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+/** Selo circular de verificação, no mesmo desenho do carimbo da marca. */
+function SeloVerificado() {
+  return (
+    <svg viewBox="0 0 96 96" aria-hidden="true" className="h-20 w-20 shrink-0 text-brand-600 sm:h-24 sm:w-24">
+      <circle cx="48" cy="48" r="44" fill="none" stroke="currentColor" strokeWidth="3" />
+      <circle cx="48" cy="48" r="35" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3.4" />
+      <path d="M33 49.5l10 10 20-22" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Dado({ rotulo, children }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-slate-500">{rotulo}</dt>
+      <dd className="mt-0.5 truncate text-sm font-medium text-ink">{children}</dd>
+    </div>
+  );
+}
 
 export default function VisualizadorCarta() {
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [carta, setCarta] = useState(null);
+  const [verificacao, setVerificacao] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
 
-  const fetchCarta = async () => {
+  const fetchCarta = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      
-      // Link público: a função carta_publica devolve só a carta deste id,
-      // sem expor o restante da tabela para quem não está logado.
-      let { data, error: dbError } = await supabase
-        .rpc('carta_publica', { p_id: id })
-        .maybeSingle();
+      if (!UUID.test(String(id))) throw new Error('Este link de carta não é válido. Confira se ele foi copiado por inteiro.');
 
-      // Compatibilidade enquanto a migração de segurança não foi aplicada no banco
+      // Link público: as funções devolvem só a carta deste id, sem abrir a tabela
+      const [cartaRes, verifRes] = await Promise.all([
+        supabase.rpc('carta_publica', { p_id: id }).maybeSingle(),
+        supabase.rpc('verificar_carta', { p_id: id }).maybeSingle(),
+      ]);
+
+      let { data, error: dbError } = cartaRes;
+      // Compatibilidade com bancos onde a migração de segurança ainda não foi aplicada
       if (dbError && (dbError.code === 'PGRST202' || dbError.code === '42883')) {
-        ({ data, error: dbError } = await supabase
-          .from('cartas_geradas')
-          .select('*')
-          .eq('id', id)
-          .maybeSingle());
+        ({ data, error: dbError } = await supabase.from('cartas_geradas').select('*').eq('id', id).maybeSingle());
       }
 
       if (dbError) throw dbError;
-      if (!data) throw new Error('Carta não encontrada.');
+      if (!data) throw new Error('Nenhuma carta com este código consta no registro. O documento pode ter sido excluído ou o link está incorreto.');
+      if (!data.url_storage) throw new Error('O arquivo desta carta não foi encontrado no registro.');
 
       setCarta(data);
-
-      // Converte o base64 do PDF para Blob URL
-      if (data.url_storage) {
-        const base64Data = data.url_storage.includes(',') 
-          ? data.url_storage.split(',')[1] 
-          : data.url_storage;
-        
-        const binaryString = atob(base64Data);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        
-        const blob = new Blob([bytes], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        setPdfUrl(url);
-      } else {
-        throw new Error('O arquivo da carta não foi localizado na nuvem.');
-      }
+      // A função de verificação traz o nome da empresa; sem ela, usa os dados da própria carta
+      setVerificacao(verifRes.error ? null : verifRes.data);
+      setPdfUrl(URL.createObjectURL(dataUrlToBlob(data.url_storage)));
     } catch (err) {
       console.error(err);
       setError(err.message || 'Erro ao carregar o documento.');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    // eslint-disable-next-line
-    fetchCarta();
   }, [id]);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carrega a carta ao abrir o link
+    fetchCarta();
+  }, [fetchCarta]);
+
+  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
+
   const handleDownload = () => {
-    if (!pdfUrl || !carta) return;
-    const link = document.createElement('a');
-    link.href = pdfUrl;
-    link.download = `${carta.nome_arquivo || 'CARTA'}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (pdfUrl && carta) baixarArquivo(pdfUrl, `${carta.nome_arquivo || 'CARTA'}.pdf`);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="text-center space-y-3">
-          <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mx-auto" />
-          <p className="text-sm text-slate-500 font-medium">Buscando documento oficial...</p>
+      <div className="flex min-h-dvh items-center justify-center bg-paper p-4" role="status">
+        <div className="space-y-3 text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" aria-hidden="true" />
+          <p className="text-sm text-slate-500">Conferindo o documento no registro…</p>
         </div>
       </div>
     );
@@ -90,99 +94,85 @@ export default function VisualizadorCarta() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center space-y-4 border border-slate-200">
-          <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
-          <h2 className="text-lg font-bold text-slate-800">Falha ao abrir documento</h2>
-          <p className="text-sm text-slate-500 leading-normal">{error}</p>
-          <div className="pt-2">
-            <button 
-              onClick={fetchCarta}
-              className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-600/15"
-            >
-              Tentar Novamente
-            </button>
-          </div>
+      <div className="flex min-h-dvh items-center justify-center bg-paper p-4">
+        <div className="panel w-full max-w-md space-y-4 p-8 text-center">
+          <AlertCircle className="mx-auto h-10 w-10 text-red-600" aria-hidden="true" />
+          <h1 className="text-lg font-semibold text-ink">Documento não verificado</h1>
+          <p className="text-sm leading-relaxed text-slate-600">{error}</p>
+          <button onClick={fetchCarta} className="inline-flex h-9 items-center rounded-lg border border-line bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Tentar de novo
+          </button>
         </div>
       </div>
     );
   }
 
-  // Detecta se é dispositivo móvel para ajustar exibição do iframe
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const emitidaEm = new Date(verificacao?.emitida_em || carta.data_geracao || carta.criado_em);
+  const codigo = verificacao?.codigo || codigoVerificacao(carta.id);
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col">
-      {/* Header */}
-      <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 shadow-sm">
-        <div className="flex items-center gap-2.5 text-indigo-600 font-bold">
-          <FileText className="w-5 h-5" />
-          <span className="text-sm tracking-tight">DocFlow Hub - Documentos</span>
+    <div className="flex min-h-dvh flex-col bg-paper">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-white px-4 sm:px-6">
+        <div className="flex items-center gap-2.5">
+          <BrandMark className="h-7 w-7" />
+          <span className="text-sm font-semibold text-ink">SysTarhget</span>
+          <span className="hidden text-sm text-slate-400 sm:inline">Verificação de documento</span>
         </div>
         <button
           onClick={handleDownload}
-          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all shadow-md shadow-indigo-600/10 active:scale-[0.98]"
+          className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-3.5 text-sm font-medium text-white hover:bg-brand-700"
         >
-          <Download className="w-4 h-4" />
+          <Download className="h-4 w-4" aria-hidden="true" />
           Baixar PDF
         </button>
       </header>
 
-      {/* Main Area */}
-      <main className="flex-1 p-4 md:p-8 flex flex-col items-center">
-        <div className="max-w-4xl w-full space-y-4 flex flex-col flex-grow">
-          {/* Info Card */}
-          <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <span className="text-[9px] font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Documento Autêntico
-              </span>
-              <h1 className="text-base font-bold text-slate-800 mt-1.5 truncate">
-                {carta.nome_funcionario}
-              </h1>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Emitido em: {new Date(carta.data_geracao || carta.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+      <main className="flex flex-1 flex-col items-center p-4 sm:p-8">
+        <div className="flex w-full max-w-4xl flex-1 flex-col gap-4">
+          {/* Selo de verificação */}
+          <section className="panel flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6" aria-labelledby="titulo-verificacao">
+            <SeloVerificado />
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5 text-sm font-medium text-brand-700">
+                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                Documento autêntico
               </p>
+              <h1 id="titulo-verificacao" className="mt-1 truncate text-xl font-semibold tracking-tight text-ink">
+                {verificacao?.nome_funcionario || carta.nome_funcionario}
+              </h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Esta carta consta no registro oficial do sistema. Confira se os dados abaixo batem com o documento apresentado.
+              </p>
+              <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+                <Dado rotulo="Emitida em">{dataHora.format(emitidaEm)}</Dado>
+                {verificacao?.empresa && <Dado rotulo="Empresa">{verificacao.empresa}</Dado>}
+                <Dado rotulo="Código de verificação">
+                  <span className="tracking-[0.15em] tabular-nums">{codigo}</span>
+                </Dado>
+              </dl>
             </div>
-            
-            <button
-              onClick={handleDownload}
-              className="sm:w-auto w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-850 text-white text-xs font-bold px-5 py-3 rounded-lg transition-all active:scale-[0.98]"
-            >
-              <Download className="w-4 h-4" />
-              Baixar Carta de Apresentação
-            </button>
-          </div>
+          </section>
 
-          {/* Document Viewer Frame */}
-          <div className="flex-1 bg-white rounded-lg border border-slate-200 shadow-md overflow-hidden flex flex-col min-h-[450px]">
+          {/* Documento */}
+          <section className="panel flex min-h-[480px] flex-1 flex-col overflow-hidden" aria-label="Documento">
             {isMobile ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
-                  <FileText className="w-8 h-8" />
-                </div>
-                <div className="max-w-xs space-y-1">
-                  <h3 className="font-bold text-slate-800 text-sm">Visualização Mobile</h3>
-                  <p className="text-xs text-slate-500 leading-normal">
-                    Dispositivos móveis podem não renderizar PDFs diretamente em tela. Clique no botão abaixo para baixar e abrir o documento no seu celular.
-                  </p>
-                </div>
+              <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+                <p className="max-w-xs text-sm text-slate-600">
+                  No celular, o PDF abre melhor no aplicativo de documentos.
+                </p>
                 <button
                   onClick={handleDownload}
-                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-6 py-3 rounded-lg transition-all shadow-lg shadow-indigo-600/15"
+                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-600 px-5 text-sm font-medium text-white hover:bg-brand-700"
                 >
-                  <Download className="w-4 h-4" />
-                  Abrir PDF Oficial
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Abrir o PDF
                 </button>
               </div>
             ) : (
-              <iframe
-                src={pdfUrl}
-                className="w-full flex-grow border-0"
-                title={carta.nome_arquivo}
-              />
+              <iframe src={pdfUrl} className="w-full flex-grow border-0" title={carta.nome_arquivo || 'Carta'} />
             )}
-          </div>
+          </section>
         </div>
       </main>
     </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Building2, Plus, Trash2, Edit2, Loader2, X, Save, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
+import { invalidar } from '../lib/dados';
 
 export default function Empresas() {
   const [empresas, setEmpresas] = useState([]);
@@ -107,11 +108,13 @@ export default function Empresas() {
       if (id) {
         const { error } = await supabase.from('empresas').update(payload).eq('id', id);
         if (error) throw error;
+        invalidar('empresas');
         setEmpresas(prev => prev.map(e => e.id === id ? { ...e, ...payload } : e));
         toast.success('Empresa atualizada!');
       } else {
         const { data, error } = await supabase.from('empresas').insert([payload]).select();
         if (error) throw error;
+        invalidar('empresas');
         setEmpresas(prev => [data[0], ...prev]);
         toast.success('Empresa cadastrada!');
       }
@@ -131,6 +134,7 @@ export default function Empresas() {
     try {
       const { error } = await supabase.from('empresas').delete().eq('id', id);
       if (error) throw error;
+      invalidar('empresas');
       setEmpresas(prev => prev.filter(e => e.id !== id));
       toast.success('Empresa excluída.');
     } catch {

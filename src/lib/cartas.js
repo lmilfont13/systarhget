@@ -111,6 +111,9 @@ export function avisarFalhaHistorico() {
   });
 }
 
+/** Código curto de conferência: os 8 primeiros caracteres do identificador da carta. */
+export const codigoVerificacao = (id) => String(id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
+
 export const cartaShareUrl = (id) => `${window.location.origin}/carta/${id}`;
 
 export async function copiarLinkCarta(id) {

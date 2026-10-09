@@ -1,11 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Settings, Trash2, X, Save, Cloud, CloudOff, PlusCircle } from 'lucide-react';
+import { Upload, FileText, Settings, Trash2, X, Save, Cloud, CloudOff, PlusCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { PDFGenerator } from '../pdf/PDFGenerator';
+import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, arquivoTemplatePdf, usoDosTemplates, invalidar } from '../lib/dados';
+
+const dataCurta = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 export default function Templates() {
   const [templates, setTemplates] = useState([]);
+  const [uso, setUso] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [abrindoId, setAbrindoId] = useState(null);
   const [extraFields, setExtraFields] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [mappingModal, setMappingModal] = useState({ isOpen: false, template: null });
@@ -34,23 +40,27 @@ export default function Templates() {
 
   const fetchTemplates = async () => {
     try {
-      const [pData, tData, fData] = await Promise.all([
-        supabase.from('pdf_templates').select('*').order('created_at', { ascending: false }),
-        supabase.from('templates').select('*').order('criado_em', { ascending: false }),
-        supabase.from('funcionarios').select('dados_extras')
+      // Lista sem o arquivo PDF (que pode ter centenas de KB); ele só é baixado ao mapear
+      invalidar('templates:pdf', 'templates:texto');
+      const [pdfs, textos, funcs, usoAtual] = await Promise.all([
+        listarTemplatesPdf(),
+        listarTemplatesTexto(),
+        listarFuncionarios(),
+        usoDosTemplates().catch(() => null),
       ]);
-      
+
       const allTemplates = [
-        ...(pData.data || []).map(t => ({ ...t, type: 'pdf' })),
-        ...(tData.data || []).map(t => ({ ...t, type: 'text', name: t.nome }))
+        ...pdfs.map(t => ({ ...t, type: 'pdf' })),
+        ...textos.map(t => ({ ...t, type: 'text', name: t.nome }))
       ];
 
       setTemplates(allTemplates);
+      setUso(usoAtual);
 
       // Extract unique keys from all employees' dados_extras
-      if (fData.data) {
+      if (funcs) {
         const keys = new Set();
-        fData.data.forEach(f => {
+        funcs.forEach(f => {
           if (f.dados_extras) {
             Object.keys(f.dados_extras).forEach(k => {
               if (k !== 'CPF') keys.add(k);
@@ -62,6 +72,8 @@ export default function Templates() {
     } catch (error) {
       console.error('Erro ao buscar templates:', error);
       toast.error('Erro ao carregar templates.');
+    } finally {
+      setCarregando(false);
     }
   };
 
@@ -97,10 +109,11 @@ export default function Templates() {
         file_url: base64PDF, // Salvando o Base64 na nuvem!
       };
 
-      const { data, error } = await supabase.from('pdf_templates').insert([templateData]).select();
+      const { data, error } = await supabase.from('pdf_templates').insert([templateData]).select('id, name, fields, created_at');
       if (error) throw error;
 
-      setTemplates(prev => [data[0], ...prev]);
+      invalidar('templates:pdf');
+      setTemplates(prev => [{ ...data[0], type: 'pdf' }, ...prev]);
       toast.success(`Template salvo na nuvem! Foram detectados ${fields.length} campos.`);
     } catch (error) {
       console.error(error);
@@ -112,14 +125,19 @@ export default function Templates() {
   };
 
   const removeTemplate = async (id, fileName, type = 'pdf') => {
-    if (!window.confirm(`Excluir o template "${fileName}"?`)) return;
-    
+    const usoTpl = uso?.get(id);
+    const aviso = usoTpl?.total
+      ? `\n\nAs ${usoTpl.total} cartas já emitidas com ele continuam no Histórico.`
+      : '';
+    if (!window.confirm(`Excluir o template "${fileName}"?${aviso}`)) return;
+
     try {
-      // 1. Primeiro removemos as cartas geradas e assinaturas pendentes associadas
-      await supabase.from('cartas_geradas').delete().eq('template_id', id);
-      await supabase.from('assinaturas_pendentes').delete().eq('template_id', id);
-      
-      // 2. Agora excluímos o template
+      // O histórico de cartas é preservado: o banco apenas desfaz o vínculo com o template.
+      if (type === 'pdf') {
+        const { error: assinErr } = await supabase.from('assinaturas_pendentes').delete().eq('template_id', id);
+        if (assinErr) throw assinErr;
+      }
+
       const table = type === 'text' ? 'templates' : 'pdf_templates';
       const { error } = await supabase.from(table).delete().eq('id', id);
       if (error) throw error;
@@ -128,8 +146,9 @@ export default function Templates() {
         localStorage.removeItem(`pdf_${fileName}`);
       }
       
+      invalidar('templates');
       setTemplates(prev => prev.filter(t => t.id !== id));
-      toast.success('Template removido.');
+      toast.success('Template excluído. O histórico de cartas foi mantido.');
     } catch (error) {
       console.error(error);
       toast.error('Erro ao excluir template. Ele pode estar sendo usado em outro lugar.');
@@ -137,8 +156,20 @@ export default function Templates() {
   };
 
   const openMapping = async (template) => {
-    // Tenta pegar da nuvem primeiro, depois tenta do localStorage se for um template antigo
+    // O arquivo é baixado só agora (e fica em cache); templates antigos podem estar no localStorage
     let base64 = template.file_url;
+    if (!base64) {
+      setAbrindoId(template.id);
+      try {
+        base64 = await arquivoTemplatePdf(template.id);
+      } catch (e) {
+        console.error(e);
+        toast.error('Não foi possível baixar o PDF do template.');
+        return;
+      } finally {
+        setAbrindoId(null);
+      }
+    }
     if (base64 && base64.startsWith('local:')) {
       base64 = localStorage.getItem(`pdf_${template.name}`);
     }
@@ -191,6 +222,7 @@ export default function Templates() {
         
       if (error) throw error;
 
+      invalidar('templates:pdf');
       setTemplates(prev => prev.map(t => t.id === mappingModal.template.id ? mappingModal.template : t));
       toast.success('Mapeamento salvo com sucesso!');
       setMappingModal({ isOpen: false, template: null, pdfUrl: null });
@@ -259,13 +291,31 @@ export default function Templates() {
         </div>
       </div>
 
+      {uso && !carregando && (() => {
+        const semUso = templates.filter(t => t.type === 'text' && !uso.get(t.id)?.total);
+        if (semUso.length === 0) return null;
+        return (
+          <div className="rounded-xl border border-signal-100 bg-signal-50 px-4 py-3 text-sm text-signal-700">
+            {semUso.length === 1
+              ? <>O template <strong className="font-semibold">{semUso[0].name.trim()}</strong> nunca foi usado para emitir cartas.</>
+              : <>{semUso.length} templates de texto nunca foram usados para emitir cartas.</>}
+            {' '}Excluir um template não apaga nenhuma carta do histórico.
+          </div>
+        );
+      })()}
+
       <div className="bg-white rounded-xl border border-line overflow-hidden">
-        {templates.length === 0 ? (
+        {carregando ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Carregando templates…
+          </div>
+        ) : templates.length === 0 ? (
           <div className="text-center py-16 text-gray-500 text-sm">Nenhum template salvo.</div>
         ) : (
           <ul role="list" className="divide-y divide-gray-100">
             {templates.map((template) => {
-              const isCloudSaved = template.type === 'text' || (template.file_url && !template.file_url.startsWith('local:'));
+              const isCloudSaved = template.type === 'text' || !String(template.file_url || '').startsWith('local:');
+              const usoTpl = uso?.get(template.id);
               
               return (
               <li key={template.id} className="flex items-center justify-between gap-x-6 p-6 hover:bg-gray-50/50">
@@ -287,7 +337,19 @@ export default function Templates() {
                       )}
                     </div>
                     <p className="mt-1 truncate text-xs leading-5 text-gray-500">
-                      {template.fields?.length || 0} campos detectados
+                      {template.fields?.length || 0} {template.fields?.length === 1 ? 'campo' : 'campos'}
+                      <span aria-hidden="true"> · </span>
+                      {template.type === 'text' ? (
+                        usoTpl?.total ? (
+                          <span className="text-gray-600">
+                            {usoTpl.total} {usoTpl.total === 1 ? 'carta emitida' : 'cartas emitidas'}, última em {dataCurta.format(new Date(usoTpl.ultimo))}
+                          </span>
+                        ) : uso ? (
+                          <span className="font-medium text-signal-700">Nunca usado</span>
+                        ) : null
+                      ) : (
+                        <span title="Documentos gerados a partir de PDF não ficam vinculados ao template no histórico">Uso não rastreado</span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -295,9 +357,10 @@ export default function Templates() {
                   {template.type === 'pdf' ? (
                     <button 
                       onClick={() => openMapping(template)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
+                      disabled={abrindoId === template.id}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors disabled:opacity-60"
                     >
-                      <Settings className="w-4 h-4" />
+                      {abrindoId === template.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings className="w-4 h-4" />}
                       Mapear Campos
                     </button>
                   ) : (
@@ -312,6 +375,8 @@ export default function Templates() {
                   <button 
                     onClick={() => removeTemplate(template.id, template.name, template.type)}
                     className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                    aria-label={`Excluir template ${template.name}`}
+                    title="Excluir template (o histórico de cartas é mantido)"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
