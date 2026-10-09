@@ -2,6 +2,7 @@
 // Pode ser chamado pelo supervisor dono do pedido (logo após enviar) ou pelo admin (reprocessar).
 import { CORS, clienteServico, papelDe, resposta, usuarioDaRequisicao } from './comum.ts';
 import { ErroAgente, resolverPedido } from './agentes.ts';
+import { avisarWhatsApp, mensagemDoPedido } from './whatsapp.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -38,6 +39,13 @@ Deno.serve(async (req) => {
   if (erroTomar) return resposta({ erro: 'Não foi possível iniciar o processamento.' }, 500);
   if (!tomado?.length) return resposta({ ok: true, status: 'processando' });
 
+  // Avisa no WhatsApp só no primeiro processamento (pedido recém-chegado)
+  const primeiraVez = pedido.status === 'recebida';
+  const nomeSupervisor = async () => {
+    const { data } = await db.from('solicitantes').select('nome').eq('user_id', pedido.solicitante_id).maybeSingle();
+    return data?.nome || 'Supervisor';
+  };
+
   try {
     const itens = await resolverPedido(db, pedido.texto);
     const { error: erroAnalise } = await db.from('solicitacoes_analise')
@@ -45,11 +53,13 @@ Deno.serve(async (req) => {
     if (erroAnalise) throw erroAnalise;
     const { error: erroStatus } = await db.from('solicitacoes').update({ status: 'revisao', erro: null }).eq('id', id);
     if (erroStatus) throw erroStatus;
+    if (primeiraVez) await avisarWhatsApp(mensagemDoPedido(await nomeSupervisor(), pedido.texto, itens));
     return resposta({ ok: true, status: 'revisao' });
   } catch (e) {
     console.error('processar', e);
     const msg = e instanceof ErroAgente ? e.message : 'Falha inesperada ao processar. Use "Reprocessar".';
     await db.from('solicitacoes').update({ status: 'erro', erro: msg }).eq('id', id);
+    if (primeiraVez) await avisarWhatsApp(mensagemDoPedido(await nomeSupervisor(), pedido.texto, null, msg));
     return resposta({ ok: false, status: 'erro', erro: msg });
   }
 });

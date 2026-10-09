@@ -183,7 +183,7 @@ export default function Solicitacoes() {
   const { user } = useAuth();
   const [pedidos, setPedidos] = useState(null);
   const [filtro, setFiltro] = useState('pendentes');
-  const [abertoId, setAbertoId] = useState(null);
+  const [abertoId, setAbertoId] = useState(() => new URLSearchParams(window.location.search).get('abrir'));
   const [rascunho, setRascunho] = useState([]);
   const [funcionarios, setFuncionarios] = useState([]);
   const [empresas, setEmpresas] = useState([]);
