@@ -51,7 +51,6 @@ async function perguntar(sistema: string, conteudo: string): Promise<Record<stri
     body: JSON.stringify({
       model: MODELO,
       max_tokens: 2000,
-      temperature: 0,
       system: sistema,
       messages: [{ role: 'user', content: conteudo }],
     }),
@@ -65,6 +64,7 @@ async function perguntar(sistema: string, conteudo: string): Promise<Record<stri
     const corpo = await r.text();
     console.error('anthropic', r.status, corpo.slice(0, 500));
     if (r.status === 401 || r.status === 403) throw new ErroAgente('A chave da IA foi recusada. Confira a ANTHROPIC_API_KEY no Supabase.');
+    if (corpo.includes('credit balance')) throw new ErroAgente('A conta da IA está sem créditos. Adicione créditos em console.anthropic.com (Billing) e use "Reprocessar".');
     if (r.status === 429 || r.status === 529) throw new ErroAgente('A IA está ocupada agora. Use "Reprocessar" em alguns minutos.');
     throw new ErroAgente(`A IA não respondeu (erro ${r.status}). Use "Reprocessar".`);
   }
