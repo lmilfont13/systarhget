@@ -24,6 +24,8 @@ const VisualizadorCarta = lazy(telas['/carta']);
 const Estoque = lazy(telas['/estoque']);
 const Auditoria = lazy(telas['/auditoria']);
 const Login = lazy(telas['/login']);
+const Pedir = lazy(telas['/pedir']);
+const Solicitacoes = lazy(telas['/solicitacoes']);
 
 function StandaloneFallback() {
   return (
@@ -50,6 +52,7 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="templates" element={<Templates />} />
+            <Route path="solicitacoes" element={<Solicitacoes />} />
             <Route path="documentos" element={<Documentos />} />
             <Route path="funcionarios" element={<Funcionarios />} />
             <Route path="empresas" element={<Empresas />} />
@@ -62,6 +65,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
           <Route path="promotores" element={<Suspense fallback={<StandaloneFallback />}><PortalPromotor /></Suspense>} />
+          <Route path="pedir" element={<Suspense fallback={<StandaloneFallback />}><Pedir /></Suspense>} />
           <Route path="carta/:id" element={<Suspense fallback={<StandaloneFallback />}><VisualizadorCarta /></Suspense>} />
         </Routes>
       </AuthProvider>

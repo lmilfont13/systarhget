@@ -19,6 +19,8 @@ export const telas = {
   '/promotores': () => import('../pages/PortalPromotor'),
   '/carta': () => import('../pages/VisualizadorCarta'),
   '/login': () => import('../pages/Login'),
+  '/pedir': () => import('../pages/Pedir'),
+  '/solicitacoes': () => import('../pages/Solicitacoes'),
 };
 
 /** Dados que cada tela usa, para já virem do cache quando ela abrir. */

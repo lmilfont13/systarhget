@@ -30,7 +30,8 @@ export default function Login() {
 
   if (!loading && session && !recovering) {
     const from = location.state?.from?.pathname;
-    return <Navigate to={role === 'promotor' ? '/promotores' : from || '/dashboard'} replace />;
+    const destino = { promotor: '/promotores', solicitante: '/pedir' }[role] || from || '/dashboard';
+    return <Navigate to={destino} replace />;
   }
 
   const run = (fn) => async (e) => {

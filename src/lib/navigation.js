@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FileText, History, Package, Users, Building2,
-  Store, FileSignature, Download, ShieldCheck, Settings,
+  Store, FileSignature, Download, ShieldCheck, Settings, Inbox,
 } from 'lucide-react';
 
 /** Navegação principal, agrupada pelo tipo de trabalho. */
@@ -9,6 +9,7 @@ export const NAV_GROUPS = [
     label: 'Operação',
     items: [
       { href: '/dashboard',  name: 'Painel',          icon: LayoutDashboard, keywords: 'inicio resumo dashboard' },
+      { href: '/solicitacoes', name: 'Pedidos de carta', icon: Inbox,         keywords: 'solicitacoes supervisores agentes caixa de entrada' },
       { href: '/documentos', name: 'Gerar documentos', icon: FileText,        keywords: 'carta pdf emitir gerar' },
       { href: '/historico',  name: 'Histórico de cartas', icon: History,     keywords: 'cartas geradas emitidas' },
       { href: '/estoque',    name: 'Estoque',          icon: Package,         keywords: 'materiais uniforme produtos' },
