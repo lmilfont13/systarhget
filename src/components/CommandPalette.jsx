@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, CornerDownLeft, FilePlus2, UserPlus, ExternalLink } from 'lucide-react';
+import { Search, CornerDownLeft, FilePlus2, UserPlus, ExternalLink, FileSignature } from 'lucide-react';
+import { listarFuncionarios } from '../lib/dados';
 import { NAV_ITEMS } from '../lib/navigation';
 import { cn } from '../lib/cn';
 
@@ -17,7 +18,23 @@ export default function CommandPalette({ onClose }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  const [pessoas, setPessoas] = useState([]);
   const listRef = useRef(null);
+
+  // Lista de promotores (vem do cache compartilhado: normalmente instantâneo)
+  useEffect(() => {
+    let ativo = true;
+    listarFuncionarios()
+      .then((lista) => {
+        if (!ativo) return;
+        setPessoas(lista.map((f) => ({
+          f,
+          busca: normalize(`${f.nome} ${f.dados_extras?.CPF ?? ''} ${String(f.dados_extras?.CPF ?? '').replace(/\D/g, '')} ${f.cargo ?? ''}`),
+        })));
+      })
+      .catch(() => {});
+    return () => { ativo = false; };
+  }, []);
 
   const results = useMemo(() => {
     const all = [
@@ -26,7 +43,23 @@ export default function CommandPalette({ onClose }) {
     ];
     const q = normalize(query);
     if (!q) return all;
-    return all
+
+    // Promotores: a partir de 2 letras (ou 3 dígitos de CPF), com atalho para gerar a carta
+    const encontrados = q.length >= 2
+      ? pessoas
+          .filter((p) => p.busca.includes(q))
+          .slice(0, 6)
+          .map(({ f }) => ({
+            id: `p-${f.id}`,
+            name: f.nome,
+            hint: f.dados_extras?.CPF ? `CPF ${f.dados_extras.CPF}` : f.cargo || 'Promotor',
+            icon: FileSignature,
+            href: `/documentos?func=${encodeURIComponent(f.id)}`,
+            acao: 'Gerar carta',
+          }))
+      : [];
+
+    const telas = all
       .map((item) => {
         const name = normalize(item.name);
         const score = name.startsWith(q) ? 3 : name.includes(q) ? 2 : normalize(item.keywords).includes(q) ? 1 : 0;
@@ -35,7 +68,9 @@ export default function CommandPalette({ onClose }) {
       .filter((r) => r.score > 0)
       .sort((a, b) => b.score - a.score)
       .map((r) => r.item);
-  }, [query]);
+
+    return [...encontrados, ...telas];
+  }, [query, pessoas]);
 
   useEffect(() => {
     listRef.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
@@ -64,7 +99,7 @@ export default function CommandPalette({ onClose }) {
             onChange={(e) => { setQuery(e.target.value); setActive(0); }}
             autoFocus
             onKeyDown={onKeyDown}
-            placeholder="Ir para uma página ou ação…"
+            placeholder="Buscar promotor, página ou ação…"
             className="h-14 w-full !border-0 bg-transparent text-[0.9375rem] text-ink !shadow-none outline-none"
             role="combobox"
             aria-expanded="true"
@@ -97,7 +132,12 @@ export default function CommandPalette({ onClose }) {
               >
                 <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-brand-600' : 'text-slate-400')} aria-hidden="true" />
                 <span className="flex-1 truncate font-medium">{item.name}</span>
-                <span className="text-xs text-slate-400">{item.hint}</span>
+                <span className="hidden truncate text-xs text-slate-400 sm:inline">{item.hint}</span>
+                {item.acao && (
+                  <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium', isActive ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-500')}>
+                    {item.acao}
+                  </span>
+                )}
                 {isActive && <CornerDownLeft className="h-3.5 w-3.5 text-brand-500" aria-hidden="true" />}
               </li>
             );

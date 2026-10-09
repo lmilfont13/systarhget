@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { FileEdit, CheckCircle2, Loader2, FileText, Eye, Search, Lock, LogOut, MessageSquare, Copy, Download, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../lib/supabase';
 import { useAuth, PORTAL_EMAIL, authErrorMessage } from '../lib/auth';
+import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
 import { cleanFooterText, generateUniqueId, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
 import { PDFGenerator } from '../pdf/PDFGenerator';
 import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
@@ -266,10 +266,11 @@ export default function PortalPromotor() {
       setIsLoading(true);
       
       const [pData, tData, fData, eData] = await Promise.all([
-        supabase.from('pdf_templates').select('*'),
-        supabase.from('templates').select('*'),
-        supabase.from('funcionarios').select('*').order('criado_em', { ascending: false }),
-        supabase.from('empresas').select('*').order('criado_em', { ascending: false })
+        // Listas leves e em cache: sem os PDFs dos templates nem as imagens das empresas
+        listarTemplatesPdf().then((data) => ({ data })),
+        listarTemplatesTexto().then((data) => ({ data })),
+        listarFuncionarios().then((data) => ({ data })),
+        listarEmpresas().then((data) => ({ data })),
       ]);
       
       const allTemplates = [
@@ -345,6 +346,19 @@ export default function PortalPromotor() {
   }, [isAuthenticated]);
 
   const activeTemplate = templates.find(t => String(t.id) === String(selectedTemplate));
+
+  // Imagens (logo, carimbos, assinatura) só da empresa selecionada, baixadas uma vez por sessão
+  useEffect(() => {
+    if (!selectedEmpresa) return;
+    let ativo = true;
+    imagensEmpresa(selectedEmpresa)
+      .then((imgs) => {
+        if (!ativo) return;
+        setEmpresas((prev) => prev.map((e) => (String(e.id) === String(selectedEmpresa) ? { ...e, ...imgs } : e)));
+      })
+      .catch((e) => console.error('Falha ao carregar imagens da empresa:', e));
+    return () => { ativo = false; };
+  }, [selectedEmpresa, empresas.length]);
   const activeEmpresa = empresas.find(e => String(e.id) === String(selectedEmpresa));
   
   // 3. Filtra funcionários APENAS da conta Colgate
@@ -500,8 +514,9 @@ export default function PortalPromotor() {
       
       const getBase64 = assetToDataUrl;
 
-      const logoBase64 = await getBase64(activeEmpresa?.logo_url);
-      const carimboBase64 = await getBase64(activeEmpresa?.carimbo_url);
+      const empresaGen = await empresaCompleta(activeEmpresa);
+      const logoBase64 = await getBase64(empresaGen?.logo_url);
+      const carimboBase64 = await getBase64(empresaGen?.carimbo_url);
       // Retira a assinatura padrão da Vanessa e utiliza o carimbo gerado com nome e assinatura do supervisor
       const carimboRespBase64 = carimboSupervisor;
 
@@ -564,7 +579,7 @@ export default function PortalPromotor() {
 
         blob = await PDFGenerator.generateFromText(content, assets);
       } else {
-        let base64PDF = activeTemplate.file_url;
+        let base64PDF = activeTemplate.file_url || await arquivoTemplatePdf(activeTemplate.id);
         if (base64PDF && base64PDF.startsWith('local:')) {
           base64PDF = localStorage.getItem(`pdf_${activeTemplate.name}`);
         }
@@ -598,7 +613,8 @@ export default function PortalPromotor() {
       // Registra no histórico (o PDF fica salvo para reenvio e para o link público)
       const { id: cartaId, error: registroError } = await registrarCarta({
         funcionarioId: activeFuncionario?.id,
-        templateId: activeTemplate?.id,
+        // O vínculo do histórico só aceita templates de texto (FK para a tabela templates)
+        templateId: activeTemplate?.type === 'text' ? activeTemplate.id : null,
         empresaId: activeEmpresa?.id,
         nomeFuncionario: nomePromotor,
         nomeArquivo: `CARTA ${nomePromotor.trim().toUpperCase()} - Supervisor ${String(supervisorName || '').trim()}`,

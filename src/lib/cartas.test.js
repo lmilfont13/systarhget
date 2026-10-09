@@ -84,3 +84,11 @@ describe('toLoginEmail (login por usuário)', async () => {
     expect(displayName({ email: 'luciano@empresa.com.br' })).toBe('luciano@empresa.com.br');
   });
 });
+
+describe('codigoVerificacao (selo da carta pública)', async () => {
+  const { codigoVerificacao } = await import('./cartas.js');
+  it('usa os 8 primeiros caracteres do id, sem hífens, em maiúsculas', () => {
+    expect(codigoVerificacao('9332e543-07b5-43b4-ad5e-1254dfea50ce')).toBe('9332E543');
+    expect(codigoVerificacao('0d4e6e8e-4e6a-4c55-9a41-c14bd03e5c46')).toBe('0D4E6E8E');
+  });
+});

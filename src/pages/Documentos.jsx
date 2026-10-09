@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { CheckCircle2, Copy, Download, Eye, FileEdit, FileText, Info, Loader2, Search, Wand2, X, Lock, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../lib/supabase';
 import { PDFGenerator } from '../pdf/PDFGenerator';
 import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
+import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
 import { cleanFooterText, generateUniqueId, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
 
 
@@ -71,10 +71,11 @@ export default function Documentos() {
       setIsLoading(true);
       
       const [pData, tData, fData, eData] = await Promise.all([
-        supabase.from('pdf_templates').select('*'),
-        supabase.from('templates').select('*'),
-        supabase.from('funcionarios').select('*').order('criado_em', { ascending: false }),
-        supabase.from('empresas').select('*').order('criado_em', { ascending: false })
+        // Listas leves e em cache: sem os PDFs dos templates nem as imagens das empresas
+        listarTemplatesPdf().then((data) => ({ data })),
+        listarTemplatesTexto().then((data) => ({ data })),
+        listarFuncionarios().then((data) => ({ data })),
+        listarEmpresas().then((data) => ({ data })),
       ]);
 
       if (pData.error) console.error('Erro ao buscar pdf_templates:', pData.error);
@@ -163,6 +164,19 @@ export default function Documentos() {
   };
 
   const activeTemplate = templates.find(t => String(t.id) === String(selectedTemplate));
+
+  // Imagens (logo, carimbos, assinatura) só da empresa selecionada, baixadas uma vez por sessão
+  useEffect(() => {
+    if (!selectedEmpresa) return;
+    let ativo = true;
+    imagensEmpresa(selectedEmpresa)
+      .then((imgs) => {
+        if (!ativo) return;
+        setEmpresas((prev) => prev.map((e) => (String(e.id) === String(selectedEmpresa) ? { ...e, ...imgs } : e)));
+      })
+      .catch((e) => console.error('Falha ao carregar imagens da empresa:', e));
+    return () => { ativo = false; };
+  }, [selectedEmpresa, empresas.length]);
   const activeFuncionario = selectedFuncionarios.length > 0 ? funcionarios.find(f => String(f.id) === String(selectedFuncionarios[0])) : null;
   const activeEmpresa = empresas.find(e => String(e.id) === String(selectedEmpresa));
   const isNotaDebito = (activeTemplate?.name || activeTemplate?.nome || '').toLowerCase().includes('nota de d');
@@ -604,7 +618,7 @@ export default function Documentos() {
           }
         }
 
-        const funcEmpresaFinal = empresas.find(e => String(e.id) === String(targetEmpId)) || empresa;
+        const funcEmpresaFinal = await empresaCompleta(empresas.find(e => String(e.id) === String(targetEmpId)) || empresa);
         const funcLogoBase64 = await getBase64(funcEmpresaFinal?.logo_url);
         const funcCarimboBase64 = await getBase64(funcEmpresaFinal?.carimbo_url);
         const funcCarimboRespBase64 = await getBase64(funcEmpresaFinal?.carimbo_funcionario_url);
@@ -680,7 +694,7 @@ export default function Documentos() {
 
           blob = await PDFGenerator.generateFromText(content, assets);
         } else {
-          let base64PDF = activeTemplate.file_url;
+          let base64PDF = activeTemplate.file_url || await arquivoTemplatePdf(activeTemplate.id);
           if (base64PDF && base64PDF.startsWith('local:')) {
             base64PDF = localStorage.getItem(`pdf_${activeTemplate.name}`);
           }
@@ -768,7 +782,8 @@ export default function Documentos() {
 
         const { id: cartaId, error: registroError } = await registrarCarta({
           funcionarioId: currentFunc?.id,
-          templateId: activeTemplate?.id,
+          // O vínculo do histórico só aceita templates de texto (FK para a tabela templates)
+          templateId: activeTemplate?.type === 'text' ? activeTemplate.id : null,
           empresaId: activeEmpresa?.id,
           nomeFuncionario: baseFileName.replace('CARTA ', ''),
           nomeArquivo: `${baseFileName} - Admin`,

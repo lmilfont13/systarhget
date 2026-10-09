@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Edit2, Loader2, X, Save, FileText, Copy, Search, Building2, Link2, BarChart3, Tag, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
+import { invalidar } from '../lib/dados';
 
 // Cores distintas para badges de empresas (empresa vinculada - CDC/POP/SPAR etc.)
 const EMPRESA_COLORS = [
@@ -133,6 +134,7 @@ export default function Funcionarios() {
     try {
       const { error } = await supabase.from('funcionarios').delete().eq('id', id);
       if (error) throw error;
+      invalidar('funcionarios');
       setFuncionarios(prev => prev.filter(f => f.id !== id));
       toast.success('Funcionário excluído.');
     } catch {
@@ -174,11 +176,13 @@ export default function Funcionarios() {
       if (id) {
         const { error } = await supabase.from('funcionarios').update({ nome: nomeUpper, cargo, dados_extras, empresa_id: empresa_id || null }).eq('id', id);
         if (error) throw error;
+        invalidar('funcionarios');
         setFuncionarios(prev => prev.map(f => f.id === id ? { ...editModal.data, nome: nomeUpper } : f));
         toast.success('Funcionário atualizado!');
       } else {
         const { data, error } = await supabase.from('funcionarios').insert([{ nome: nomeUpper, cargo, dados_extras, empresa_id: empresa_id || null }]).select();
         if (error) throw error;
+        invalidar('funcionarios');
         setFuncionarios(prev => [data[0], ...prev]);
         toast.success('Funcionário cadastrado com sucesso!');
       }
@@ -223,6 +227,7 @@ export default function Funcionarios() {
         .update({ empresa_id: assocEmpresaId || null, dados_extras: novosDadosExtras })
         .eq('id', assocModal.func.id);
       if (error) throw error;
+      invalidar('funcionarios');
       setFuncionarios(prev => prev.map(f =>
         f.id === assocModal.func.id
           ? { ...f, empresa_id: assocEmpresaId || null, dados_extras: novosDadosExtras }

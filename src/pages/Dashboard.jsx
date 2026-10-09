@@ -5,6 +5,7 @@ import {
   FileSignature, ArrowUpRight, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { listarFuncionarios, listarEmpresas } from '../lib/dados';
 import { cn } from '../lib/cn';
 import { PageHeader, Panel, Button, Skeleton, EmptyState } from '../components/ui';
 
@@ -86,9 +87,10 @@ export default function Dashboard() {
         const inicio = new Date();
         inicio.setDate(inicio.getDate() - DIAS_GRAFICO);
         const [fData, pData, eData, cData, rData] = await Promise.all([
-          supabase.from('funcionarios').select('id, nome, cargo, empresa_id, dados_extras, criado_em').order('criado_em', { ascending: false }),
+          // Mesmo cache das outras telas: voltar ao Painel é imediato
+          listarFuncionarios().then((data) => ({ data })),
           supabase.from('pdf_templates').select('id', { count: 'exact', head: true }),
-          supabase.from('empresas').select('id, nome'),
+          listarEmpresas().then((data) => ({ data })),
           supabase.from('cartas_geradas').select('id', { count: 'exact', head: true }),
           supabase.from('cartas_geradas').select('criado_em').gte('criado_em', inicio.toISOString()),
         ]);

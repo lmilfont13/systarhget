@@ -2,6 +2,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import { Menu, X, Search, FilePlus2, PanelLeftClose, PanelLeftOpen, ExternalLink, LogOut } from 'lucide-react';
 import { useAuth, displayName } from '../lib/auth';
+import { adiantarTela, adiantarTelasPrincipais } from '../lib/rotas';
 import { NAV_GROUPS, findNavItem } from '../lib/navigation';
 import { cn } from '../lib/cn';
 import { BrandMark, PageSkeleton } from './ui';
@@ -45,6 +46,8 @@ function SidebarNav({ collapsed, onNavigate }) {
                   <NavLink
                     to={item.href}
                     onClick={onNavigate}
+                    onMouseEnter={() => adiantarTela(item.href)}
+                    onFocus={() => adiantarTela(item.href)}
                     draggable={false}
                     title={collapsed ? item.name : undefined}
                     className={({ isActive }) =>
@@ -142,6 +145,9 @@ export default function Layout() {
       return next;
     });
   }, []);
+
+  // Com o app aberto, adianta em segundo plano as telas mais usadas
+  useEffect(() => { adiantarTelasPrincipais(); }, []);
 
   // Atalho Ctrl/⌘ + K para a busca rápida
   useEffect(() => {
@@ -244,6 +250,7 @@ export default function Layout() {
             </button>
             <Link
               to="/documentos"
+              onMouseEnter={() => adiantarTela('/documentos')}
               className="hidden h-9 items-center gap-2 rounded-lg bg-brand-600 px-3.5 text-sm font-medium text-white shadow-sm hover:bg-brand-700 sm:inline-flex"
             >
               <FilePlus2 className="h-4 w-4" aria-hidden="true" />
@@ -253,7 +260,7 @@ export default function Layout() {
         </header>
 
         <main className="flex-1 overflow-y-auto">
-          <div key={location.pathname} className="mx-auto w-full max-w-[1240px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <div key={location.pathname + location.search} className="mx-auto w-full max-w-[1240px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
             <Suspense fallback={<PageSkeleton />}>
               <Outlet />
             </Suspense>

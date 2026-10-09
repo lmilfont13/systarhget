@@ -5,23 +5,24 @@ import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
 import { AuthProvider } from './lib/auth';
 import { PageSkeleton } from './components/ui';
+import { telas } from './lib/rotas';
 
 // Cada página vira um arquivo separado, baixado só quando é aberta.
 // Telas pesadas (gerador de PDF, portal) deixam de pesar no primeiro carregamento.
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Templates = lazy(() => import('./pages/Templates'));
-const Documentos = lazy(() => import('./pages/Documentos'));
-const Downloads = lazy(() => import('./pages/Downloads'));
-const Configuracoes = lazy(() => import('./pages/Configuracoes'));
-const Funcionarios = lazy(() => import('./pages/Funcionarios'));
-const Empresas = lazy(() => import('./pages/Empresas'));
-const Lojas = lazy(() => import('./pages/Lojas'));
-const PortalPromotor = lazy(() => import('./pages/PortalPromotor'));
-const HistoricoCartas = lazy(() => import('./pages/HistoricoCartas'));
-const VisualizadorCarta = lazy(() => import('./pages/VisualizadorCarta'));
-const Estoque = lazy(() => import('./pages/Estoque'));
-const Auditoria = lazy(() => import('./pages/Auditoria'));
-const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(telas['/dashboard']);
+const Templates = lazy(telas['/templates']);
+const Documentos = lazy(telas['/documentos']);
+const Downloads = lazy(telas['/downloads']);
+const Configuracoes = lazy(telas['/configuracoes']);
+const Funcionarios = lazy(telas['/funcionarios']);
+const Empresas = lazy(telas['/empresas']);
+const Lojas = lazy(telas['/lojas']);
+const PortalPromotor = lazy(telas['/promotores']);
+const HistoricoCartas = lazy(telas['/historico']);
+const VisualizadorCarta = lazy(telas['/carta']);
+const Estoque = lazy(telas['/estoque']);
+const Auditoria = lazy(telas['/auditoria']);
+const Login = lazy(telas['/login']);
 
 function StandaloneFallback() {
   return (
