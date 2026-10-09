@@ -195,6 +195,47 @@
 }
 .palavra-marca { animation: surgir 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 1.35s both; }
 
+/* Mesa do agente (área do supervisor) */
+.mesa-luz { fill: rgb(253 230 190 / 0.35); }
+.mesa-rotulo { font-size: 7px; fill: var(--color-slate-400); font-family: var(--font-sans); }
+.mesa-lacre, .mesa-lupa, .mesa-checks, .mesa-x { opacity: 0; }
+.mesa-lacre, .mesa-carta { transform-box: fill-box; transform-origin: center; }
+
+@keyframes mesa-chega { from { transform: translate(-150px, -4px) rotate(-8deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes mesa-varre {
+  0%   { transform: translate(110px, 88px); }
+  33%  { transform: translate(136px, 93px); }
+  66%  { transform: translate(112px, 99px); }
+  100% { transform: translate(110px, 88px); }
+}
+@keyframes mesa-linha { 0%, 100% { fill: var(--color-slate-300); } 50% { fill: var(--color-brand-400); } }
+@keyframes mesa-risco { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+@keyframes mesa-carimbo {
+  0%   { opacity: 0; transform: scale(2.4) rotate(-20deg); }
+  60%  { opacity: 1; transform: scale(0.9) rotate(4deg); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes mesa-para-bandeja { to { transform: translate(103px, -8px) scale(0.85); } }
+
+.mesa--agentes .mesa-carta { animation: mesa-chega 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.mesa--agentes .mesa-lupa { opacity: 1; animation: mesa-varre 3.2s ease-in-out 0.9s infinite; transform: translate(110px, 88px); }
+.mesa--agentes .mesa-linha { animation: mesa-linha 3.2s ease-in-out 0.9s infinite; }
+.mesa--agentes .mesa-linha:nth-child(3) { animation-delay: 1.9s; }
+.mesa--agentes .mesa-linha:nth-child(4) { animation-delay: 2.9s; }
+
+.mesa--avaliacao .mesa-checks, .mesa--pronta .mesa-checks { opacity: 1; }
+.mesa-check { stroke-dasharray: 20; stroke-dashoffset: 20; }
+.mesa--avaliacao .mesa-check { animation: mesa-risco 0.5s ease-out both; }
+.mesa--avaliacao .mesa-check-1 { animation-delay: 0.7s; }
+.mesa--avaliacao .mesa-check-2 { animation-delay: 1.4s; }
+.mesa--pronta .mesa-check { stroke-dashoffset: 0; }
+
+.mesa--pronta .mesa-lacre { animation: mesa-carimbo 0.7s cubic-bezier(0.3, 0.7, 0.2, 1) 0.2s both; }
+.mesa--pronta .mesa-carta { animation: mesa-para-bandeja 0.9s cubic-bezier(0.6, 0, 0.3, 1) 1.3s both; }
+
+.mesa--recusada .mesa-x { opacity: 1; }
+.mesa--recusada .mesa-carta { opacity: 0.45; }
+
 /* Selo de lacre ao gerar carta */
 @keyframes palco {
   0%   { opacity: 0; }
