@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { listarFuncionarios, listarEmpresas } from '../lib/dados';
 import { teclaMod, abrirBuscaRapida } from '../lib/atalhos';
 import { cn } from '../lib/cn';
+import { useContagem } from '../lib/useContagem';
 import { PageHeader, Panel, Button, Skeleton, EmptyState } from '../components/ui';
 
 
@@ -19,23 +20,25 @@ const DIAS_GRAFICO = 30;
 const fmtDia = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
 const chaveDia = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
-function Stat({ label, value, hint, loading, tone = 'default', to, className }) {
+function Stat({ label, value, hint, loading, tone = 'default', to, className, ordem = 0 }) {
   const Comp = to ? Link : 'div';
+  const contado = useContagem(loading ? 0 : value);
   return (
     <Comp
       to={to}
       className={cn(
-        'panel flex flex-col gap-2 p-5',
+        'panel surgir flex flex-col gap-2 p-5',
         to && 'hover:border-slate-300',
         className,
       )}
+      style={{ '--atraso': `${ordem * 70}ms` }}
     >
       <p className="text-sm text-slate-500">{label}</p>
       {loading ? (
         <Skeleton className="h-8 w-16" />
       ) : (
         <p className={cn('text-[2rem] font-semibold leading-none tracking-tight tabular-nums', tone === 'alert' && value > 0 ? 'text-signal-600' : 'text-ink')}>
-          {fmt.format(value)}
+          {fmt.format(contado)}
         </p>
       )}
       {hint && <p className="text-xs text-slate-400">{hint}</p>}
@@ -43,15 +46,15 @@ function Stat({ label, value, hint, loading, tone = 'default', to, className }) 
   );
 }
 
-function Bar({ label, value, total, muted }) {
+function Bar({ label, value, total, muted, ordem = 0 }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
     <div className="grid grid-cols-[minmax(0,10rem)_1fr_4.5rem] items-center gap-4">
       <p className={cn('truncate text-sm', muted ? 'text-slate-400' : 'text-slate-700')} title={label}>{label}</p>
       <div className="h-2 overflow-hidden rounded-full bg-slate-100">
         <div
-          className={cn('h-full rounded-full transition-[width] duration-700 ease-out', muted ? 'bg-slate-300' : 'bg-brand-500')}
-          style={{ width: `${pct}%` }}
+          className={cn('crescer-x h-full rounded-full transition-[width] duration-700 ease-out', muted ? 'bg-slate-300' : 'bg-brand-500')}
+          style={{ width: `${pct}%`, '--atraso': `${250 + ordem * 60}ms` }}
         />
       </div>
       <p className="text-right text-sm tabular-nums">
@@ -182,11 +185,12 @@ export default function Dashboard() {
 
       {/* Indicadores */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
-        <Stat label="Promotores" value={total} loading={isLoading} to="/funcionarios" />
-        <Stat label="Empresas" value={empresas.length} loading={isLoading} to="/empresas" />
-        <Stat label="Templates" value={totalTemplates} loading={isLoading} to="/templates" />
-        <Stat label="Documentos emitidos" value={totalDocsGerados} loading={isLoading} to="/historico" />
+        <Stat ordem={0} label="Promotores" value={total} loading={isLoading} to="/funcionarios" />
+        <Stat ordem={1} label="Empresas" value={empresas.length} loading={isLoading} to="/empresas" />
+        <Stat ordem={2} label="Templates" value={totalTemplates} loading={isLoading} to="/templates" />
+        <Stat ordem={3} label="Documentos emitidos" value={totalDocsGerados} loading={isLoading} to="/historico" />
         <Stat
+          ordem={4}
           label="Sem empresa"
           value={semEmpresa}
           loading={isLoading}
@@ -211,10 +215,10 @@ export default function Dashboard() {
             />
           ) : (
             <>
-              {porEmpresa.map((emp) => <Bar key={emp.id} label={emp.nome} value={emp.total} total={total} />)}
+              {porEmpresa.map((emp, i) => <Bar key={emp.id} ordem={i} label={emp.nome} value={emp.total} total={total} />)}
               {semEmpresa > 0 && (
                 <div className="border-t border-line-soft pt-4">
-                  <Bar label="Sem vínculo" value={semEmpresa} total={total} muted />
+                  <Bar label="Sem vínculo" value={semEmpresa} total={total} muted ordem={porEmpresa.length} />
                 </div>
               )}
             </>
@@ -242,11 +246,11 @@ export default function Dashboard() {
           ) : (
             <figure>
               <div className="flex h-36 items-end gap-[3px]" role="img" aria-label={`${totalPeriodo} documentos emitidos nos últimos ${DIAS_GRAFICO} dias`}>
-                {emissoes.map((d) => (
+                {emissoes.map((d, i) => (
                   <div key={d.chave} className="group relative flex h-full flex-1 items-end">
                     <div
-                      className={cn('w-full rounded-t-[3px] transition-colors', d.total > 0 ? 'bg-brand-500 group-hover:bg-brand-700' : 'bg-slate-100')}
-                      style={{ height: d.total > 0 ? `${Math.max(6, (d.total / maxDia) * 100)}%` : '3px' }}
+                      className={cn('crescer-y w-full rounded-t-[3px] transition-colors', d.total > 0 ? 'bg-brand-500 group-hover:bg-brand-700' : 'bg-slate-100')}
+                      style={{ height: d.total > 0 ? `${Math.max(6, (d.total / maxDia) * 100)}%` : '3px', '--atraso': `${300 + i * 18}ms` }}
                     />
                     <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs text-white group-hover:block">
                       {fmtDia.format(d.data)}: {d.total}
