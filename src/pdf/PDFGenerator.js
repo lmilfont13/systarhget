@@ -645,7 +645,8 @@ export class PDFGenerator {
     }
 
     // Data (Topo Direita)
-    const dataAtual = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    // Data da carta: a pedida (assets.data_carta) ou a de hoje
+    const dataAtual = (assets.data_carta instanceof Date ? assets.data_carta : new Date()).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
     const localidade = "Fortaleza"; 
     const headerDate = `${localidade}, ${dataAtual}`;
     const headerDateWidth = font.widthOfTextAtSize(headerDate, 10);

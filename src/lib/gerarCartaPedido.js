@@ -22,11 +22,19 @@ export function textoDaLoja(loja) {
  * Gera o PDF de um item de pedido, com logo, carimbos e rodapé da empresa.
  * Devolve { blob, empresa, nomeArquivo }.
  */
-export async function gerarCartaDoItem({ template, funcionario, empresas, loja, cargo }) {
+/** "2026-10-10" → Date local (meio-dia, para não virar o dia anterior por fuso). */
+export function dataDoItem(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) return null;
+  const [a, m, d] = iso.split('-').map(Number);
+  return new Date(a, m - 1, d, 12);
+}
+
+export async function gerarCartaDoItem({ template, funcionario, empresas, loja, cargo, dataCarta }) {
+  const data = dataDoItem(dataCarta) || new Date();
   const empresaBase = empresaDoPromotor(funcionario, empresas);
   // Sem as imagens a carta ainda sai (só sem logo/carimbo); não trava a emissão
   const empresa = empresaBase ? await empresaCompleta(empresaBase).catch(() => empresaBase) : null;
-  const conteudo = montarCarta({ template, funcionario, empresa, loja, cargo });
+  const conteudo = montarCarta({ template, funcionario, empresa, loja, cargo, data });
 
   const [logo, carimbo, carimboResp, assinatura] = await Promise.all([
     assetToDataUrl(empresa?.logo_url),
@@ -41,6 +49,7 @@ export async function gerarCartaDoItem({ template, funcionario, empresas, loja, 
     carimbo_responsavel_url: carimboResp,
     assinatura_responsavel_url: assinatura,
     footer_text: cleanFooterText(empresa?.rodape),
+    data_carta: data,
   });
 
   const nome = String(funcionario?.nome || '').trim().toUpperCase();

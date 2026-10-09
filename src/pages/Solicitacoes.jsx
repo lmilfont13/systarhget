@@ -125,13 +125,29 @@ function ItemPedido({ item, indice, pedidoId, funcionarios, lojas, editavel, onC
         </div>
       </div>
 
-      <div className="mt-3">
-        <span className="mb-1.5 block text-xs font-semibold text-slate-500">Cargo na carta</span>
-        {editavel ? (
-          <CargoSelect semRotulo value={item.cargo || ''} onChange={(cargo) => onChange({ ...item, cargo })} funcionarios={funcionarios} cargoDoCadastro={func?.cargo} />
-        ) : (
-          <p className="text-sm text-ink">{item.cargo || func?.cargo || '—'}</p>
-        )}
+      <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
+        <div>
+          <span className="mb-1.5 block text-xs font-semibold text-slate-500">Cargo na carta</span>
+          {editavel ? (
+            <CargoSelect semRotulo value={item.cargo || ''} onChange={(cargo) => onChange({ ...item, cargo })} funcionarios={funcionarios} cargoDoCadastro={func?.cargo} />
+          ) : (
+            <p className="text-sm text-ink">{item.cargo || func?.cargo || '—'}</p>
+          )}
+        </div>
+        <div>
+          <label htmlFor={`data-${indice}`} className="mb-1.5 block text-xs font-semibold text-slate-500">
+            Data da carta {item.data_mencionada && <span className="font-normal text-slate-400">(pediu: {item.data_mencionada})</span>}
+          </label>
+          <input
+            id={`data-${indice}`}
+            type="date"
+            disabled={!editavel}
+            value={item.data_carta || ''}
+            onChange={(e) => onChange({ ...item, data_carta: e.target.value })}
+            className="h-10 w-full border bg-white px-3 text-sm text-ink"
+          />
+          {!item.data_carta && <p className="mt-1 text-xs text-slate-400">Vazio = data de hoje</p>}
+        </div>
       </div>
 
       {item.avisos?.length > 0 && editavel && (
@@ -232,7 +248,7 @@ export default function Solicitacoes() {
       const lojaCad = lojas.lojas.find((l) => l.id === item.loja?.id);
       const { blob } = await gerarCartaDoItem({
         template: templateDoPedido, funcionario, empresas,
-        loja: lojaCad ? textoDaLoja(lojaCad) : item.loja?.nome || '', cargo: item.cargo,
+        loja: lojaCad ? textoDaLoja(lojaCad) : item.loja?.nome || '', cargo: item.cargo, dataCarta: item.data_carta,
       });
       setPrevia((p) => {
         if (p.url) URL.revokeObjectURL(p.url);
@@ -277,7 +293,7 @@ export default function Solicitacoes() {
         }
         const lojaTexto = lojaCad ? textoDaLoja(lojaCad) : item.loja.nome;
         const { blob, empresa, nomeArquivo } = await gerarCartaDoItem({
-          template: templateDoPedido, funcionario, empresas, loja: lojaTexto, cargo: item.cargo,
+          template: templateDoPedido, funcionario, empresas, loja: lojaTexto, cargo: item.cargo, dataCarta: item.data_carta,
         });
         const { id, error } = await registrarCarta({
           funcionarioId: funcionario.id, templateId: templateDoPedido.id, empresaId: empresa?.id,

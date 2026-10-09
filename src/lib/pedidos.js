@@ -68,7 +68,7 @@ export async function meuPerfil(userId) {
 export async function meusPedidos(userId) {
   const { data, error } = await supabase
     .from('solicitacoes')
-    .select('id, texto, status, motivo_recusa, criado_em, aprovado_em')
+    .select('id, texto, status, motivo_recusa, criado_em, atualizado_em, aprovado_em')
     .eq('solicitante_id', userId)
     .order('criado_em', { ascending: false })
     .limit(50);
@@ -159,4 +159,35 @@ export function linkWhatsApp(whatsapp, texto) {
   const numero = String(whatsapp || '').replace(/\D/g, '');
   const comPais = numero && !numero.startsWith('55') ? `55${numero}` : numero;
   return `https://wa.me/${comPais}?text=${encodeURIComponent(texto)}`;
+}
+
+/**
+ * Etapas que o supervisor vê na linha do tempo do pedido.
+ * estado: 'feita' | 'atual' | 'futura' | 'recusada'; em: data/hora (ISO) quando conhecida.
+ */
+export function etapasDoPedido(p) {
+  const s = p?.status;
+  const analisado = ['revisao', 'erro', 'aprovada', 'recusada'].includes(s);
+  const fim = s === 'aprovada' || s === 'recusada';
+  return [
+    { chave: 'recebido', rotulo: 'Recebido', estado: 'feita', em: p?.criado_em },
+    { chave: 'agentes', rotulo: 'Agentes', estado: analisado ? 'feita' : 'atual', em: ['revisao', 'erro'].includes(s) ? p?.atualizado_em : null },
+    { chave: 'avaliacao', rotulo: 'Em avaliação', estado: fim ? 'feita' : analisado ? 'atual' : 'futura', em: null },
+    s === 'recusada'
+      ? { chave: 'fim', rotulo: 'Recusado', estado: 'recusada', em: p?.atualizado_em }
+      : { chave: 'fim', rotulo: 'Pronta', estado: s === 'aprovada' ? 'feita' : 'futura', em: p?.aprovado_em },
+  ];
+}
+
+/** Frase curta sobre o momento do pedido. */
+export function fraseDoPedido(p) {
+  switch (p?.status) {
+    case 'recebida':
+    case 'processando': return 'Os agentes estão lendo seu pedido e procurando o promotor e a loja.';
+    case 'revisao':
+    case 'erro': return 'A carta foi montada e está com a coordenação para conferência.';
+    case 'aprovada': return 'Carta pronta. Abra abaixo ou aguarde o link no WhatsApp.';
+    case 'recusada': return 'A coordenação não aprovou este pedido.';
+    default: return '';
+  }
 }
