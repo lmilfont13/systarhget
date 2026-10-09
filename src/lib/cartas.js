@@ -143,7 +143,7 @@ export function baixarArquivo(blobOrUrl, fileName) {
  * Compartilha um ou mais PDFs: usa o compartilhamento nativo (celular) quando existe;
  * senão baixa os arquivos e abre o WhatsApp Web com uma mensagem.
  */
-export async function compartilharPdfs(files, { titulo, texto }) {
+export async function compartilharPdfs(files, { titulo, texto, whatsapp }) {
   const toastId = 'share-wa';
   try {
     if (navigator.canShare && navigator.canShare({ files })) {
@@ -164,7 +164,10 @@ export async function compartilharPdfs(files, { titulo, texto }) {
       { duration: 5000 },
     );
     setTimeout(() => {
-      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`, '_blank');
+      // Com o número, abre direto a conversa com a pessoa
+      const numero = String(whatsapp || '').replace(/\D/g, '');
+      const fone = numero ? `&phone=${numero.startsWith('55') ? numero : `55${numero}`}` : '';
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}${fone}`, '_blank');
     }, 1500);
     return true;
   } catch (e) {

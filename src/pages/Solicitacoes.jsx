@@ -7,12 +7,12 @@ import {
 import { useAuth } from '../lib/auth';
 import { listarFuncionarios, listarEmpresas, listarTemplatesTexto, invalidar } from '../lib/dados';
 import { carregarLojas, cadastrarSeNova } from '../lib/lojas';
-import { registrarCarta, cartaShareUrl } from '../lib/cartas';
+import { registrarCarta, compartilharPdfs } from '../lib/cartas';
 import { celebrarCarta } from '../lib/celebrar';
 import { gerarCartaDoItem, textoDaLoja } from '../lib/gerarCartaPedido';
 import {
   STATUS_ADMIN, listarSolicitacoes, acompanharPedidos, processarPedido, concluirPedido,
-  recusarPedido, definirTemplatePadrao, salvarItens, linkWhatsApp, cartasDoPedido,
+  recusarPedido, definirTemplatePadrao, salvarItens, cartasDoPedido, arquivosDoPedido,
 } from '../lib/pedidos';
 import { PageHeader, Panel, Button, Skeleton, EmptyState } from '../components/ui';
 import CargoSelect from '../components/CargoSelect';
@@ -377,11 +377,27 @@ export default function Solicitacoes() {
     return () => { ativo = false; };
   }, [aberto?.id, aberto?.status]);
 
-  const mensagemWhats = aberto?.status === 'aprovada'
-    ? `Olá, ${String(aberto.solicitante?.nome || '').split(' ')[0]}! ${cartasAprovadas.length > 1 ? 'As cartas estão prontas' : 'A carta está pronta'}:\n` +
-      cartasAprovadas.map((c) => `• ${c.nome_funcionario}: ${cartaShareUrl(c.id)}`).join('\n') +
-      `\n\nVocê também encontra em ${window.location.origin}/pedir`
-    : '';
+  // Envia os PDFs (não links): no celular abre o compartilhar com o WhatsApp;
+  // no computador baixa os arquivos e abre a conversa do supervisor para anexar.
+  const [enviandoWhats, setEnviandoWhats] = useState(false);
+  const enviarPdfsWhatsApp = async () => {
+    setEnviandoWhats(true);
+    try {
+      const arquivos = await arquivosDoPedido(aberto.id);
+      if (!arquivos.length) { toast.error('Não encontrei os PDFs deste pedido.'); return; }
+      const nome = String(aberto.solicitante?.nome || '').split(' ')[0];
+      await compartilharPdfs(arquivos, {
+        titulo: arquivos.length > 1 ? 'Cartas de apresentação' : arquivos[0].name,
+        texto: `Olá, ${nome}! ${arquivos.length > 1 ? `Seguem as ${arquivos.length} cartas` : 'Segue a carta'} de apresentação em anexo.`,
+        whatsapp: aberto.solicitante?.whatsapp,
+      });
+    } catch (e) {
+      console.error(e);
+      toast.error('Não foi possível preparar os PDFs.');
+    } finally {
+      setEnviandoWhats(false);
+    }
+  };
 
   return (
     <>
@@ -539,8 +555,9 @@ export default function Solicitacoes() {
               <div className="panel flex flex-wrap items-center gap-3 p-4">
                 <p className="text-sm text-slate-600">Aprovado. O supervisor já vê {cartasAprovadas.length > 1 ? `as ${cartasAprovadas.length} cartas` : 'a carta'} na área dele.</p>
                 {aberto.solicitante?.whatsapp && cartasAprovadas.length > 0 && (
-                  <Button as="a" href={linkWhatsApp(aberto.solicitante.whatsapp, mensagemWhats)} target="_blank" rel="noreferrer" className="sm:ml-auto">
-                    <MessageCircle className="h-4 w-4" aria-hidden="true" /> Enviar no WhatsApp
+                  <Button onClick={enviarPdfsWhatsApp} disabled={enviandoWhats} className="sm:ml-auto">
+                    {enviandoWhats ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <MessageCircle className="h-4 w-4" aria-hidden="true" />}
+                    Enviar PDF no WhatsApp
                   </Button>
                 )}
               </div>
