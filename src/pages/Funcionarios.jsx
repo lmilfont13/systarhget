@@ -4,6 +4,7 @@ import { Plus, Trash2, Edit2, Loader2, X, Save, FileText, Copy, Search, Building
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { invalidar } from '../lib/dados';
+import { listaDeCargos } from '../lib/cargos';
 
 // Cores distintas para badges de empresas (empresa vinculada - CDC/POP/SPAR etc.)
 const EMPRESA_COLORS = [
@@ -678,8 +679,11 @@ export default function Funcionarios() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Cargo</label>
-                    <input type="text" value={editModal.data.cargo || ''} onChange={e => handleEditChange('cargo', e.target.value)}
+                    <input type="text" list="lista-cargos" autoComplete="off" placeholder="Escolha na lista ou digite" value={editModal.data.cargo || ''} onChange={e => handleEditChange('cargo', e.target.value)}
                       className="block w-full rounded-lg border-slate-200 focus:ring-2 focus:ring-indigo-500 sm:text-sm py-2 px-3 border shadow-sm" />
+                    <datalist id="lista-cargos">
+                      {listaDeCargos(funcionarios).map(o => <option key={o.cargo} value={o.cargo}>{o.total} cadastrado(s)</option>)}
+                    </datalist>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Vínculo Empresa</label>

@@ -143,6 +143,12 @@ export default function CommandPalette({ onClose }) {
             );
           })}
         </ul>
+        <div className="flex items-center gap-4 border-t border-line-soft bg-slate-50 px-4 py-2 text-xs text-slate-500">
+          <span className="flex items-center gap-1"><span className="kbd">↑</span><span className="kbd">↓</span> navegar</span>
+          <span className="flex items-center gap-1"><span className="kbd">Enter</span> abrir</span>
+          <span className="flex items-center gap-1"><span className="kbd">Esc</span> fechar</span>
+          <span className="ml-auto hidden sm:inline">Digite o nome ou CPF para gerar a carta</span>
+        </div>
       </div>
     </div>
   );

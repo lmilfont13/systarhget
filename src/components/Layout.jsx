@@ -1,15 +1,18 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
-import { Menu, X, Search, FilePlus2, PanelLeftClose, PanelLeftOpen, ExternalLink, LogOut } from 'lucide-react';
+import { Menu, X, Search, FilePlus2, PanelLeftClose, PanelLeftOpen, ExternalLink, LogOut, Keyboard } from 'lucide-react';
+import { toast } from 'sonner';
+import { teclaMod, abrirBuscaRapida } from '../lib/atalhos';
+import AtalhosDialog from './AtalhosDialog';
 import { useAuth, displayName } from '../lib/auth';
 import { adiantarTela, adiantarTelasPrincipais } from '../lib/rotas';
 import { NAV_GROUPS, findNavItem } from '../lib/navigation';
 import { cn } from '../lib/cn';
-import { BrandMark, PageSkeleton } from './ui';
+import { BrandMark, Wordmark, PageSkeleton } from './ui';
 import CommandPalette from './CommandPalette';
 
 const COLLAPSE_KEY = 'systarhget:sidebar-collapsed';
-const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+const DICA_KEY = 'tarhget:dica-busca-vista';
 
 function readCollapsed() {
   try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; }
@@ -17,13 +20,9 @@ function readCollapsed() {
 
 function Brand({ collapsed }) {
   return (
-    <Link to="/dashboard" className="flex min-w-0 items-center gap-3 rounded-lg outline-offset-4" aria-label="SysTarhget — início">
-      <BrandMark />
-      {!collapsed && (
-        <span className="truncate text-[0.9375rem] font-semibold tracking-tight text-white">
-          SysTarhget
-        </span>
-      )}
+    <Link to="/dashboard" className="flex min-w-0 items-center gap-3 rounded-lg outline-offset-4" aria-label="Tarhget — início">
+      <BrandMark className="text-brand-100" />
+      {!collapsed && <Wordmark className="truncate text-brand-50" />}
     </Link>
   );
 }
@@ -130,12 +129,13 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [atalhosOpen, setAtalhosOpen] = useState(false);
 
   const current = findNavItem(location.pathname);
 
   // Atualiza o título da aba conforme a página
   useEffect(() => {
-    document.title = current ? `${current.name} · SysTarhget` : 'SysTarhget';
+    document.title = current ? `${current.name} · Tarhget` : 'Tarhget';
   }, [current]);
 
   const toggleCollapsed = useCallback(() => {
@@ -149,16 +149,48 @@ export default function Layout() {
   // Com o app aberto, adianta em segundo plano as telas mais usadas
   useEffect(() => { adiantarTelasPrincipais(); }, []);
 
-  // Atalho Ctrl/⌘ + K para a busca rápida
+  // Atalhos: Ctrl/⌘ + K abre a busca; "?" mostra a ajuda (fora de campos de texto)
   useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        setAtalhosOpen(false);
         setPaletteOpen((o) => !o);
+        return;
+      }
+      const digitando = e.target instanceof HTMLElement && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName));
+      if (e.key === '?' && !digitando && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setPaletteOpen(false);
+        setAtalhosOpen(true);
       }
     };
+    const abrirBusca = () => { setAtalhosOpen(false); setPaletteOpen(true); };
+    const abrirAtalhos = () => { setPaletteOpen(false); setAtalhosOpen(true); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('tarhget:abrir-busca', abrirBusca);
+    window.addEventListener('tarhget:abrir-atalhos', abrirAtalhos);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('tarhget:abrir-busca', abrirBusca);
+      window.removeEventListener('tarhget:abrir-atalhos', abrirAtalhos);
+    };
+  }, []);
+
+  // Dica do atalho na primeira vez que a pessoa entra no sistema neste navegador
+  useEffect(() => {
+    let vista = true;
+    try { vista = localStorage.getItem(DICA_KEY) === '1'; } catch { /* sem armazenamento: não mostra */ }
+    if (vista) return;
+    const t = setTimeout(() => {
+      toast(`Dica: aperte ${teclaMod} + K para buscar`, {
+        description: 'Digite o nome ou CPF de um promotor e gere a carta dele direto, sem passar pelos menus.',
+        duration: 12000,
+        action: { label: 'Experimentar', onClick: () => abrirBuscaRapida() },
+      });
+      try { localStorage.setItem(DICA_KEY, '1'); } catch { /* ignora */ }
+    }, 1200);
+    return () => clearTimeout(t);
   }, []);
 
   // Trava a rolagem do fundo enquanto o menu mobile está aberto
@@ -235,18 +267,26 @@ export default function Layout() {
           <div className="flex min-w-0 items-center gap-2 text-sm">
             {current && <span className="hidden text-slate-400 sm:inline">{current.group}</span>}
             {current && <span className="hidden text-slate-300 sm:inline" aria-hidden="true">/</span>}
-            <span className="truncate font-medium text-ink">{current?.name ?? 'SysTarhget'}</span>
+            <span className="truncate font-medium text-ink">{current?.name ?? 'Tarhget'}</span>
           </div>
 
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={() => setPaletteOpen(true)}
-              className="flex h-9 items-center gap-2 rounded-lg border border-line bg-white px-3 text-sm text-slate-500 hover:border-slate-300 hover:text-slate-700 sm:w-64"
+              className="flex h-9 items-center gap-2 rounded-lg border border-line bg-white px-3 text-sm text-slate-500 hover:border-slate-300 hover:text-slate-700 sm:w-72"
               aria-label="Abrir busca rápida"
             >
               <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="hidden flex-1 text-left sm:inline">Buscar…</span>
-              <span className="kbd hidden sm:inline-flex">{isMac ? '⌘' : 'Ctrl'} K</span>
+              <span className="hidden flex-1 truncate text-left sm:inline">Buscar promotor ou página</span>
+              <span className="kbd hidden sm:inline-flex">{teclaMod} K</span>
+            </button>
+            <button
+              onClick={() => setAtalhosOpen(true)}
+              className="hidden h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-ink md:inline-flex"
+              aria-label="Atalhos de teclado"
+              title="Atalhos de teclado (?)"
+            >
+              <Keyboard className="h-[18px] w-[18px]" />
             </button>
             <Link
               to="/documentos"
@@ -269,6 +309,7 @@ export default function Layout() {
       </div>
 
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+      {atalhosOpen && <AtalhosDialog onClose={() => setAtalhosOpen(false)} />}
     </div>
   );
 }

@@ -5,7 +5,10 @@ import { toast } from 'sonner';
 import { PDFGenerator } from '../pdf/PDFGenerator';
 import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
 import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
-import { cleanFooterText, generateUniqueId, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
+import { carregarLojas, cadastrarSeNova } from '../lib/lojas';
+import { cargoParaCarta } from '../lib/cargos';
+import CargoSelect from '../components/CargoSelect';
+import { cleanFooterText, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
 
 
 
@@ -26,6 +29,9 @@ export default function Documentos() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lojas, setLojas] = useState([]);
+  // '' = automático (cargo do cadastro); senão a função escolhida para esta emissão
+  const [cargoEscolhido, setCargoEscolhido] = useState('');
+  const [origemLojas, setOrigemLojas] = useState('navegador');
   const [manualLojas, setManualLojas] = useState({});
 
   const [searchFuncionario] = useState('');
@@ -118,10 +124,13 @@ export default function Documentos() {
       setFuncionarios(fData.data || []);
       setEmpresas(eData.data || []);
 
-      // Carrega lojas locais
-      const savedLojas = localStorage.getItem('docflow_lojas');
-      if (savedLojas) {
-        setLojas(JSON.parse(savedLojas));
+      // Lojas cadastradas (banco; enquanto a migração não existir, do navegador)
+      try {
+        const resultadoLojas = await carregarLojas();
+        setLojas(resultadoLojas.lojas);
+        setOrigemLojas(resultadoLojas.origem);
+      } catch (e) {
+        console.error('Erro ao carregar lojas:', e);
       }
 
       const params = new URLSearchParams(location.search);
@@ -312,7 +321,7 @@ export default function Documentos() {
               case 'empresa_carimbo': newData[field.name] = activeEmpresaRef?.carimbo_url || ''; break;
               case 'funcionario_nome': newData[field.name] = (activeFuncionario?.nome || '').toUpperCase(); break;
               case 'funcionario_cpf': newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF); break;
-              case 'funcionario_cargo': newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toUpperCase() : ''; break;
+              case 'funcionario_cargo': newData[field.name] = cargoParaCarta(cargoEscolhido, activeFuncionario); break;
               case 'data_atual': newData[field.name] = dataAtual; break;
               default: 
                 if (activeFuncionario?.dados_extras && activeFuncionario.dados_extras[field.mappedTo] !== undefined) {
@@ -328,7 +337,7 @@ export default function Documentos() {
             if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) newData[field.name] = formatCpf(activeFuncionario?.dados_extras?.CPF);
             else if (fieldNameLower.includes('rg') || displayNameLower.includes('rg')) newData[field.name] = activeFuncionario?.dados_extras?.RG || '';
             else if (fieldNameLower.includes('nome') || displayNameLower.includes('nome') || fieldNameLower.includes('promotor') || displayNameLower.includes('promotor') || fieldNameLower.includes('funcionario') || displayNameLower.includes('funcionario')) newData[field.name] = (activeFuncionario?.nome || '').toUpperCase();
-            else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) newData[field.name] = activeFuncionario?.cargo ? String(activeFuncionario.cargo).toUpperCase() : '';
+            else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) newData[field.name] = cargoParaCarta(cargoEscolhido, activeFuncionario);
             else if (fieldNameLower.includes('data') || displayNameLower.includes('data')) newData[field.name] = dataAtual;
             else if (fieldNameLower.includes('empresa') || displayNameLower.includes('empresa')) newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
             else if (fieldNameLower.includes('nc') || displayNameLower.includes('nc') || fieldNameLower.includes('cdc') || displayNameLower.includes('cdc')) newData[field.name] = activeFuncionario?.dados_extras?.['NC FUNCIONARIO'] || activeFuncionario?.dados_extras?.NC || '';
@@ -386,7 +395,7 @@ export default function Documentos() {
         console.error('Erro no auto-fill:', err);
       }
     }
-  }, [selectedTemplate, selectedFuncionarios, selectedEmpresa, optaContinuar]);
+  }, [selectedTemplate, selectedFuncionarios, selectedEmpresa, optaContinuar, cargoEscolhido]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -410,8 +419,8 @@ export default function Documentos() {
             toast.error(`O promotor ${String(f.nome || 'Desconhecido').toUpperCase()} não possui Empresa vinculada. Cadastre a empresa antes de gerar a carta.`);
             return;
           }
-          if (!f.cargo || f.cargo.trim() === '') {
-            toast.error(`O promotor ${String(f.nome || 'Desconhecido').toUpperCase()} não possui Cargo preenchido. Complete o cadastro antes de gerar a carta.`);
+          if (!cargoParaCarta(cargoEscolhido, f)) {
+            toast.error(`O promotor ${String(f.nome || 'Desconhecido').toUpperCase()} não possui Cargo preenchido. Complete o cadastro ou escolha a função em "Cargo na carta".`);
             return;
           }
         }
@@ -483,16 +492,9 @@ export default function Documentos() {
 
           if (!isKnownLoja && !isOldLoja && lojaValue) {
             const capitalizedName = capitalizeStoreName(lojaValue);
-            const newLoja = {
-              id: generateUniqueId(),
-              nome: capitalizedName,
-              endereco: '',
-              cidadeUf: '',
-              cnpj: ''
-            };
-            const updatedLojas = [newLoja, ...lojas];
-            localStorage.setItem('docflow_lojas', JSON.stringify(updatedLojas));
-            setLojas(updatedLojas);
+            // Loja nova digitada na hora: entra no cadastro para as próximas vezes
+            const lojaSalva = await cadastrarSeNova(capitalizedName, lojas, origemLojas);
+            if (lojaSalva) setLojas(prev => [lojaSalva, ...prev]);
             
             if (overrideFormData) overrideFormData[lojaField.name] = capitalizedName;
             else setFormData(prev => ({ ...prev, [lojaField.name]: capitalizedName }));
@@ -582,8 +584,8 @@ export default function Documentos() {
           finalFormDataForFunc['RG'] = rgValue;
           finalFormDataForFunc['cdc'] = cdcValue;
           finalFormDataForFunc['CDC'] = cdcValue;
-          finalFormDataForFunc['cargo'] = currentFunc.cargo ? String(currentFunc.cargo).toUpperCase() : '';
-          finalFormDataForFunc['CARGO'] = currentFunc.cargo ? String(currentFunc.cargo).toUpperCase() : '';
+          finalFormDataForFunc['cargo'] = cargoParaCarta(cargoEscolhido, currentFunc);
+          finalFormDataForFunc['CARGO'] = cargoParaCarta(cargoEscolhido, currentFunc);
           finalFormDataForFunc['empresa'] = funcEmpresa?.nome || '';
           finalFormDataForFunc['EMPRESA'] = funcEmpresa?.nome || '';
           const baseData = overrideFormData || formData;
@@ -598,7 +600,7 @@ export default function Documentos() {
               
               if (fieldNameLower.includes('nome') || displayNameLower.includes('nome') || fieldNameLower.includes('promotor') || displayNameLower.includes('promotor') || fieldNameLower.includes('funcionario') || displayNameLower.includes('funcionario')) finalFormDataForFunc[field.name] = (currentFunc.nome || '').toUpperCase();
               else if (fieldNameLower.includes('cpf') || displayNameLower.includes('cpf')) finalFormDataForFunc[field.name] = formatCpf(de['CPF']);
-              else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) finalFormDataForFunc[field.name] = currentFunc.cargo ? String(currentFunc.cargo).toUpperCase() : '';
+              else if (fieldNameLower.includes('cargo') || displayNameLower.includes('cargo')) finalFormDataForFunc[field.name] = cargoParaCarta(cargoEscolhido, currentFunc);
               else if (fieldNameLower.includes('rg') || displayNameLower.includes('rg')) finalFormDataForFunc[field.name] = rgValue;
               else if (fieldNameLower.includes('cdc') || displayNameLower.includes('cdc') || fieldNameLower.includes('nc')) finalFormDataForFunc[field.name] = cdcValue;
               else if (fieldNameLower.includes('empresa') || displayNameLower.includes('empresa')) finalFormDataForFunc[field.name] = funcEmpresa?.nome || '';
@@ -997,6 +999,28 @@ export default function Documentos() {
     return Array.from(lojasMap.values()).sort();
   }, [empresas]);
 
+  // Lista única de lojas para os seletores: as cadastradas na tela Lojas
+  // e as que vêm do cadastro das empresas, sem repetir nomes.
+  const opcoesLojas = useMemo(() => {
+    const vistos = new Set();
+    const lista = [];
+    for (const l of lojas) {
+      const nome = (l.nome || '').trim();
+      if (!nome || vistos.has(nome.toLowerCase())) continue;
+      vistos.add(nome.toLowerCase());
+      lista.push({
+        value: l.endereco ? `${l.nome} (${l.endereco})` : l.nome,
+        label: `${capitalizeStoreName(l.nome)}${l.cidadeUf ? ` (${l.cidadeUf})` : ''}`,
+      });
+    }
+    for (const nome of allLojas) {
+      if (vistos.has(nome.trim().toLowerCase())) continue;
+      vistos.add(nome.trim().toLowerCase());
+      lista.push({ value: nome, label: nome });
+    }
+    return lista.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  }, [lojas, allLojas]);
+
   if (isLoading) {
     return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
   }
@@ -1227,6 +1251,18 @@ export default function Documentos() {
                   </>
                 )}
               </div>
+
+              {/* Cargo: automático (cadastro) ou escolhido na lista */}
+              {selectedFuncionarios.length > 0 && (
+                <CargoSelect
+                  className="mt-4 max-w-md"
+                  value={cargoEscolhido}
+                  onChange={setCargoEscolhido}
+                  funcionarios={funcionarios}
+                  cargoDoCadastro={activeFuncionario?.cargo}
+                  variosPromotores={selectedFuncionarios.length > 1}
+                />
+              )}
 
               {/* Status and detected branding */}
               {selectedFuncionarios.length > 0 && activeFuncionario && (
@@ -1949,9 +1985,16 @@ export default function Documentos() {
                               }))}
                             >
                               <option value="">Selecione uma loja...</option>
-                              {allLojas.map(loja => (
-                                <option key={loja} value={loja}>{loja}</option>
+                              {opcoesLojas.map(op => (
+                                <option key={op.value} value={op.value}>{op.label}</option>
                               ))}
+                              {(() => {
+                                // Valor digitado antes que não está na lista continua visível
+                                const atual = multiFuncData[func.id]?.[field.name] || formData[field.name] || '';
+                                return atual && !opcoesLojas.some(op => op.value === atual)
+                                  ? <option value={atual}>{atual}</option>
+                                  : null;
+                              })()}
                             </select>
                           ) : (
                             <input

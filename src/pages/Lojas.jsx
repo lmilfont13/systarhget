@@ -3,6 +3,7 @@ import { Store, Plus, Trash2, Edit2, X, Save, Search, MapPin } from 'lucide-reac
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { capitalizeStoreName } from '../lib/formatters';
+import { carregarLojas, salvarLoja, excluirLoja } from '../lib/lojas';
 
 export default function Lojas() {
   const [lojas, setLojas] = useState([]);
@@ -13,53 +14,35 @@ export default function Lojas() {
   // Modal State
   const [editModal, setEditModal] = useState({ isOpen: false, data: null });
 
+  const [origem, setOrigem] = useState('navegador');
+
   const fetchLojas = async () => {
     try {
       setIsLoading(true);
-      let savedLojas = [];
-      const savedLojasStr = localStorage.getItem('docflow_lojas');
-      if (savedLojasStr) {
-        savedLojas = JSON.parse(savedLojasStr);
-      }
 
+      // Lojas citadas no cadastro das empresas entram na lista local
+      // (e, com o banco disponível, são enviadas para ele junto com as demais)
       const { data: empresasData } = await supabase.from('empresas').select('lojas');
-      
-      let changed = false;
-      const lojasMap = new Map();
-      
-      savedLojas.forEach(l => {
-        lojasMap.set((l.nome || '').toLowerCase().trim(), l);
-      });
-
-      if (empresasData) {
-        empresasData.forEach(empresa => {
-          if (Array.isArray(empresa.lojas)) {
-            empresa.lojas.forEach(loja => {
-              if (!loja) return;
-              const cleanName = String(loja).trim().toLowerCase();
-              if (cleanName && !lojasMap.has(cleanName)) {
-                const capitalizedName = capitalizeStoreName(String(loja).trim());
-                const newLoja = {
-                  id: 'migrated-' + Math.random().toString(36).substr(2, 9),
-                  nome: capitalizedName,
-                  endereco: '',
-                  cidadeUf: '',
-                  cnpj: ''
-                };
-                lojasMap.set(cleanName, newLoja);
-                savedLojas.push(newLoja);
-                changed = true;
-              }
-            });
-          }
+      let locais = [];
+      try { locais = JSON.parse(localStorage.getItem('docflow_lojas') || '[]'); } catch { locais = []; }
+      const nomes = new Set(locais.map(l => (l.nome || '').toLowerCase().trim()));
+      let mudou = false;
+      (empresasData || []).forEach(empresa => {
+        (Array.isArray(empresa.lojas) ? empresa.lojas : []).forEach(loja => {
+          const limpo = String(loja || '').trim();
+          if (!limpo || nomes.has(limpo.toLowerCase())) return;
+          nomes.add(limpo.toLowerCase());
+          locais.push({ id: 'migrated-' + Math.random().toString(36).slice(2, 11), nome: capitalizeStoreName(limpo), endereco: '', cidadeUf: '', cnpj: '' });
+          mudou = true;
         });
+      });
+      if (mudou) {
+        try { localStorage.setItem('docflow_lojas', JSON.stringify(locais)); } catch { /* ignora */ }
       }
 
-      if (changed) {
-        localStorage.setItem('docflow_lojas', JSON.stringify(savedLojas));
-      }
-
-      setLojas(savedLojas);
+      const resultado = await carregarLojas();
+      setLojas(resultado.lojas);
+      setOrigem(resultado.origem);
     } catch (error) {
       console.error('Erro ao buscar lojas:', error);
       toast.error('Erro ao carregar lojas salvas.');
@@ -69,7 +52,7 @@ export default function Lojas() {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carrega as lojas ao abrir a tela
     fetchLojas();
   }, []);
 
@@ -85,7 +68,7 @@ export default function Lojas() {
     });
   };
 
-  const saveLoja = () => {
+  const saveLoja = async () => {
     const { id, nome, endereco, cidadeUf, cnpj } = editModal.data;
     if (!nome.trim()) {
       toast.error('O nome da loja é obrigatório.');
@@ -94,41 +77,23 @@ export default function Lojas() {
 
     setIsSubmitting(true);
     try {
-      let updatedLojas;
-      if (id) {
-        // Editar loja existente
-        updatedLojas = lojas.map(l => l.id === id ? { ...l, nome, endereco, cidadeUf, cnpj } : l);
-        toast.success('Loja atualizada com sucesso!');
-      } else {
-        // Criar nova loja
-        const newLoja = {
-          id: Date.now().toString(),
-          nome,
-          endereco,
-          cidadeUf,
-          cnpj
-        };
-        updatedLojas = [newLoja, ...lojas];
-        toast.success('Loja cadastrada com sucesso!');
-      }
-
-      localStorage.setItem('docflow_lojas', JSON.stringify(updatedLojas));
-      setLojas(updatedLojas);
+      const salva = await salvarLoja({ id, nome, endereco, cidadeUf, cnpj }, origem);
+      setLojas(prev => (id ? prev.map(l => (l.id === id ? salva : l)) : [salva, ...prev]));
+      toast.success(id ? 'Loja atualizada com sucesso!' : 'Loja cadastrada com sucesso!');
       setEditModal({ isOpen: false, data: null });
     } catch (error) {
       console.error(error);
-      toast.error('Erro ao salvar a loja.');
+      toast.error(error?.code === '23505' ? 'Já existe uma loja com esse nome.' : 'Erro ao salvar a loja.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm('Deseja realmente excluir esta loja?')) return;
     try {
-      const updatedLojas = lojas.filter(l => l.id !== id);
-      localStorage.setItem('docflow_lojas', JSON.stringify(updatedLojas));
-      setLojas(updatedLojas);
+      await excluirLoja(id, origem);
+      setLojas(prev => prev.filter(l => l.id !== id));
       toast.success('Loja excluída com sucesso.');
     } catch {
       toast.error('Erro ao excluir a loja.');
@@ -138,9 +103,9 @@ export default function Lojas() {
   const filteredLojas = lojas.filter(l => {
     const term = searchTerm.toLowerCase();
     return (
-      l.nome.toLowerCase().includes(term) ||
-      l.endereco.toLowerCase().includes(term) ||
-      l.cidadeUf.toLowerCase().includes(term) ||
+      (l.nome || '').toLowerCase().includes(term) ||
+      (l.endereco || '').toLowerCase().includes(term) ||
+      (l.cidadeUf || '').toLowerCase().includes(term) ||
       (l.cnpj && l.cnpj.toLowerCase().includes(term))
     );
   });
@@ -164,6 +129,13 @@ export default function Lojas() {
       </div>
 
       {/* Barra de Busca */}
+      {!isLoading && origem === 'navegador' && (
+        <div className="rounded-xl border border-signal-100 bg-signal-50 px-4 py-3 text-sm text-signal-700">
+          As lojas ainda estão salvas só neste navegador, por isso não aparecem em outros computadores nem no Portal.
+          Assim que a atualização do banco for aplicada, elas serão enviadas automaticamente.
+        </div>
+      )}
+
       <div className="relative">
         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
           <Search className="h-5 w-5 text-gray-400" aria-hidden="true" />

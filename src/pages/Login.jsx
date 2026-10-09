@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useAuth, authErrorMessage } from '../lib/auth';
-import { BrandMark, Button } from '../components/ui';
+import { BrandMark, Wordmark, Button } from '../components/ui';
 
 function Field({ label, id, ...props }) {
   return (
@@ -116,17 +116,13 @@ export default function Login() {
 
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-paper px-4 py-10">
-      {/* Marca d'água: o carimbo da empresa, grande e quase invisível */}
-      <svg aria-hidden="true" viewBox="0 0 200 200" className="pointer-events-none absolute -right-24 -bottom-24 h-[34rem] w-[34rem] text-brand-600/[0.06] sm:-right-10 sm:-bottom-16">
-        <circle cx="100" cy="100" r="92" fill="none" stroke="currentColor" strokeWidth="6" />
-        <circle cx="100" cy="100" r="70" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="6 7" />
-        <path d="M121 78c-4-6-11-9-20-9-12 0-20 6-20 15 0 9 8 13 20 15 13 3 22 7 22 17 0 9-9 16-22 16-10 0-18-4-22-11" fill="none" stroke="currentColor" strokeWidth="10" strokeLinecap="round" />
-      </svg>
+      {/* Marca d'água: o T da marca, grande e quase invisível */}
+      <BrandMark className="pointer-events-none absolute -right-24 -bottom-24 h-[34rem] w-[34rem] text-brand-800/[0.05] sm:-right-10 sm:-bottom-16" />
 
       <div className="relative w-full max-w-sm">
         <div className="mb-8 flex items-center gap-3">
-          <BrandMark className="h-9 w-9" />
-          <span className="text-lg font-semibold tracking-tight text-ink">SysTarhget</span>
+          <BrandMark className="h-10 w-10" />
+          <Wordmark className="text-xl text-brand-800" />
         </div>
         <div className="panel p-6 shadow-lg sm:p-8">
           <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
