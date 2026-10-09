@@ -1,25 +1,42 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Templates from './pages/Templates';
-import Documentos from './pages/Documentos';
-import Downloads from './pages/Downloads';
-import Configuracoes from './pages/Configuracoes';
-import Funcionarios from './pages/Funcionarios';
-import Empresas from './pages/Empresas';
-import Lojas from './pages/Lojas';
-import PortalPromotor from './pages/PortalPromotor';
-import HistoricoCartas from './pages/HistoricoCartas';
-import VisualizadorCarta from './pages/VisualizadorCarta';
-import Estoque from './pages/Estoque';
-import Auditoria from './pages/Auditoria';
-import './index.css';
+import { PageSkeleton } from './components/ui';
 
-function App() {
+// Cada página vira um arquivo separado, baixado só quando é aberta.
+// Telas pesadas (gerador de PDF, portal) deixam de pesar no primeiro carregamento.
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Templates = lazy(() => import('./pages/Templates'));
+const Documentos = lazy(() => import('./pages/Documentos'));
+const Downloads = lazy(() => import('./pages/Downloads'));
+const Configuracoes = lazy(() => import('./pages/Configuracoes'));
+const Funcionarios = lazy(() => import('./pages/Funcionarios'));
+const Empresas = lazy(() => import('./pages/Empresas'));
+const Lojas = lazy(() => import('./pages/Lojas'));
+const PortalPromotor = lazy(() => import('./pages/PortalPromotor'));
+const HistoricoCartas = lazy(() => import('./pages/HistoricoCartas'));
+const VisualizadorCarta = lazy(() => import('./pages/VisualizadorCarta'));
+const Estoque = lazy(() => import('./pages/Estoque'));
+const Auditoria = lazy(() => import('./pages/Auditoria'));
+
+function StandaloneFallback() {
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-10">
+      <PageSkeleton />
+    </div>
+  );
+}
+
+export default function App() {
   return (
     <BrowserRouter>
-      <Toaster position="top-right" richColors />
+      <Toaster
+        position="top-right"
+        richColors
+        closeButton
+        toastOptions={{ style: { fontFamily: 'var(--font-sans)' } }}
+      />
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Estoque />} />
@@ -35,11 +52,9 @@ function App() {
           <Route path="auditoria" element={<Auditoria />} />
           <Route path="configuracoes" element={<Configuracoes />} />
         </Route>
-        <Route path="promotores" element={<PortalPromotor />} />
-        <Route path="carta/:id" element={<VisualizadorCarta />} />
+        <Route path="promotores" element={<Suspense fallback={<StandaloneFallback />}><PortalPromotor /></Suspense>} />
+        <Route path="carta/:id" element={<Suspense fallback={<StandaloneFallback />}><VisualizadorCarta /></Suspense>} />
       </Routes>
     </BrowserRouter>
   );
 }
-
-export default App;

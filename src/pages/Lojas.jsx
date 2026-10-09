@@ -146,17 +146,17 @@ export default function Lojas() {
   });
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Lojas</h1>
+          <h1 className="text-[1.625rem] font-semibold tracking-tight text-ink">Lojas</h1>
           <p className="mt-1 text-sm text-gray-500">
             Cadastre e gerencie as lojas disponíveis para seleção rápida na geração de documentos.
           </p>
         </div>
         <button
           onClick={openNew}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 transition-colors self-start sm:self-auto"
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           Nova Loja
@@ -174,13 +174,13 @@ export default function Lojas() {
           id="search"
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
-          className="block w-full rounded-lg border-0 py-3 pl-10 text-gray-900 ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm bg-white/80 backdrop-blur-sm shadow-sm"
+          className="block w-full rounded-lg border-0 py-3 pl-10 text-gray-900 ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm bg-white shadow-sm"
           placeholder="Buscar loja por nome, endereço, cidade ou CNPJ..."
         />
       </div>
 
       {/* Listagem de Lojas */}
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-lg border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl border border-line overflow-hidden">
         {isLoading ? (
           <div className="p-12 flex justify-center items-center gap-3 text-indigo-600">
             <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
@@ -219,7 +219,7 @@ export default function Lojas() {
                         </span>
                       )}
                       {loja.cnpj && (
-                        <span className="flex items-center gap-1 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono text-[10px]">
+                        <span className="flex items-center gap-1 bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono text-xs">
                           CNPJ: {loja.cnpj}
                         </span>
                       )}
@@ -250,7 +250,7 @@ export default function Lojas() {
 
       {/* Modal Criar/Editar Loja */}
       {editModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-base font-semibold text-gray-900">
@@ -266,7 +266,7 @@ export default function Lojas() {
 
             <div className="p-6 overflow-y-auto space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-gray-700">
                   Nome da Loja <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -279,7 +279,7 @@ export default function Lojas() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-gray-700">
                   Cidade e UF
                 </label>
                 <input
@@ -292,7 +292,7 @@ export default function Lojas() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-gray-700">
                   Endereço
                 </label>
                 <input
@@ -305,7 +305,7 @@ export default function Lojas() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-gray-700">
                   CNPJ da Loja (Opcional)
                 </label>
                 <input
@@ -328,7 +328,7 @@ export default function Lojas() {
               <button
                 onClick={saveLoja}
                 disabled={isSubmitting}
-                className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 disabled:opacity-50 transition-all shadow-sm"
+                className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-sm"
               >
                 <Save className="w-4 h-4" />
                 Salvar Loja

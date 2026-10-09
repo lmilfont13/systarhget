@@ -200,10 +200,10 @@ export default function Templates() {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Templates</h1>
+          <h1 className="text-[1.625rem] font-semibold tracking-tight text-ink">Templates</h1>
           <p className="mt-1 text-sm text-gray-500">
             Faça upload dos seus PDFs e mapeie os campos para preenchimento automático.
           </p>
@@ -244,7 +244,7 @@ export default function Templates() {
           <button 
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors disabled:opacity-50"
           >
             <Upload className="w-4 h-4" />
             {isUploading ? 'Processando...' : 'Novo Template PDF'}
@@ -259,7 +259,7 @@ export default function Templates() {
         </div>
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-lg border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl border border-line overflow-hidden">
         {templates.length === 0 ? (
           <div className="text-center py-16 text-gray-500 text-sm">Nenhum template salvo.</div>
         ) : (
@@ -324,7 +324,7 @@ export default function Templates() {
 
       {/* Modal de Edição de Texto */}
       {textModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -374,7 +374,7 @@ export default function Templates() {
                 <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
                   <div className="px-4 py-2 border-b border-gray-200 bg-gray-100 flex justify-between items-center">
                     <h4 className="text-xs font-semibold text-gray-700 uppercase">Mapeamento de Placeholders</h4>
-                    <span className="text-[10px] text-gray-500">{textModal.template.fields.length} placeholders detectados</span>
+                    <span className="text-xs text-gray-500">{textModal.template.fields.length} placeholders detectados</span>
                   </div>
                   <table className="min-w-full divide-y divide-gray-200">
                     <tbody className="divide-y divide-gray-200 bg-white">
@@ -469,7 +469,7 @@ export default function Templates() {
 
       {/* Modal de Mapeamento */}
       {mappingModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-7xl h-[90vh] flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -516,8 +516,8 @@ export default function Templates() {
                   {mappingModal.template.fields?.map(field => (
                     <div key={field.name} className="flex flex-col gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-sm hover:border-indigo-300 transition-colors">
                       <div className="flex justify-between items-start">
-                        <p className="text-sm font-bold text-gray-900 break-all">{field.name}</p>
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 uppercase">
+                        <p className="text-sm font-semibold text-gray-900 break-all">{field.name}</p>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 uppercase">
                           {field.type}
                         </span>
                       </div>

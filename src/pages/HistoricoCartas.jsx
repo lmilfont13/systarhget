@@ -251,12 +251,12 @@ export default function HistoricoCartas() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Histórico de Cartas Geradas</h1>
+        <h1 className="text-[1.625rem] font-semibold tracking-tight text-ink">Histórico de Cartas Geradas</h1>
         <p className="text-sm text-slate-500 mt-1">Acompanhe quem gerou as cartas de apresentação, datas e faça a gestão dos arquivos salvos.</p>
       </div>
 
       {/* Filtros e Busca */}
-      <div className="bg-white border border-slate-200/80 rounded-lg p-5 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="bg-white border border-line rounded-lg p-5 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative flex-grow w-full md:max-w-md">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-slate-400" />
@@ -286,19 +286,19 @@ export default function HistoricoCartas() {
       {/* Floating Action Bar */}
       {selectedIds.length > 0 && (
         <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 flex items-center justify-between shadow-sm animate-in slide-in-from-top-2">
-          <span className="text-sm font-bold text-indigo-800">
+          <span className="text-sm font-semibold text-indigo-800">
             {selectedIds.length} carta{selectedIds.length > 1 ? 's' : ''} selecionada{selectedIds.length > 1 ? 's' : ''}
           </span>
           <div className="flex items-center gap-2">
             <button
               onClick={handleBatchWhatsApp}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366] hover:bg-[#20ba56] text-white text-sm font-bold rounded-lg shadow-lg shadow-emerald-500/20 transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366] hover:bg-[#20ba56] text-white text-sm font-semibold rounded-lg shadow-lg shadow-emerald-500/20 transition-all"
             >
               <MessageSquare className="w-4 h-4" /> Enviar em Lote
             </button>
             <button
               onClick={handleBatchDelete}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-rose-500/20 transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-lg shadow-lg shadow-rose-500/20 transition-all"
             >
               <Trash2 className="w-4 h-4" /> Excluir em Lote
             </button>
@@ -314,13 +314,13 @@ export default function HistoricoCartas() {
       ) : filteredCartas.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-lg p-12 text-center max-w-xl mx-auto space-y-3">
           <FileText className="w-12 h-12 text-slate-350 mx-auto" />
-          <h2 className="text-base font-bold text-slate-800">Nenhum registro encontrado</h2>
+          <h2 className="text-base font-semibold text-slate-800">Nenhum registro encontrado</h2>
           <p className="text-xs text-slate-400">
             Nenhuma carta de apresentação foi gerada ainda ou nenhuma corresponde aos filtros aplicados.
           </p>
         </div>
       ) : (
-        <div className="bg-white border border-slate-200/80 rounded-lg shadow-sm overflow-hidden">
+        <div className="bg-white border border-line rounded-lg shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-150">
               <thead className="bg-slate-50">
@@ -339,10 +339,10 @@ export default function HistoricoCartas() {
                       }}
                     />
                   </th>
-                  <th scope="col" className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Promotor / Funcionário</th>
-                  <th scope="col" className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Gerado por</th>
-                  <th scope="col" className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Data de Geração</th>
-                  <th scope="col" className="px-6 py-3.5 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ações</th>
+                  <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500">Promotor / Funcionário</th>
+                  <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500">Gerado por</th>
+                  <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500">Data de Geração</th>
+                  <th scope="col" className="px-6 py-3.5 text-right text-xs font-semibold text-slate-500">Ações</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
@@ -369,17 +369,17 @@ export default function HistoricoCartas() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-650 font-bold shrink-0">
+                          <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-650 font-semibold shrink-0">
                             <FileText className="w-4.5 h-4.5" />
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-slate-800">{carta.nome_funcionario}</p>
-                            <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate max-w-xs">{extrairNomeExatoArquivo(carta.nome_arquivo)}</p>
+                            <p className="text-xs text-slate-400 font-mono mt-0.5 truncate max-w-xs">{extrairNomeExatoArquivo(carta.nome_arquivo)}</p>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold border ${
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${
                           extrairEmissor(carta.nome_arquivo).toLowerCase().includes('supervisor')
                             ? 'bg-amber-50 text-amber-700 border-amber-200'
                             : 'bg-indigo-50 text-indigo-750 border-indigo-200'
@@ -389,7 +389,7 @@ export default function HistoricoCartas() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
                         <div>{formatData}</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">{formatHora}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{formatHora}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end gap-1.5">

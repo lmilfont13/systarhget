@@ -8,15 +8,15 @@ export default function Downloads() {
   ];
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Downloads</h1>
+        <h1 className="text-[1.625rem] font-semibold tracking-tight text-ink">Downloads</h1>
         <p className="mt-1 text-sm text-gray-500">
           Histórico de documentos gerados recentemente. Eles ficam disponíveis no seu navegador.
         </p>
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm rounded-lg border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl border border-line overflow-hidden">
         <ul role="list" className="divide-y divide-gray-100">
           {documents.map((doc) => (
             <li key={doc.id} className="flex items-center justify-between gap-x-6 p-6 hover:bg-gray-50/50 transition-colors">
