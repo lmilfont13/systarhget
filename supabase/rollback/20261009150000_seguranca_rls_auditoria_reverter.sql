@@ -51,4 +51,16 @@ create policy "Permitir upload de carimbos" on storage.objects for insert with c
 create policy "Permitir upload de logos" on storage.objects for insert with check (bucket_id = 'logos');
 create policy "Permitir upload publico flreew_0" on storage.objects for insert with check (bucket_id = 'documents');
 
+-- Tabelas do bot e assinaturas pendentes
+drop policy if exists "systarhget_admin" on public.assinaturas_pendentes;
+create policy "Permitir atualização" on public.assinaturas_pendentes for update using (true);
+create policy "Permitir inserção" on public.assinaturas_pendentes for insert with check (true);
+create policy "Permitir leitura total para todos (para a rota pública)" on public.assinaturas_pendentes for select using (true);
+create policy "Usuários veem apenas seus bots" on public.bots for all
+  using (empresa_id in (select empresas.id from public.empresas where empresas.auth_user_id = auth.uid()));
+alter table public.bots disable row level security;
+alter table public.bot_auth disable row level security;
+alter table public.blocked_dates disable row level security;
+alter table public.solicitacoes_correios disable row level security;
+
 commit;

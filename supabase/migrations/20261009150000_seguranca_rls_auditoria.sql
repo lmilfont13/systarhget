@@ -15,12 +15,9 @@
 --   2. Crie a conta do portal em Authentication → Users (e-mail igual a
 --      VITE_PORTAL_EMAIL, padrão portal@systarhget.app) e rode o UPDATE do fim
 --      deste arquivo para marcá-la como promotor.
---   3. Confira o bot de cartas do Telegram: se ele acessa o banco com a chave
---      pública (anon), vai parar de funcionar. Ele deve usar a chave service_role,
---      que ignora RLS.
 --
--- Não toca nas tabelas de outros sistemas (bots, bot_auth, blocked_dates,
--- solicitacoes_correios, assinaturas_pendentes, carimbos).
+-- As tabelas do antigo bot do Telegram (desativado) e assinaturas_pendentes
+-- ficam fechadas: os dados são mantidos, mas ninguém lê pela chave pública.
 -- ============================================================================
 
 begin;
@@ -162,7 +159,33 @@ create policy "systarhget_arquivos_admin" on storage.objects
   with check (bucket_id in ('logos', 'carimbos', 'documents') and public.is_admin());
 
 -- ----------------------------------------------------------------------------
--- 8. Auditoria
+-- 8. Tabelas sem uso (bot do Telegram desativado) e assinaturas pendentes
+-- ----------------------------------------------------------------------------
+drop policy if exists "Usuários veem apenas seus bots" on public.bots;
+drop policy if exists "Permitir atualização" on public.assinaturas_pendentes;
+drop policy if exists "Permitir inserção" on public.assinaturas_pendentes;
+drop policy if exists "Permitir leitura total para todos (para a rota pública)" on public.assinaturas_pendentes;
+
+do $$
+declare
+  t text;
+begin
+  -- RLS ligada e nenhuma política: só a chave service_role (painel do Supabase) acessa
+  foreach t in array array['bots', 'bot_auth', 'blocked_dates', 'solicitacoes_correios'] loop
+    execute format('alter table public.%I enable row level security', t);
+  end loop;
+end $$;
+
+-- A tela de Templates limpa assinaturas ao excluir um template
+alter table public.assinaturas_pendentes enable row level security;
+drop policy if exists "systarhget_admin" on public.assinaturas_pendentes;
+create policy "systarhget_admin" on public.assinaturas_pendentes
+  for all to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+-- ----------------------------------------------------------------------------
+-- 9. Auditoria
 -- ----------------------------------------------------------------------------
 create table if not exists public.audit_log (
   id            bigint generated always as identity primary key,
