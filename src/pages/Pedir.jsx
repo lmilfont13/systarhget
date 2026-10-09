@@ -11,6 +11,7 @@ import {
   cartasDoPedido, acompanharPedidos, fraseDoPedido,
 } from '../lib/pedidos';
 import LinhaEtapas from '../components/LinhaEtapas';
+import MesaDoAgente from '../components/MesaDoAgente';
 
 const fmtData = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -96,7 +97,7 @@ function Acesso() {
 }
 
 // ------------------------------------------------------------- um pedido
-function CartaoPedido({ pedido }) {
+function CartaoPedido({ pedido, destaque }) {
   const st = STATUS_PEDIDO[pedido.status] || STATUS_PEDIDO.recebida;
   const [cartas, setCartas] = useState(null);
 
@@ -115,6 +116,7 @@ function CartaoPedido({ pedido }) {
       </div>
       <p className="mt-2 text-xs text-slate-400">Enviado em {fmtData.format(new Date(pedido.criado_em))}</p>
       <div className="mt-4 rounded-xl bg-slate-50 px-2 pb-2 pt-3">
+        {destaque && <MesaDoAgente key={pedido.status} status={pedido.status} className="mx-auto mb-2 max-w-sm" />}
         <LinhaEtapas pedido={pedido} />
         <p className="mt-2 text-center text-xs text-slate-500">{fraseDoPedido(pedido)}</p>
       </div>
@@ -204,7 +206,7 @@ function AreaSupervisor({ user }) {
             Seus pedidos aparecem aqui, com o andamento de cada um.
           </p>
         ) : (
-          <ul className="space-y-3">{pedidos.map((p) => <CartaoPedido key={p.id} pedido={p} />)}</ul>
+          <ul className="space-y-3">{pedidos.map((p, i) => <CartaoPedido key={p.id} pedido={p} destaque={i === 0} />)}</ul>
         )}
       </section>
     </div>
