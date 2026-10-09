@@ -47,7 +47,6 @@ async function perguntar(sistema: string, conteudo: string): Promise<Record<stri
     body: JSON.stringify({
       model: MODELO,
       max_tokens: 2000,
-      temperature: 0,
       system: sistema,
       messages: [{ role: 'user', content: conteudo }],
     }),
