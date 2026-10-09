@@ -8,8 +8,9 @@ import { MarcaDesenhada } from '../components/Lacre';
 import { cn } from '../lib/cn';
 import {
   STATUS_PEDIDO, cadastrarSolicitante, enviarPedido, meuPerfil, meusPedidos,
-  cartasDoPedido, acompanharPedidos,
+  cartasDoPedido, acompanharPedidos, fraseDoPedido,
 } from '../lib/pedidos';
+import LinhaEtapas from '../components/LinhaEtapas';
 
 const fmtData = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -113,6 +114,10 @@ function CartaoPedido({ pedido }) {
         <span className={cn('shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium', TONS[st.tom])}>{st.rotulo}</span>
       </div>
       <p className="mt-2 text-xs text-slate-400">Enviado em {fmtData.format(new Date(pedido.criado_em))}</p>
+      <div className="mt-4 rounded-xl bg-slate-50 px-2 pb-2 pt-3">
+        <LinhaEtapas pedido={pedido} />
+        <p className="mt-2 text-center text-xs text-slate-500">{fraseDoPedido(pedido)}</p>
+      </div>
       {pedido.status === 'recusada' && pedido.motivo_recusa && (
         <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Motivo: {pedido.motivo_recusa}</p>
       )}

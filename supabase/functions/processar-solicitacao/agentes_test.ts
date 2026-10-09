@@ -43,6 +43,21 @@ Deno.test('resolve promotor e loja escolhidos pela IA', async () => {
   assertEquals(item.confianca, 'alta');
 });
 
+Deno.test('data pedida vira data da carta; data inválida é ignorada', async () => {
+  respostasIA(
+    { itens: [
+      { trecho: 'a', promotor: 'adailton', loja: 'atacadao', data: '2026-10-10', data_texto: 'amanhã' },
+      { trecho: 'b', promotor: 'adailton', loja: 'atacadao', data: 'amanhã' },
+    ] },
+    { escolhas: [{ caso: 0, id: 'f1', confianca: 'alta' }, { caso: 1, id: 'f1', confianca: 'alta' }] },
+    { escolhas: [{ caso: 0, id: 'l1', confianca: 'alta' }, { caso: 1, id: 'l1', confianca: 'alta' }] },
+  );
+  const [a, b] = await resolverPedido(dbFalso(), 'x');
+  assertEquals(a.data_carta, '2026-10-10');
+  assertEquals(a.data_mencionada, 'amanhã');
+  assertEquals(b.data_carta, '');
+});
+
 Deno.test('id inventado pela IA é descartado e o item vai para revisão', async () => {
   respostasIA(
     { itens: [{ trecho: 'x', promotor: 'adailton', loja: 'atacadao', cpf: '', cargo: '', observacao: '' }] },
