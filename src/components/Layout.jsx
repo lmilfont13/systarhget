@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
-import { Menu, X, Search, FilePlus2, PanelLeftClose, PanelLeftOpen, ExternalLink } from 'lucide-react';
+import { Menu, X, Search, FilePlus2, PanelLeftClose, PanelLeftOpen, ExternalLink, LogOut } from 'lucide-react';
+import { useAuth, displayName } from '../lib/auth';
 import { NAV_GROUPS, findNavItem } from '../lib/navigation';
 import { cn } from '../lib/cn';
 import { BrandMark, PageSkeleton } from './ui';
@@ -81,9 +82,12 @@ function SidebarNav({ collapsed, onNavigate }) {
 }
 
 function SidebarFooter({ collapsed }) {
+  const { user, signOut } = useAuth();
   const version = typeof __APP_VERSION_DATE__ !== 'undefined' ? __APP_VERSION_DATE__ : '';
+  const email = displayName(user);
+  const initial = (email.charAt(0) || '?').toUpperCase();
   return (
-    <div className="border-t border-white/[0.08] p-3">
+    <div className="space-y-1 border-t border-white/[0.08] p-3">
       <Link
         to="/promotores"
         className={cn(
@@ -95,11 +99,25 @@ function SidebarFooter({ collapsed }) {
         <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
         {!collapsed && <span>Portal do promotor</span>}
       </Link>
-      {!collapsed && version && (
-        <p className="mt-2 px-3 text-[11px] text-white/30" title="Data da última atualização do sistema">
-          Atualizado em {version}
-        </p>
-      )}
+      <div className={cn('flex items-center gap-3 rounded-lg px-3 py-2', collapsed && 'flex-col gap-2 px-0')}>
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-700 text-xs font-semibold text-white" title={email} aria-hidden="true">
+          {initial}
+        </span>
+        {!collapsed && (
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm text-white/80" title={email}>{email}</p>
+            {version && <p className="truncate text-[11px] text-white/30" title="Data da última atualização do sistema">Versão de {version}</p>}
+          </div>
+        )}
+        <button
+          onClick={signOut}
+          className="rounded-lg p-1.5 text-white/50 hover:bg-white/10 hover:text-white"
+          aria-label="Sair"
+          title="Sair"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

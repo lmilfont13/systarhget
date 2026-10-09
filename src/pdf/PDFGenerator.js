@@ -104,7 +104,9 @@ export class PDFGenerator {
             y = rect.y;
             x = rect.x;
           }
-        } catch (e) { }
+        } catch {
+          // campo sem posição definida: mantém a ordem padrão
+        }
   
         return {
           name: field.getName(),
@@ -118,7 +120,7 @@ export class PDFGenerator {
       });
     } catch (error) {
       console.error("Erro ao extrair campos do PDF:", error);
-      throw new Error("Não foi possível ler os campos do PDF. O arquivo pode estar corrompido ou protegido.");
+      throw new Error("Não foi possível ler os campos do PDF. O arquivo pode estar corrompido ou protegido.", { cause: error });
     }
   }
 
@@ -263,7 +265,7 @@ export class PDFGenerator {
                 try {
                   // Tenta carregar como PNG primeiro
                   image = await pdfDoc.embedPng(imageBytes);
-                } catch (e) {
+                } catch {
                   // Se falhar, tenta como JPG
                   image = await pdfDoc.embedJpg(imageBytes);
                 }
@@ -356,8 +358,6 @@ export class PDFGenerator {
       if (data._expensesArray && data._expensesArray.length > 0) {
          try {
            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-           const pages = pdfDoc.getPages();
-           let page = pages[0];
            
            let baseDescRect = null;
            let baseValRect = null;
@@ -386,7 +386,7 @@ export class PDFGenerator {
                            // Expandindo a área de limpeza para capturar campos logo acima da primeira linha
                            if (y > 400 && y < 640) {
                                if (field instanceof PDFTextField) {
-                                   try { field.setText(''); field.updateAppearances(font); } catch(e) {}
+                                   try { field.setText(''); field.updateAppearances(font); } catch { /* campo somente leitura: ignora */ }
                                }
                            }
                        }
@@ -497,7 +497,7 @@ export class PDFGenerator {
       
     } catch (error) {
       console.error("Erro na geração do PDF:", error);
-      throw new Error("Falha ao gerar o documento PDF final. Verifique os dados fornecidos.");
+      throw new Error("Falha ao gerar o documento PDF final. Verifique os dados fornecidos.", { cause: error });
     }
   }
 
@@ -518,7 +518,7 @@ export class PDFGenerator {
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
       .replace(/&nbsp;/g, ' ')
-      .replace(/[^\x20-\x7E\xA0-\xFF\n<>\/a-zA-Z]/g, ''); 
+      .replace(/[^\x20-\x7E\xA0-\xFF\n<>/a-zA-Z]/g, ''); 
     
     const rawLines = cleanContent.split('\n');
 
@@ -618,7 +618,7 @@ export class PDFGenerator {
 
         try {
           return await pdfDoc.embedPng(imageBytes);
-        } catch (e) {
+        } catch {
           try {
             return await pdfDoc.embedJpg(imageBytes);
           } catch (e2) {
@@ -831,8 +831,6 @@ export class PDFGenerator {
         });
       }
       
-      // Atualiza o cursorY para ficar abaixo dos carimbos (caso tenhamos mais elementos)
-      cursorY = baseStampY;
     }
 
     // 4. Rodapé Dinâmico

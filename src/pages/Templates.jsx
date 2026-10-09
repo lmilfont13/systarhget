@@ -194,7 +194,7 @@ export default function Templates() {
       setTemplates(prev => prev.map(t => t.id === mappingModal.template.id ? mappingModal.template : t));
       toast.success('Mapeamento salvo com sucesso!');
       setMappingModal({ isOpen: false, template: null, pdfUrl: null });
-    } catch (error) {
+    } catch {
       toast.error('Erro ao salvar mapeamento.');
     }
   };
@@ -231,7 +231,7 @@ export default function Templates() {
                     fields: [] 
                   } 
                 });
-              } catch (e) {
+              } catch {
                 toast.error('Erro ao criar template.');
               }
             }}

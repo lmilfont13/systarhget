@@ -1,67 +1,21 @@
 import { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  FileText, Users, Building2, Search, BarChart3, PieChart,
+  FileText, Users, Building2, Search, BarChart3, CalendarDays,
   FileSignature, ArrowUpRight, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { cn } from '../lib/cn';
 import { PageHeader, Panel, Button, Skeleton, EmptyState } from '../components/ui';
 
-// Detecta gênero pelo nome (heurística por terminação)
-function detectarGenero(nome) {
-  if (!nome) return 'indefinido';
-  const parts = nome.trim().toUpperCase().split(' ');
-  const primeiro = parts[0];
-
-  const nomesF = new Set([
-    'MARIA', 'ANA', 'PATRICIA', 'FERNANDA', 'JULIANA', 'CAMILA', 'AMANDA',
-    'JESSICA', 'LETICIA', 'ALINE', 'BEATRIZ', 'RAFAELA', 'GABRIELA', 'MARIANA',
-    'BRUNA', 'LARISSA', 'VANESSA', 'PRISCILA', 'RENATA', 'TATIANA', 'SIMONE',
-    'CLAUDIA', 'CRISTIANE', 'CRISTINA', 'LUCIANA', 'ADRIANA', 'ANDREIA', 'DANIELLE',
-    'DANIELA', 'ELIANE', 'ELISANGELA', 'EVELINE', 'FABIANA', 'FRANCIELE', 'FRANCIELLE',
-    'GLEICIANE', 'GRAZIELA', 'ISABELA', 'JANAINA', 'JAQUELINE', 'JOSIANE', 'KARINA',
-    'KATIANE', 'KEILA', 'LEILA', 'LIDIANE', 'LUANA', 'LUCIENE', 'LUISA', 'LUZIA',
-    'MAIRA', 'MARCIA', 'MARGARETE', 'MARLENE', 'MONIQUE', 'NADIA', 'NATALIA', 'NAYARA',
-    'NILZA', 'NOEMIA', 'RAQUEL', 'REGIANE', 'REJANE', 'ROSANA', 'ROSANGELA', 'ROSELI',
-    'ROSEMEIRE', 'ROZANGELA', 'SABRINA', 'SAMARA', 'SANDRA', 'SHEILA', 'SILVIA', 'SONIA',
-    'SUELI', 'SUZANA', 'TAMIRES', 'TANIA', 'THAIS', 'THAYSSA', 'VALDIRENE', 'VALERIA',
-    'VERA', 'VIVIANE', 'WANESSA', 'WELIDA', 'YASMIN', 'ZILDA', 'ALICE', 'ALICIA',
-    'CRISLEANE', 'GLEICIELLY', 'CINTIA', 'EDILAINE', 'EDNA', 'ELIETE', 'ELISABETE',
-    'ELZA', 'EVELISE', 'FATIMA', 'GENILDA', 'GILMARA', 'GLAUCIA', 'GREICE', 'HORTENCIA',
-    'INES', 'IRACEMA', 'IRENE', 'IVONE', 'IZABEL', 'JANE', 'JANIA', 'JOANA', 'JOELMA',
-    'JOYCE', 'KAROLINE', 'KATIA', 'LAIS', 'LAYLA', 'LEIDIANE', 'LEONARDA', 'LILIAN',
-    'MADALENA', 'MAIANE', 'MAISA', 'MARCELA', 'MILENA', 'MIRIAM', 'MIRIAN'
-  ]);
-
-  const nomesM = new Set([
-    'JOAO', 'JOSE', 'PEDRO', 'PAULO', 'CARLOS', 'LUIZ', 'LUIS', 'ANTONIO', 'FRANCISCO',
-    'MARCOS', 'LUCAS', 'GABRIEL', 'RAFAEL', 'DANIEL', 'FELIPE', 'RODRIGO', 'ALEXANDRE',
-    'ANDERSON', 'ANDRE', 'CAIO', 'CLEITON', 'CLEBER', 'CRISTIANO',
-    'DIEGO', 'DIMAS', 'EDSON', 'EDUARDO', 'ELIAS', 'ELVIS', 'EMERSON', 'ERICK',
-    'FABIO', 'FERNANDO', 'FLAVIO', 'GEOVANE', 'GILBERTO', 'GIOVANE', 'GUILHERME',
-    'GUSTAVO', 'HEITOR', 'HENRIQUE', 'HUGO', 'IGOR', 'ISAAC', 'ISRAEL', 'IVAN',
-    'JEAN', 'JEFFERSON', 'JONATHAN', 'JORGE', 'JULIO', 'LEANDRO', 'LEONARDO',
-    'LUAN', 'MARCELO', 'MARCIO', 'MARIO', 'MATEUS', 'MATHEUS', 'MAURO',
-    'MAXWELL', 'MICHEL', 'MIGUEL', 'NILTON', 'OSCAR', 'REGINALDO',
-    'REINALDO', 'RENATO', 'ROBERTO', 'ROGERIO', 'RONALDO', 'RUAN', 'SAMUEL', 'SERGIO',
-    'SILVIO', 'TIAGO', 'VAGNER', 'VALDO', 'VINICIUS', 'VITOR', 'WAGNER', 'WALTER',
-    'WELLINGTON', 'WESLEY', 'WILLIAM', 'WILLIAN', 'WILSON', 'YAGO', 'JONAS', 'JOELMO',
-    'ADAILTON', 'ALISSON', 'ALEX', 'ALEXSANDRO', 'AMILTON', 'ADAO', 'AFONSO',
-    'AIRTON', 'ALAN', 'ALBERTO', 'ALDENIR', 'ALDERSON', 'ALEXANDRO', 'ALFREDO',
-    'ALLAN', 'ALMIR', 'ALTAIR', 'ALTAMIRO', 'ALTEMIRO', 'ALVES', 'AMANCIO'
-  ]);
-
-  if (nomesF.has(primeiro)) return 'F';
-  if (nomesM.has(primeiro)) return 'M';
-  if (primeiro.endsWith('A') && !primeiro.endsWith('CA') && !primeiro.endsWith('MA')) return 'F';
-  return 'M';
-}
 
 const normalizar = (str) =>
   String(str || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
 const fmt = new Intl.NumberFormat('pt-BR');
+const DIAS_GRAFICO = 30;
+const fmtDia = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
+const chaveDia = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 function Stat({ label, value, hint, loading, tone = 'default', to, className }) {
   const Comp = to ? Link : 'div';
@@ -121,6 +75,7 @@ export default function Dashboard() {
   const [totalDocsGerados, setTotalDocsGerados] = useState(0);
   const [funcionarios, setFuncionarios] = useState([]);
   const [empresas, setEmpresas] = useState([]);
+  const [cartasRecentes, setCartasRecentes] = useState([]);
   const [dashSearch, setDashSearch] = useState('');
   const deferredSearch = useDeferredValue(dashSearch);
 
@@ -128,19 +83,23 @@ export default function Dashboard() {
     let cancelled = false;
     async function loadData() {
       try {
-        const [fData, pData, eData, cData] = await Promise.all([
+        const inicio = new Date();
+        inicio.setDate(inicio.getDate() - DIAS_GRAFICO);
+        const [fData, pData, eData, cData, rData] = await Promise.all([
           supabase.from('funcionarios').select('id, nome, cargo, empresa_id, dados_extras, criado_em').order('criado_em', { ascending: false }),
-          supabase.from('pdf_templates').select('*', { count: 'exact', head: true }),
+          supabase.from('pdf_templates').select('id', { count: 'exact', head: true }),
           supabase.from('empresas').select('id, nome'),
-          supabase.from('cartas_geradas').select('*', { count: 'exact', head: true }),
+          supabase.from('cartas_geradas').select('id', { count: 'exact', head: true }),
+          supabase.from('cartas_geradas').select('criado_em').gte('criado_em', inicio.toISOString()),
         ]);
         if (cancelled) return;
-        const firstError = [fData, pData, eData, cData].find((r) => r.error)?.error;
+        const firstError = [fData, pData, eData, cData, rData].find((r) => r.error)?.error;
         if (firstError) throw firstError;
         setFuncionarios(fData.data || []);
         setTotalTemplates(pData.count || 0);
         setEmpresas(eData.data || []);
         setTotalDocsGerados(cData.count || 0);
+        setCartasRecentes(rData.data || []);
       } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
         if (!cancelled) setLoadError('Não foi possível carregar os dados. Verifique a conexão e recarregue a página.');
@@ -156,7 +115,7 @@ export default function Dashboard() {
   const enriched = useMemo(
     () =>
       funcionarios
-        .map((f) => ({ ...f, _genero: detectarGenero(f.nome), _busca: normalizar(`${f.nome} ${f.dados_extras?.CPF ?? ''} ${f.dados_extras?.Empresa ?? ''} ${f.cargo ?? ''}`) }))
+        .map((f) => ({ ...f, _busca: normalizar(`${f.nome} ${f.dados_extras?.CPF ?? ''} ${f.dados_extras?.Empresa ?? ''} ${f.cargo ?? ''}`) }))
         .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')),
     [funcionarios],
   );
@@ -164,10 +123,6 @@ export default function Dashboard() {
   const total = enriched.length;
   const semEmpresa = useMemo(() => enriched.filter((f) => !f.empresa_id).length, [enriched]);
 
-  const generos = useMemo(
-    () => enriched.reduce((acc, f) => { if (f._genero === 'F') acc.f++; else acc.m++; return acc; }, { m: 0, f: 0 }),
-    [enriched],
-  );
 
   const porEmpresa = useMemo(() => {
     const counts = new Map();
@@ -183,14 +138,30 @@ export default function Dashboard() {
     return q ? enriched.filter((f) => f._busca.includes(q)) : enriched;
   }, [enriched, deferredSearch]);
 
-  const pctM = total > 0 ? Math.round((generos.m / total) * 100) : 0;
-  const pctF = total > 0 ? 100 - pctM : 0;
+  const emissoes = useMemo(() => {
+    const dias = [];
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    for (let i = DIAS_GRAFICO - 1; i >= 0; i--) {
+      const d = new Date(hoje);
+      d.setDate(hoje.getDate() - i);
+      dias.push({ chave: chaveDia(d), data: d, total: 0 });
+    }
+    const porChave = new Map(dias.map((d) => [d.chave, d]));
+    for (const c of cartasRecentes) {
+      const dia = porChave.get(chaveDia(new Date(c.criado_em)));
+      if (dia) dia.total += 1;
+    }
+    return dias;
+  }, [cartasRecentes]);
+  const totalPeriodo = emissoes.reduce((acc, d) => acc + d.total, 0);
+  const maxDia = Math.max(1, ...emissoes.map((d) => d.total));
 
   return (
     <div>
       <PageHeader
         title="Painel"
-        description="Quem está cadastrado, onde está alocado e o que já foi emitido."
+        description="Quem está cadastrado, onde está alocado e o que foi emitido no último mês."
         actions={
           <Button as={Link} to="/funcionarios" variant="secondary">
             <Users className="h-4 w-4" aria-hidden="true" />
@@ -247,35 +218,44 @@ export default function Dashboard() {
           )}
         </Panel>
 
-        {/* Gênero */}
-        <Panel title="Distribuição por gênero" icon={PieChart} meta={!isLoading && `${fmt.format(total)} pessoas`} className="lg:col-span-2" bodyClassName="flex flex-col justify-center gap-6 p-5">
+        {/* Emissões */}
+        <Panel
+          title="Documentos emitidos"
+          icon={CalendarDays}
+          meta={!isLoading && `${fmt.format(totalPeriodo)} nos últimos ${DIAS_GRAFICO} dias`}
+          className="lg:col-span-2"
+          bodyClassName="flex flex-col justify-end p-5"
+        >
           {isLoading ? (
-            <Skeleton className="h-24" />
+            <Skeleton className="h-36" />
+          ) : totalPeriodo === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="Nenhum documento no período"
+              description="As cartas emitidas aparecem aqui, dia a dia."
+              action={<Button as={Link} to="/documentos" size="sm">Gerar documento</Button>}
+              className="py-6"
+            />
           ) : (
-            <>
-              <div className="flex h-2.5 w-full gap-1 overflow-hidden">
-                <div className="rounded-full bg-brand-600 transition-[width] duration-700" style={{ width: `${pctM}%` }} title={`Masculino: ${pctM}%`} />
-                <div className="rounded-full bg-signal-500 transition-[width] duration-700" style={{ width: `${pctF}%` }} title={`Feminino: ${pctF}%`} />
-              </div>
-              <dl className="grid grid-cols-2 gap-4">
-                {[
-                  { label: 'Masculino', value: generos.m, pct: pctM, dot: 'bg-brand-600' },
-                  { label: 'Feminino', value: generos.f, pct: pctF, dot: 'bg-signal-500' },
-                ].map((g) => (
-                  <div key={g.label}>
-                    <dt className="flex items-center gap-2 text-sm text-slate-500">
-                      <span className={cn('h-2 w-2 rounded-full', g.dot)} aria-hidden="true" />
-                      {g.label}
-                    </dt>
-                    <dd className="mt-1 text-2xl font-semibold tracking-tight tabular-nums text-ink">
-                      {fmt.format(g.value)}
-                      <span className="ml-2 text-sm font-normal text-slate-400">{g.pct}%</span>
-                    </dd>
+            <figure>
+              <div className="flex h-36 items-end gap-[3px]" role="img" aria-label={`${totalPeriodo} documentos emitidos nos últimos ${DIAS_GRAFICO} dias`}>
+                {emissoes.map((d) => (
+                  <div key={d.chave} className="group relative flex h-full flex-1 items-end">
+                    <div
+                      className={cn('w-full rounded-t-[3px] transition-colors', d.total > 0 ? 'bg-brand-500 group-hover:bg-brand-700' : 'bg-slate-100')}
+                      style={{ height: d.total > 0 ? `${Math.max(6, (d.total / maxDia) * 100)}%` : '3px' }}
+                    />
+                    <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs text-white group-hover:block">
+                      {fmtDia.format(d.data)}: {d.total}
+                    </span>
                   </div>
                 ))}
-              </dl>
-              <p className="text-xs text-slate-400">Estimado pelo primeiro nome.</p>
-            </>
+              </div>
+              <figcaption className="mt-2 flex justify-between text-xs text-slate-400">
+                <span>{fmtDia.format(emissoes[0].data)}</span>
+                <span>Hoje</span>
+              </figcaption>
+            </figure>
           )}
         </Panel>
       </div>

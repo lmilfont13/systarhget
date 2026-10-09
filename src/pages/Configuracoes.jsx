@@ -1,23 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Save } from 'lucide-react';
 import { toast } from 'sonner';
 
+const DEFAULTS = {
+  razaoSocial: '',
+  cnpj: '',
+  email: '',
+  telefone: '',
+  endereco: '',
+};
+
 export default function Configuracoes() {
-  const [formData, setFormData] = useState({
-    razaoSocial: '',
-    cnpj: '',
-    email: '',
-    telefone: '',
-    endereco: '',
-  });
-
-  useEffect(() => {
-    const savedData = localStorage.getItem('companySettings');
-    if (savedData) {
-      setFormData(JSON.parse(savedData));
+  const [formData, setFormData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('companySettings');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // configurações salvas inválidas: começa em branco
     }
-  }, []);
-
+    return DEFAULTS;
+  });
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));

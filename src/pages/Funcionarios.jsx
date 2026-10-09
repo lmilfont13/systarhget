@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Edit2, Loader2, X, Save, FileText, Copy, Search, Building2, Link2, BarChart3, Tag, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
-import { formatExcelDate } from '../lib/formatters';
 
 // Cores distintas para badges de empresas (empresa vinculada - CDC/POP/SPAR etc.)
 const EMPRESA_COLORS = [
@@ -136,7 +135,7 @@ export default function Funcionarios() {
       if (error) throw error;
       setFuncionarios(prev => prev.filter(f => f.id !== id));
       toast.success('Funcionário excluído.');
-    } catch (error) {
+    } catch {
       toast.error('Erro ao excluir funcionário.');
     }
   };

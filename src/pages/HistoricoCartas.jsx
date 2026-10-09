@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FileText, Search, Trash2, Eye, Download, MessageSquare, Loader2, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
+import { dataUrlToBlob, baixarArquivo, compartilharPdfs } from '../lib/cartas';
 
 export default function HistoricoCartas() {
   const [cartas, setCartas] = useState([]);
@@ -15,7 +16,8 @@ export default function HistoricoCartas() {
       setLoading(true);
       const { data, error } = await supabase
         .from('cartas_geradas')
-        .select('*')
+        // Sem url_storage: o PDF (base64) só é baixado quando alguém pede
+        .select('id, nome_arquivo, nome_funcionario, data_geracao, criado_em, empresa_id, funcionario_id, template_id')
         .order('data_geracao', { ascending: false });
 
       if (error) throw error;
@@ -32,6 +34,16 @@ export default function HistoricoCartas() {
     // eslint-disable-next-line
     fetchHistorico();
   }, []);
+
+  // Busca o conteúdo do PDF de uma carta sob demanda (com cache em memória)
+  const pdfCache = useRef(new Map());
+  const buscarPdf = async (id) => {
+    if (pdfCache.current.has(id)) return pdfCache.current.get(id);
+    const { data, error } = await supabase.from('cartas_geradas').select('url_storage').eq('id', id).single();
+    if (error) throw error;
+    pdfCache.current.set(id, data?.url_storage ?? null);
+    return data?.url_storage ?? null;
+  };
 
   const extrairEmissor = (nomeArquivo) => {
     if (!nomeArquivo) return 'Administrador';
@@ -98,72 +110,34 @@ export default function HistoricoCartas() {
     }
   };
 
-  const handleDownload = (base64Data, nomeArquivo) => {
-    try {
-      if (!base64Data) {
-        toast.error('Arquivo corrompido ou inexistente.');
-        return;
-      }
+  const pdfComoArquivo = async (carta) => {
+    const dataUrl = await buscarPdf(carta.id);
+    if (!dataUrl) throw new Error('Arquivo corrompido ou inexistente.');
+    return new File([dataUrlToBlob(dataUrl)], extrairNomeExatoArquivo(carta.nome_arquivo), { type: 'application/pdf' });
+  };
 
-      const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-      const binaryString = atob(cleanBase64);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
-      const blob = new Blob([bytes], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = extrairNomeExatoArquivo(nomeArquivo);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
+  const handleDownload = async (carta) => {
+    try {
+      toast.loading('Baixando documento...', { id: 'download-pdf' });
+      const file = await pdfComoArquivo(carta);
+      toast.dismiss('download-pdf');
+      baixarArquivo(file, file.name);
       toast.success('Download iniciado!');
     } catch (e) {
       console.error(e);
-      toast.error('Erro ao efetuar download do PDF.');
+      toast.dismiss('download-pdf');
+      toast.error(e.message?.includes('corrompido') ? e.message : 'Erro ao efetuar download do PDF.');
     }
   };
 
   const handleShareWhatsApp = async (carta) => {
     try {
       toast.loading('Preparando arquivo para envio...', { id: 'share-wa' });
-      const base64Data = carta.url_storage;
-      const res = await fetch(base64Data);
-      const blob = await res.blob();
-      const fileName = carta.nome_arquivo.endsWith('.pdf') ? carta.nome_arquivo : `${carta.nome_arquivo}.pdf`;
-      const file = new File([blob], fileName, { type: 'application/pdf' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        toast.dismiss('share-wa');
-        await navigator.share({
-          files: [file],
-          title: fileName,
-          text: `Olá, segue o documento de ${carta.nome_funcionario}`
-        });
-      } else {
-        const blobUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(blobUrl);
-
-        toast.dismiss('share-wa');
-        toast.success('Arquivo baixado! O WhatsApp Web será aberto para você anexar o PDF.', { duration: 5000 });
-        
-        setTimeout(() => {
-          const text = `Olá, estou enviando o documento de ${carta.nome_funcionario} em anexo.`;
-          const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-          window.open(whatsappUrl, '_blank');
-        }, 1500);
-      }
+      const file = await pdfComoArquivo(carta);
+      await compartilharPdfs([file], {
+        titulo: file.name,
+        texto: `Olá, estou enviando o documento de ${carta.nome_funcionario} em anexo.`,
+      });
     } catch (e) {
       console.error(e);
       toast.dismiss('share-wa');
@@ -173,60 +147,16 @@ export default function HistoricoCartas() {
 
   const handleBatchWhatsApp = async () => {
     if (selectedIds.length === 0) return;
-    
-    toast.loading(`Preparando ${selectedIds.length} arquivos para envio...`, { id: 'batch-wa' });
-    
+    toast.loading(`Preparando ${selectedIds.length} arquivos para envio...`, { id: 'share-wa' });
     try {
-      const filesToShare = [];
-      
-      for (const id of selectedIds) {
-        const carta = cartas.find(c => c.id === id);
-        if (carta) {
-          const res = await fetch(carta.url_storage);
-          const blob = await res.blob();
-          const fileName = carta.nome_arquivo.endsWith('.pdf') ? carta.nome_arquivo : `${carta.nome_arquivo}.pdf`;
-          filesToShare.push(new File([blob], fileName, { type: 'application/pdf' }));
-        }
-      }
-
-      if (navigator.canShare && navigator.canShare({ files: filesToShare })) {
-        toast.dismiss('batch-wa');
-        await navigator.share({
-          files: filesToShare,
-          title: 'Cartas em Lote',
-          text: `Olá, seguem os documentos em anexo.`
-        });
-        setSelectedIds([]); // limpa seleção
-      } else {
-        // Fallback for browsers that don't support native sharing
-        for (const file of filesToShare) {
-          const blobUrl = URL.createObjectURL(file);
-          const link = document.createElement('a');
-          link.href = blobUrl;
-          link.download = file.name;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(blobUrl);
-          await new Promise(r => setTimeout(r, 400));
-        }
-        
-        toast.dismiss('batch-wa');
-        toast.success('Arquivos baixados! O WhatsApp Web será aberto para você anexar todos de uma vez.', { duration: 5000 });
-        
-        setTimeout(() => {
-          const text = `Olá, seguem os documentos em anexo.`;
-          const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-          window.open(whatsappUrl, '_blank');
-          setSelectedIds([]);
-        }, 1500);
-      }
+      const selecionadas = cartas.filter((c) => selectedIds.includes(c.id));
+      const files = await Promise.all(selecionadas.map(pdfComoArquivo));
+      const ok = await compartilharPdfs(files, { titulo: 'Cartas em lote', texto: 'Olá, seguem os documentos em anexo.' });
+      if (ok) setSelectedIds([]);
     } catch (e) {
       console.error(e);
-      toast.dismiss('batch-wa');
-      if (e.name !== 'AbortError') {
-        toast.error('Erro ao compartilhar arquivos em lote.');
-      }
+      toast.dismiss('share-wa');
+      toast.error('Erro ao compartilhar arquivos em lote.');
     }
   };
 
@@ -408,7 +338,7 @@ export default function HistoricoCartas() {
                             <MessageSquare className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDownload(carta.url_storage, carta.nome_arquivo)}
+                            onClick={() => handleDownload(carta)}
                             className="p-2 text-slate-650 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
                             title="Baixar PDF"
                           >

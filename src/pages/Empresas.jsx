@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Building2, Plus, Trash2, Edit2, Loader2, X, Save, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
@@ -12,11 +12,7 @@ export default function Empresas() {
   const [editModal, setEditModal] = useState({ isOpen: false, data: null });
   const [imageErrors, setImageErrors] = useState({});
 
-  useEffect(() => {
-    fetchEmpresas();
-  }, []);
-
-  const fetchEmpresas = async () => {
+  async function fetchEmpresas() {
     try {
       const { data, error } = await supabase
         .from('empresas')
@@ -34,6 +30,11 @@ export default function Empresas() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronização intencional ao carregar/alterar seleção
+    fetchEmpresas();
+  }, []);
 
   const handleImageUpload = async (e, field) => {
     const file = e.target.files[0];
@@ -132,7 +133,7 @@ export default function Empresas() {
       if (error) throw error;
       setEmpresas(prev => prev.filter(e => e.id !== id));
       toast.success('Empresa excluída.');
-    } catch (error) {
+    } catch {
       toast.error('Erro ao excluir.');
     }
   };

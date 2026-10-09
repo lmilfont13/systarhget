@@ -1,38 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Wrench, CheckCircle2, Copy, Download, Edit2, Eye, FileEdit, FileText, Info, Loader2, Search, Trash2, Wand2, X, Plus, Users, Building2, Tag, Link2, Hash, Lock, MessageSquare } from 'lucide-react';
+import { CheckCircle2, Copy, Download, Eye, FileEdit, FileText, Info, Loader2, Search, Wand2, X, Lock, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { PDFGenerator } from '../pdf/PDFGenerator';
 import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
+import { cleanFooterText, generateUniqueId, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
 
-const cleanFooterText = (text) => {
-  if (!text) return '';
-  let clean = text.trim();
-  
-  if (clean.startsWith('{') || clean.startsWith('[')) {
-    try {
-      const obj = JSON.parse(clean);
-      if (typeof obj === 'object') {
-        return obj.endereco || obj.texto || Object.values(obj)[0] || clean;
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-  
-  if (clean.includes('", "') || clean.includes('","')) {
-    const match = clean.match(/^"([^"]+)"/);
-    if (match && match[1]) {
-      return match[1];
-    }
-  }
-  
-  clean = clean.replace(/^"+|"+$/g, '').trim();
-  return clean;
-};
 
-const generateUniqueId = () => Date.now().toString();
 
 export default function Documentos() {
   const location = useLocation();
@@ -53,10 +28,9 @@ export default function Documentos() {
   const [lojas, setLojas] = useState([]);
   const [manualLojas, setManualLojas] = useState({});
 
-  const [searchFuncionario, setSearchFuncionario] = useState('');
-  const [filterEmpresa, setFilterEmpresa] = useState('');
+  const [searchFuncionario] = useState('');
+  const [filterEmpresa] = useState('');
   const [optaContinuar, setOptaContinuar] = useState(true);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   // Estados adicionados para a refatoração
   const [showBranding, setShowBranding] = useState(false);
@@ -198,6 +172,7 @@ export default function Documentos() {
     if (selectedFuncionarios.length > 0 && funcionarios.length > 0) {
       const func = funcionarios.find(f => String(f.id) === String(selectedFuncionarios[0]));
       if (func && func.empresa_id) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronização intencional ao carregar/alterar seleção
         setSelectedEmpresa(String(func.empresa_id));
       }
     }
@@ -220,6 +195,7 @@ export default function Documentos() {
           const pop = empresas.find(e => (e.nome || '').toUpperCase().includes('POP'));
           if (pop && String(selectedEmpresa) !== String(pop.id)) {
             targetEmpId = pop.id;
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronização intencional ao carregar/alterar seleção
             setSelectedEmpresa(pop.id);
           }
         } else if (empNome.includes('SPAR')) {
@@ -311,7 +287,6 @@ export default function Documentos() {
         activeTemplate.fields?.forEach(field => {
           if (!field || !field.name) return;
           if (!(field.name in newIncluded)) newIncluded[field.name] = true;
-          const fieldNameLower = (field.name || '').toLowerCase();
           
           if (field.mappedTo) {
             switch (field.mappedTo) {
@@ -538,39 +513,12 @@ export default function Documentos() {
     try {
       const empresa = empresas.find(e => String(e.id) === String(selectedEmpresa));
       
-      const getBase64 = async (url) => {
-        if (!url) return null;
-        if (url.startsWith('data:')) return url;
-        try {
-          if (url.includes('.supabase.co/storage/v1/object/public/')) {
-            const parts = url.split('/public/')[1].split('/');
-            const bucket = parts[0];
-            const filePath = parts.slice(1).join('/');
-            const { data, error } = await supabase.storage.from(bucket).download(filePath);
-            if (!error && data) {
-              return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(data);
-              });
-            }
-          }
-          const res = await fetch(url);
-          const blob = await res.blob();
-          return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-          });
-        } catch (e) {
-          console.error('Falha ao obter imagem:', e);
-          return null;
-        }
-      };
+      const getBase64 = assetToDataUrl;
 
       const funcsToProcess = selectedFuncionarios.length > 0 ? selectedFuncionarios.map(id => funcionarios.find(f => String(f.id) === String(id))) : [null];
       
       let generatedCount = 0;
+      let falhasHistorico = 0;
       let lastGeneratedBlobUrl = null;
       let lastGeneratedName = null;
       let lastCartaId = null;
@@ -818,31 +766,15 @@ export default function Documentos() {
         const fileName = `${baseFileName}.pdf`;
         const blobUrl = URL.createObjectURL(blob);
 
-        const getBlobBase64 = (b) => new Promise(res => {
-          const reader = new FileReader();
-          reader.readAsDataURL(b);
-          reader.onloadend = () => res(reader.result);
+        const { id: cartaId, error: registroError } = await registrarCarta({
+          funcionarioId: currentFunc?.id,
+          templateId: activeTemplate?.id,
+          empresaId: activeEmpresa?.id,
+          nomeFuncionario: baseFileName.replace('CARTA ', ''),
+          nomeArquivo: `${baseFileName} - Admin`,
+          pdfBlob: blob,
         });
-        
-        const base64Data = await getBlobBase64(blob);
-
-        let cartaId = null;
-        try {
-          const nomeArq = `${baseFileName} - Admin`;
-          const { data: insertData, error: insertError } = await supabase.from('cartas_geradas').insert({
-            funcionario_id: currentFunc?.id || null,
-            template_id: activeTemplate?.id || null,
-            empresa_id: activeEmpresa?.id || null,
-            nome_funcionario: baseFileName.replace('CARTA ', ''),
-            nome_arquivo: nomeArq,
-            url_storage: base64Data,
-            data_geracao: new Date().toISOString()
-          }).select();
-          
-          if (!insertError && insertData && insertData.length > 0) cartaId = insertData[0].id;
-        } catch (dbErr) {
-          console.error('Erro ao salvar no histórico:', dbErr);
-        }
+        if (registroError) falhasHistorico++;
 
         // Trigger download automatically
         const link = document.createElement('a');
@@ -858,7 +790,9 @@ export default function Documentos() {
         lastCartaId = cartaId;
         generatedBatchFiles.push(new File([blob], fileName, { type: 'application/pdf' }));
       }
-      
+
+      if (falhasHistorico > 0) avisarFalhaHistorico();
+
       if (generatedCount === 1) {
         setGeneratedCartaId(lastCartaId);
         setGeneratedCartaName(lastGeneratedName);
@@ -1026,54 +960,9 @@ export default function Documentos() {
     }
   };
 
-  const handleCopyLink = () => {
-    if (!generatedCartaId) return;
-    const shareUrl = `${window.location.origin}/carta/${generatedCartaId}`;
-    navigator.clipboard.writeText(shareUrl);
-    toast.success('Link da carta copiado para a área de transferência!');
-  };
+  const handleCopyLink = () => copiarLinkCarta(generatedCartaId);
 
-  const handleWhatsAppShareDirect = async (blobUrl, cartaName) => {
-    if (!blobUrl) return;
-    try {
-      toast.loading('Preparando arquivo para envio...', { id: 'share-wa' });
-      const res = await fetch(blobUrl);
-      const blob = await res.blob();
-      const fileName = `CARTA ${cartaName.trim().toUpperCase()}.pdf`;
-      const file = new File([blob], fileName, { type: 'application/pdf' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        toast.dismiss('share-wa');
-        await navigator.share({
-          files: [file],
-          title: fileName,
-          text: `Olá, segue o documento de ${cartaName}`
-        });
-      } else {
-        const linkUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = linkUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(linkUrl);
-
-        toast.dismiss('share-wa');
-        toast.success('Arquivo baixado! O WhatsApp Web será aberto para você anexar o PDF.', { duration: 5000 });
-        
-        setTimeout(() => {
-          const text = `Olá, estou enviando o documento de ${cartaName} em anexo.`;
-          const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-          window.open(whatsappUrl, '_blank');
-        }, 1500);
-      }
-    } catch (e) {
-      console.error(e);
-      toast.dismiss('share-wa');
-      toast.error('Erro ao compartilhar arquivo pelo WhatsApp.');
-    }
-  };
+  const handleWhatsAppShareDirect = (blobUrl, cartaName) => compartilharCartaWhatsApp(blobUrl, cartaName);
 
   const handleWhatsAppShare = () => {
     handleWhatsAppShareDirect(generatedBlobUrl, generatedCartaName);
@@ -1857,7 +1746,7 @@ export default function Documentos() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
-                      {importItems.map((item, idx) => (
+                      {importItems.map((item) => (
                         <tr key={item.id} className="hover:bg-slate-50/50">
                           <td className="px-4 py-2">
                             <input 
@@ -2015,7 +1904,7 @@ export default function Documentos() {
             </div>
 
             <div className="p-6 overflow-y-auto space-y-6">
-              {selectedFuncionarios.map((funcId, idx) => {
+              {selectedFuncionarios.map((funcId) => {
                 const func = funcionarios.find(f => String(f.id) === String(funcId));
                 if (!func) return null;
                 return (
