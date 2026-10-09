@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { dataUrlToBlob } from './cartas';
 
 /**
  * Pedidos de carta feitos pelos supervisores (área /pedir) e a caixa de entrada do admin.
@@ -152,6 +153,19 @@ export async function definirTemplatePadrao(templateId) {
   if (!templateId) return;
   const { error: e2 } = await supabase.from('templates').update({ padrao_pedidos: true }).eq('id', templateId);
   if (e2) throw e2;
+}
+
+/** PDFs das cartas emitidas para o pedido, prontos para anexar (admin). */
+export async function arquivosDoPedido(id) {
+  const { data, error } = await supabase
+    .from('cartas_geradas')
+    .select('nome_arquivo, url_storage')
+    .eq('solicitacao_id', id)
+    .order('criado_em');
+  if (error) throw error;
+  return (data || [])
+    .filter((c) => c.url_storage)
+    .map((c) => new File([dataUrlToBlob(c.url_storage)], `${String(c.nome_arquivo || 'CARTA').replace(/[\\/:*?"<>|]/g, '-')}.pdf`, { type: 'application/pdf' }));
 }
 
 /** Link de WhatsApp com a mensagem para o supervisor. */
