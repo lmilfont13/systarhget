@@ -5,13 +5,16 @@ import { supabase } from './supabase';
 /**
  * Papéis:
  *  - 'promotor': conta usada no Portal do Promotor. Só lê cadastros e registra cartas.
+ *  - 'solicitante': supervisor que pede cartas pela área /pedir. Não vê o cadastro.
  *  - 'admin': qualquer outra conta. Acesso completo ao painel.
  * O papel vem de app_metadata.role, que só pode ser definido pelo painel do Supabase
  * (o usuário não consegue alterá-lo pelo navegador).
  */
 export function roleFromSession(session) {
   const role = session?.user?.app_metadata?.role;
-  return role === 'promotor' ? 'promotor' : session ? 'admin' : null;
+  if (!session) return null;
+  if (role === 'promotor' || role === 'solicitante') return role;
+  return 'admin';
 }
 
 /** Domínio usado para contas por nome de usuário (sem e-mail real), como TARHGET. */

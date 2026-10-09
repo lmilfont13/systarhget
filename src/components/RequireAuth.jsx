@@ -18,5 +18,6 @@ export default function RequireAuth({ role = 'admin', children }) {
   if (loading) return <FullScreenLoader />;
   if (!session) return <Navigate to="/login" replace state={{ from: location }} />;
   if (role === 'admin' && userRole === 'promotor') return <Navigate to="/promotores" replace />;
+  if (role === 'admin' && userRole === 'solicitante') return <Navigate to="/pedir" replace />;
   return children;
 }
