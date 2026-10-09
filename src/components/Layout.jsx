@@ -8,6 +8,7 @@ import { useAuth, displayName } from '../lib/auth';
 import { adiantarTela, adiantarTelasPrincipais } from '../lib/rotas';
 import { NAV_GROUPS, findNavItem } from '../lib/navigation';
 import { contarPendentes, acompanharPedidos } from '../lib/pedidos';
+import AvisoNovosPedidos from './AvisoNovosPedidos';
 import { cn } from '../lib/cn';
 import { BrandMark, Wordmark, PageSkeleton } from './ui';
 import CommandPalette from './CommandPalette';
@@ -309,6 +310,7 @@ export default function Layout() {
             >
               <Keyboard className="h-[18px] w-[18px]" />
             </button>
+            <AvisoNovosPedidos />
             <Link
               to="/documentos"
               onMouseEnter={() => adiantarTela('/documentos')}

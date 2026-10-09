@@ -83,3 +83,14 @@ Deno.test('resposta fora do formato vira erro legível', async () => {
   try { await resolverPedido(dbFalso(), 'carta pro adailton'); } catch (e) { erro = e; }
   assert(erro instanceof ErroAgente);
 });
+
+Deno.test('mensagem de WhatsApp resume cada carta com o selo de confiança', async () => {
+  const { mensagemDoPedido } = await import('./whatsapp.ts');
+  const msg = mensagemDoPedido('Marcos Lima', 'carta pro adailton no atacadao', [
+    { promotor: { nome: 'ADAILTON JOSE', mencionado: 'adailton' }, loja: { nome: 'Atacadão' }, confianca: 'alta' },
+    { promotor: { nome: '', mencionado: 'zé' }, loja: { nome: '' }, confianca: 'revisar' },
+  ] as never);
+  assert(msg.includes('Marcos Lima'));
+  assert(msg.includes('✅ ADAILTON JOSE → Atacadão'));
+  assert(msg.includes('🔴 ? (zé) → ?'));
+});
