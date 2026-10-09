@@ -36,6 +36,6 @@ export const NAV_GROUPS = [
 export const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items.map((i) => ({ ...i, group: g.label })));
 
 export function findNavItem(pathname) {
-  if (pathname === '/' || pathname === '') return NAV_ITEMS.find((i) => i.href === '/estoque');
+  if (pathname === '/' || pathname === '') return NAV_ITEMS.find((i) => i.href === '/dashboard');
   return NAV_ITEMS.find((i) => pathname === i.href || pathname.startsWith(`${i.href}/`));
 }

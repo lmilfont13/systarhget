@@ -1,35 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { FileEdit, CheckCircle2, Loader2, FileText, Eye, Info, Search, Lock, LogOut, MessageSquare, Copy, Download, X } from 'lucide-react';
+import { FileEdit, CheckCircle2, Loader2, FileText, Eye, Search, Lock, LogOut, MessageSquare, Copy, Download, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
+import { useAuth, PORTAL_EMAIL, authErrorMessage } from '../lib/auth';
+import { cleanFooterText, generateUniqueId, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
 import { PDFGenerator } from '../pdf/PDFGenerator';
 import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
 
-const cleanFooterText = (text) => {
-  if (!text) return '';
-  let clean = text.trim();
-  
-  if (clean.startsWith('{') || clean.startsWith('[')) {
-    try {
-      const obj = JSON.parse(clean);
-      if (typeof obj === 'object') {
-        return obj.endereco || obj.texto || Object.values(obj)[0] || clean;
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-  
-  if (clean.includes('", "') || clean.includes('","')) {
-    const match = clean.match(/^"([^"]+)"/);
-    if (match && match[1]) {
-      return match[1];
-    }
-  }
-  
-  clean = clean.replace(/^"+|"+$/g, '').trim();
-  return clean;
-};
 
 const generateCarimboImage = (signatureDataUrl, name) => {
   return new Promise((resolve) => {
@@ -90,13 +67,12 @@ const generateCarimboImage = (signatureDataUrl, name) => {
   });
 };
 
-const generateUniqueId = () => Date.now().toString();
 
 export default function PortalPromotor() {
+  const { session, loading: authLoading, signIn, signOut } = useAuth();
   const [password, setPassword] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    sessionStorage.getItem('promotor_authenticated') === 'true'
-  );
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const isAuthenticated = Boolean(session);
   
   const [templates, setTemplates] = useState([]);
   const [funcionarios, setFuncionarios] = useState([]);
@@ -262,24 +238,24 @@ export default function PortalPromotor() {
     };
   }, [isDrawing]);
 
-  // Senha do portal
-  const PORTAL_PASSWORD = '123';
-
-  // Verifica login
-  const handleLogin = (e) => {
+  // Login do portal: conta compartilhada de promotor no Supabase Auth.
+  // A senha não fica mais no código; é validada pelo servidor.
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (password === PORTAL_PASSWORD) {
-      setIsAuthenticated(true);
-      sessionStorage.setItem('promotor_authenticated', 'true');
+    if (!password) return;
+    setIsSigningIn(true);
+    try {
+      await signIn(PORTAL_EMAIL, password);
       toast.success('Acesso liberado ao Portal Colgate!');
-    } else {
-      toast.error('Senha incorreta. Tente novamente.');
+    } catch (err) {
+      toast.error(authErrorMessage(err));
+    } finally {
+      setIsSigningIn(false);
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    sessionStorage.removeItem('promotor_authenticated');
+  const handleLogout = async () => {
+    await signOut();
     setPassword('');
     setSelectedFuncionario('');
     setFormData({});
@@ -449,7 +425,6 @@ export default function PortalPromotor() {
         
         // eslint-disable-next-line
         setFormData(newData);
-        // eslint-disable-next-line
         setIncludedFields(newIncluded);
       } catch (err) {
         console.error(err);
@@ -523,36 +498,7 @@ export default function PortalPromotor() {
     try {
       let blob;
       
-      const getBase64 = async (url) => {
-        if (!url) return null;
-        if (url.startsWith('data:')) return url;
-        try {
-          if (url.includes('.supabase.co/storage/v1/object/public/')) {
-            const parts = url.split('/public/')[1].split('/');
-            const bucket = parts[0];
-            const filePath = parts.slice(1).join('/');
-            
-            const { data, error } = await supabase.storage.from(bucket).download(filePath);
-            if (!error && data) {
-              return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(data);
-              });
-            }
-          }
-          const res = await fetch(url);
-          const blob = await res.blob();
-          return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-          });
-        } catch (e) {
-          console.error(e);
-          return null;
-        }
-      };
+      const getBase64 = assetToDataUrl;
 
       const logoBase64 = await getBase64(activeEmpresa?.logo_url);
       const carimboBase64 = await getBase64(activeEmpresa?.carimbo_url);
@@ -646,41 +592,19 @@ export default function PortalPromotor() {
       }
 
       const nomePromotor = activeFuncionario?.nome || formData['Nome'] || 'documento';
-      const fileName = `CARTA ${nomePromotor.trim().toUpperCase()}.pdf`;
 
       const blobUrl = URL.createObjectURL(blob);
 
-      // Converte o blob em base64
-      const getBlobBase64 = (b) => {
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(b);
-          reader.onloadend = () => resolve(reader.result);
-        });
-      };
-      
-      const base64Data = await getBlobBase64(blob);
-
-      // Salva no banco de dados
-      let cartaId = null;
-      try {
-        const nomeArq = `CARTA ${nomePromotor.trim().toUpperCase()} - Supervisor ${String(supervisorName || '').trim()}`;
-        const { data: insertData, error: insertError } = await supabase.from('cartas_geradas').insert({
-          funcionario_id: activeFuncionario?.id || null,
-          template_id: activeTemplate?.id || null,
-          empresa_id: activeEmpresa?.id || null,
-          nome_funcionario: nomePromotor,
-          nome_arquivo: nomeArq,
-          url_storage: base64Data,
-          data_geracao: new Date().toISOString()
-        }).select();
-        
-        if (!insertError && insertData && insertData.length > 0) {
-          cartaId = insertData[0].id;
-        }
-      } catch (dbErr) {
-        console.error('Erro ao salvar no histórico:', dbErr);
-      }
+      // Registra no histórico (o PDF fica salvo para reenvio e para o link público)
+      const { id: cartaId, error: registroError } = await registrarCarta({
+        funcionarioId: activeFuncionario?.id,
+        templateId: activeTemplate?.id,
+        empresaId: activeEmpresa?.id,
+        nomeFuncionario: nomePromotor,
+        nomeArquivo: `CARTA ${nomePromotor.trim().toUpperCase()} - Supervisor ${String(supervisorName || '').trim()}`,
+        pdfBlob: blob,
+      });
+      if (registroError) avisarFalhaHistorico();
 
       setGeneratedCartaId(cartaId);
       setGeneratedCartaName(nomePromotor);
@@ -702,54 +626,9 @@ export default function PortalPromotor() {
     }
   };
 
-  const handleCopyLink = () => {
-    if (!generatedCartaId) return;
-    const shareUrl = `${window.location.origin}/carta/${generatedCartaId}`;
-    navigator.clipboard.writeText(shareUrl);
-    toast.success('Link da carta copiado para a área de transferência!');
-  };
+  const handleCopyLink = () => copiarLinkCarta(generatedCartaId);
 
-  const handleWhatsAppShareDirect = async (blobUrl, cartaName) => {
-    if (!blobUrl) return;
-    try {
-      toast.loading('Preparando arquivo para envio...', { id: 'share-wa' });
-      const res = await fetch(blobUrl);
-      const blob = await res.blob();
-      const fileName = `CARTA ${cartaName.trim().toUpperCase()}.pdf`;
-      const file = new File([blob], fileName, { type: 'application/pdf' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        toast.dismiss('share-wa');
-        await navigator.share({
-          files: [file],
-          title: fileName,
-          text: `Olá, segue o documento de ${cartaName}`
-        });
-      } else {
-        const linkUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = linkUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(linkUrl);
-
-        toast.dismiss('share-wa');
-        toast.success('Arquivo baixado! O WhatsApp Web será aberto para você anexar o PDF.', { duration: 5000 });
-        
-        setTimeout(() => {
-          const text = `Olá, estou enviando o documento de ${cartaName} em anexo.`;
-          const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-          window.open(whatsappUrl, '_blank');
-        }, 1500);
-      }
-    } catch (e) {
-      console.error(e);
-      toast.dismiss('share-wa');
-      toast.error('Erro ao compartilhar arquivo pelo WhatsApp.');
-    }
-  };
+  const handleWhatsAppShareDirect = (blobUrl, cartaName) => compartilharCartaWhatsApp(blobUrl, cartaName);
 
   const handleWhatsAppShare = () => {
     handleWhatsAppShareDirect(generatedBlobUrl, generatedCartaName);
@@ -768,6 +647,14 @@ export default function PortalPromotor() {
     });
     return Array.from(lojasMap.values()).sort();
   }, [empresas]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50/50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#e31b23]" />
+      </div>
+    );
+  }
 
   // Se não estiver autenticado, exibe a tela de senha
   if (!isAuthenticated) {
@@ -792,6 +679,7 @@ export default function PortalPromotor() {
               <input
                 type="password"
                 id="pass"
+                autoComplete="current-password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Digite a senha..."
@@ -801,8 +689,10 @@ export default function PortalPromotor() {
             </div>
             <button
               type="submit"
-              className="w-full bg-[#e31b23] hover:bg-[#c3121a] text-white rounded-lg py-3 text-sm font-bold shadow-lg shadow-red-500/20 active:scale-[0.98] transition-all"
+              disabled={isSigningIn}
+              className="w-full inline-flex items-center justify-center gap-2 bg-[#e31b23] hover:bg-[#c3121a] disabled:opacity-60 text-white rounded-lg py-3 text-sm font-bold shadow-lg shadow-red-500/20 active:scale-[0.98] transition-all"
             >
+              {isSigningIn && <Loader2 className="w-4 h-4 animate-spin" />}
               Acessar Portal
             </button>
           </form>

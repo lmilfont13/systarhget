@@ -18,8 +18,6 @@ import {
   Wrench, 
   Layers, 
   AlertTriangle, 
-  CheckCircle,
-  Briefcase,
   UserCheck
 } from 'lucide-react';
 
@@ -39,11 +37,7 @@ export default function Estoque() {
   const [itemModal, setItemModal] = useState({ isOpen: false, data: null });
   const [produtoModal, setProdutoModal] = useState({ isOpen: false, data: null });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  async function fetchData() {
     try {
       setIsLoading(true);
       const [resEstoque, resProdutos] = await Promise.all([
@@ -71,6 +65,11 @@ export default function Estoque() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronização intencional ao carregar/alterar seleção
+    fetchData();
+  }, []);
 
   // Upload e conversão de imagem para base64
   const handleImageUpload = (e, callback) => {
