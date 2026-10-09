@@ -12,9 +12,9 @@
 --
 -- ANTES DE APLICAR
 --   1. Publique o código com a tela de login (senão o painel fica sem dados).
---   2. Crie a conta do portal em Authentication → Users (e-mail igual a
---      VITE_PORTAL_EMAIL, padrão portal@systarhget.app) e rode o UPDATE do fim
---      deste arquivo para marcá-la como promotor.
+--   2. A conta padrão TARHGET (tarhget@systarhget.app, papel admin) já existe e
+--      é usada no painel e no portal. Para uma conta só de portal, crie outra e
+--      rode o UPDATE do fim deste arquivo para marcá-la como promotor.
 --
 -- As tabelas do antigo bot do Telegram (desativado) e assinaturas_pendentes
 -- ficam fechadas: os dados são mantidos, mas ninguém lê pela chave pública.
@@ -277,9 +277,8 @@ end $$;
 commit;
 
 -- ============================================================================
--- DEPOIS DE APLICAR: marque a conta do portal como promotor
--- (troque o e-mail se usar outro em VITE_PORTAL_EMAIL)
+-- OPCIONAL: marcar uma conta como promotor (só acessa o Portal)
 -- ============================================================================
 -- update auth.users
 --    set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role": "promotor"}'
---  where email = 'portal@systarhget.app';
+--  where email = 'supervisores@systarhget.app';

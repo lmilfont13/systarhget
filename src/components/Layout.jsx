@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import { Menu, X, Search, FilePlus2, PanelLeftClose, PanelLeftOpen, ExternalLink, LogOut } from 'lucide-react';
-import { useAuth } from '../lib/auth';
+import { useAuth, displayName } from '../lib/auth';
 import { NAV_GROUPS, findNavItem } from '../lib/navigation';
 import { cn } from '../lib/cn';
 import { BrandMark, PageSkeleton } from './ui';
@@ -84,7 +84,7 @@ function SidebarNav({ collapsed, onNavigate }) {
 function SidebarFooter({ collapsed }) {
   const { user, signOut } = useAuth();
   const version = typeof __APP_VERSION_DATE__ !== 'undefined' ? __APP_VERSION_DATE__ : '';
-  const email = user?.email ?? '';
+  const email = displayName(user);
   const initial = (email.charAt(0) || '?').toUpperCase();
   return (
     <div className="space-y-1 border-t border-white/[0.08] p-3">

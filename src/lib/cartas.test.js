@@ -69,3 +69,18 @@ describe('findNavItem (título da página no topo)', () => {
     expect(findNavItem('/nao-existe')).toBeUndefined();
   });
 });
+
+describe('toLoginEmail (login por usuário)', async () => {
+  const { toLoginEmail, displayName } = await import('./auth.jsx');
+  it('converte nome de usuário em e-mail interno', () => {
+    expect(toLoginEmail('TARHGET')).toBe('tarhget@systarhget.app');
+    expect(toLoginEmail('  Tarhget ')).toBe('tarhget@systarhget.app');
+  });
+  it('mantém e-mails reais', () => {
+    expect(toLoginEmail('Luciano@Empresa.com.br')).toBe('luciano@empresa.com.br');
+  });
+  it('mostra o nome de usuário no menu', () => {
+    expect(displayName({ email: 'tarhget@systarhget.app' })).toBe('TARHGET');
+    expect(displayName({ email: 'luciano@empresa.com.br' })).toBe('luciano@empresa.com.br');
+  });
+});

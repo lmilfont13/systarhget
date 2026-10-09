@@ -14,8 +14,24 @@ export function roleFromSession(session) {
   return role === 'promotor' ? 'promotor' : session ? 'admin' : null;
 }
 
-/** E-mail da conta compartilhada do portal. A senha fica só no Supabase. */
-export const PORTAL_EMAIL = import.meta.env.VITE_PORTAL_EMAIL || 'portal@systarhget.app';
+/** Domínio usado para contas por nome de usuário (sem e-mail real), como TARHGET. */
+export const USER_DOMAIN = 'systarhget.app';
+
+/** "TARHGET" vira "tarhget@systarhget.app"; e-mails passam como estão. */
+export function toLoginEmail(login) {
+  const value = String(login || '').trim().toLowerCase();
+  return value.includes('@') ? value : `${value}@${USER_DOMAIN}`;
+}
+
+/** Nome para exibir: usuário (TARHGET) para contas por nome, e-mail para as demais. */
+export function displayName(user) {
+  const email = user?.email || '';
+  if (email.endsWith(`@${USER_DOMAIN}`)) return email.split('@')[0].toUpperCase();
+  return email;
+}
+
+/** Conta usada pelo Portal do Promotor. A senha fica só no Supabase. */
+export const PORTAL_EMAIL = toLoginEmail(import.meta.env.VITE_PORTAL_EMAIL || 'TARHGET');
 
 const AuthContext = createContext(null);
 
@@ -43,7 +59,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signIn = useCallback(async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error } = await supabase.auth.signInWithPassword({ email: toLoginEmail(email), password });
     if (error) throw error;
   }, []);
 
@@ -52,6 +68,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   const sendPasswordReset = useCallback(async (email) => {
+    if (!String(email).includes('@')) {
+      throw new Error('Contas por nome de usuário não recebem e-mail. Peça ao administrador para trocar a senha.');
+    }
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/login`,
     });
@@ -91,7 +110,7 @@ export function useAuth() {
 /** Traduz os erros mais comuns do Supabase Auth para mensagens acionáveis. */
 export function authErrorMessage(error) {
   const msg = String(error?.message || '').toLowerCase();
-  if (msg.includes('invalid login credentials')) return 'E-mail ou senha incorretos.';
+  if (msg.includes('invalid login credentials')) return 'Usuário ou senha incorretos.';
   if (msg.includes('email not confirmed')) return 'Confirme o e-mail pelo link enviado antes de entrar.';
   if (msg.includes('rate limit') || msg.includes('too many')) return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
   if (msg.includes('password should be') || msg.includes('at least')) return 'A senha precisa ter pelo menos 8 caracteres.';

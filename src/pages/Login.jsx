@@ -53,7 +53,7 @@ export default function Login() {
   });
 
   let title = 'Entrar';
-  let subtitle = 'Use o e-mail e a senha da sua conta.';
+  let subtitle = 'Use seu usuário ou e-mail e a senha.';
   let body;
 
   if (recovering) {
@@ -100,7 +100,7 @@ export default function Login() {
   } else {
     body = (
       <form onSubmit={onLogin} className="space-y-4">
-        <Field label="E-mail" id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+        <Field label="Usuário ou e-mail" id="email" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         <Field label="Senha" id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         <ErrorText>{error}</ErrorText>
         <Button type="submit" className="h-10 w-full" disabled={busy || loading}>
