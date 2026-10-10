@@ -12,7 +12,13 @@ import { supabase } from './supabase';
  *    uma única vez por sessão.
  */
 
-const TTL_LISTAS = 60_000; // 1 minuto
+// TTL por tipo de dado: curto para o que muda o tempo todo (Solicitações já tem
+// Realtime, mas o cache evita rebuscar à toa), mais longo para cadastros que
+// ficam dias/semanas sem mudar. Quem salva algo já chama invalidar() na hora,
+// então um TTL maior aqui não atrasa quem fez a mudança — só economiza consultas
+// repetidas de quem só está navegando.
+const TTL_CURTO = 60_000; // 1 minuto — dados que mudam com frequência
+const TTL_LONGO = 600_000; // 10 minutos — cadastros estáveis (templates, empresas, lojas)
 const cache = new Map(); // chave -> { em, promessa }
 
 function emCache(chave, ttl, carregar) {
@@ -45,7 +51,7 @@ async function resultado(consulta) {
 // ---------------------------------------------------------------------------
 export function listarFuncionarios({ atualizar = false } = {}) {
   if (atualizar) invalidar('funcionarios');
-  return emCache('funcionarios', TTL_LISTAS, () =>
+  return emCache('funcionarios', TTL_CURTO, () =>
     resultado(supabase.from('funcionarios').select('*').order('criado_em', { ascending: false })),
   );
 }
@@ -58,7 +64,7 @@ const CAMPOS_EMPRESA_LEVES = 'id, nome, email_responsavel, criado_em, ativo, loj
 
 export function listarEmpresas({ atualizar = false } = {}) {
   if (atualizar) invalidar('empresas');
-  return emCache('empresas', TTL_LISTAS, () =>
+  return emCache('empresas', TTL_LONGO, () =>
     resultado(supabase.from('empresas').select(CAMPOS_EMPRESA_LEVES).order('criado_em', { ascending: false })),
   );
 }
@@ -88,14 +94,14 @@ export async function empresaCompleta(empresa) {
 // ---------------------------------------------------------------------------
 export function listarTemplatesPdf({ atualizar = false } = {}) {
   if (atualizar) invalidar('templates');
-  return emCache('templates:pdf', TTL_LISTAS, () =>
+  return emCache('templates:pdf', TTL_LONGO, () =>
     resultado(supabase.from('pdf_templates').select('id, name, fields, created_at').order('created_at', { ascending: false })),
   );
 }
 
 export function listarTemplatesTexto({ atualizar = false } = {}) {
   if (atualizar) invalidar('templates');
-  return emCache('templates:texto', TTL_LISTAS, () =>
+  return emCache('templates:texto', TTL_LONGO, () =>
     resultado(supabase.from('templates').select('*').order('criado_em', { ascending: false })),
   );
 }

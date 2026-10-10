@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
 import { AuthProvider } from './lib/auth';
+import { supabaseSolicitante } from './lib/supabase';
 import { PageSkeleton } from './components/ui';
 import { telas } from './lib/rotas';
 import SeloCartaGerada from './components/Lacre';
@@ -65,7 +66,14 @@ export default function App() {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
           <Route path="promotores" element={<Suspense fallback={<StandaloneFallback />}><PortalPromotor /></Suspense>} />
-          <Route path="pedir" element={<Suspense fallback={<StandaloneFallback />}><Pedir /></Suspense>} />
+          {/* Sessão própria: dá pra ficar logado aqui e no admin ao mesmo tempo, em abas diferentes */}
+          <Route path="pedir" element={
+            <Suspense fallback={<StandaloneFallback />}>
+              <AuthProvider client={supabaseSolicitante}>
+                <Pedir />
+              </AuthProvider>
+            </Suspense>
+          } />
           <Route path="carta/:id" element={<Suspense fallback={<StandaloneFallback />}><VisualizadorCarta /></Suspense>} />
         </Routes>
       </AuthProvider>
