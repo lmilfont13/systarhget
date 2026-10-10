@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { CheckCircle2, Copy, Download, Eye, FileEdit, FileText, Info, Loader2, Search, Wand2, X, Lock, MessageSquare } from 'lucide-react';
+import { CheckCircle2, Copy, Download, Eye, FileEdit, FileText, Info, Loader2, Search, X, Lock, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { celebrarCarta } from '../lib/celebrar';
 import { marcarPedidoAprovado } from '../lib/pedidos';
@@ -53,8 +53,6 @@ export default function Documentos() {
 
   // Estados para o compartilhamento de PDF e histórico
   const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importItems, setImportItems] = useState([]);
   const [generatedCartaId, setGeneratedCartaId] = useState(null);
   const [generatedCartaName, setGeneratedCartaName] = useState('');
   const [generatedBlobUrl, setGeneratedBlobUrl] = useState(null);
@@ -181,10 +179,6 @@ export default function Documentos() {
   const handleTemplateSelect = (templateId) => {
     setSelectedTemplate(templateId);
     setFormData({});
-    const tpl = templates.find(t => String(t.id) === String(templateId));
-    if ((tpl?.name || tpl?.nome || '').toLowerCase().includes('nota de d')) {
-      setIsImportModalOpen(true);
-    }
   };
 
   const activeTemplate = templates.find(t => String(t.id) === String(selectedTemplate));
@@ -889,120 +883,6 @@ export default function Documentos() {
     }
   };
 
-  const handleProcessImport = () => {
-    if (importItems.length === 0) {
-      toast.error('Cole os dados da planilha primeiro dando Ctrl+V na área indicada.');
-      return null;
-    }
-
-    const newFormData = { ...formData };
-    let totalValue = 0;
-    
-    const getKeys = (idxCount) => {
-      let dKey = idxCount === 1 ? 'DESCRIÇÃO DA DESPESA' : `DESCRIÇÃO DA DESPESA_${idxCount - 1}`;
-      let vKey  = idxCount === 1 ? 'VALOR' : `VALOR_${idxCount - 1}`;
-      return { descKey: dKey, valKey: vKey };
-    };
-
-    importItems.forEach((item, index) => {
-      const idxCount = index + 1;
-      const { descKey, valKey } = getKeys(idxCount);
-      
-      newFormData[descKey] = item.cdc && item.cdc !== item.descricao ? `${item.cdc}` : item.descricao;
-      newFormData[valKey]  = item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      newFormData[`descricao_${idxCount}`] = newFormData[descKey];
-      newFormData[`valor_${idxCount}`]     = newFormData[valKey];
-      totalValue += item.valor;
-    });
-    
-    newFormData.total = totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    newFormData.TOTAL = newFormData.total;
-
-
-    // Pass the raw array for coordinate-based table auto-mapping in PDFGenerator
-    newFormData._expensesArray = importItems.map(item => ({
-      descricao: item.cdc && item.cdc !== item.descricao ? `${item.cdc}` : item.descricao,
-      valor: item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    }));
-
-    setFormData(newFormData);
-    toast.success(`${importItems.length} despesas importadas e somadas! Total: R$ ${newFormData.total}`);
-    setIsImportModalOpen(false);
-    setImportItems([]);
-    return newFormData;
-  };
-
-  const handlePaste = (e) => {
-    e.preventDefault();
-    const clipboardData = e.clipboardData || window.clipboardData;
-    const pastedData = clipboardData.getData('text');
-    
-    if (!pastedData) return;
-
-    const rows = pastedData.split('\n');
-    const newItems = [];
-    
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i].trim();
-      if (!row) continue;
-      
-      const cols = row.split('\t');
-      let foundValue = false;
-      
-      if (cols.length >= 2) {
-        // Search backwards for the first column that looks like a value
-        for (let j = cols.length - 1; j >= 1; j--) {
-          const potentialValue = cols[j].trim();
-          const valueMatch = potentialValue.match(/^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})$/) || potentialValue.match(/^(?:R\$\s*)?(\d+,\d{2})$/);
-          
-          if (valueMatch) {
-             let desc = cols.slice(0, j).join(' ').trim();
-             desc = desc.replace(/\s*R\$$/i, '').trim();
-             const valor = parseFloat(valueMatch[1].replace(/\./g, '').replace(',', '.'));
-             newItems.push({ id: Date.now() + i, descricao: desc, valor, cdc: '' });
-             foundValue = true;
-             break;
-          }
-        }
-      }
-      
-      if (foundValue) continue;
-      
-      // Fallback: SAP block or string
-      const flatListMatch = row.match(/^(.*?)(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/i) 
-                         || row.match(/^(.*?)(?:R\$\s*)?(\d+,\d{2})\s*$/i);
-      
-      if (flatListMatch && flatListMatch[1].trim().length > 0) {
-         let desc = flatListMatch[1].trim();
-         desc = desc.replace(/\s*R\$$/i, '').trim();
-         const valorStr = flatListMatch[2];
-         const valor = parseFloat(valorStr.replace(/\./g, '').replace(',', '.'));
-         newItems.push({ id: Date.now() + i, descricao: desc, valor, cdc: '' });
-         continue;
-      }
-      
-      // Lookahead for next line if it's an SAP block split
-      if (i + 1 < rows.length) {
-         const nextLine = rows[i+1].trim();
-         const nextMatch = nextLine.match(/^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})$/) || nextLine.match(/^(?:R\$\s*)?(\d+,\d{2})$/);
-         if (nextMatch) {
-            let desc = row.replace(/\s*R\$$/i, '').trim();
-            const valor = parseFloat(nextMatch[1].replace(/\./g, '').replace(',', '.'));
-            newItems.push({ id: Date.now() + i, descricao: desc, valor, cdc: '' });
-            i++; 
-            continue;
-         }
-      }
-    }
-    
-    if (newItems.length > 0) {
-      setImportItems(prev => [...prev, ...newItems]);
-      toast.success(`${newItems.length} itens extraídos da planilha!`);
-    } else {
-      toast.error('Não conseguimos extrair as colunas. Verifique se copiou a Descrição e o Valor do Excel.');
-    }
-  };
-
   const handleCopyLink = () => copiarLinkCarta(generatedCartaId);
 
   const handleWhatsAppShareDirect = (blobUrl, cartaName) => compartilharCartaWhatsApp(blobUrl, cartaName);
@@ -1058,12 +938,6 @@ export default function Documentos() {
           <h1 className="text-[1.625rem] font-semibold tracking-tight text-ink">Gerador de Documentos</h1>
           <p className="text-sm text-slate-500 mt-1">Preencha templates de texto ou PDF e gere arquivos prontos para impressão.</p>
         </div>
-        <button 
-          onClick={() => setIsImportModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-5 py-2.5 shadow-md transition-all">
-          <Wand2 className="w-4 h-4" />
-          Importação Inteligente (Tabela SAP/TOTVS)
-        </button>
       </div>
 
       <div className="bg-white border border-line rounded-lg shadow-sm p-6 md:p-8 space-y-8">
@@ -1780,119 +1654,6 @@ export default function Documentos() {
       </div>
       {/* Modal de Compartilhamento Premium */}
       
-      {/* Modal de Importação SAP/TOTVS */}
-      {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center p-5 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600">
-                  <Wand2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-800">Importação SAP/TOTVS</h3>
-                  <p className="text-xs text-slate-500">Cole os dados da Nota de Débito</p>
-                </div>
-              </div>
-              <button onClick={() => setIsImportModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-50">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto space-y-4 max-h-[60vh]">
-              <p className="text-sm text-slate-600">Copie as linhas da sua planilha do Excel ou relatório SAP e clique na área abaixo, depois pressione <kbd className="px-2 py-1 bg-slate-100 rounded border font-mono text-xs text-slate-600">Ctrl + V</kbd></p>
-              
-              <div 
-                onPaste={handlePaste}
-                tabIndex="0"
-                className="w-full min-h-[100px] border-2 border-dashed border-purple-200 rounded-lg bg-purple-50/50 flex flex-col items-center justify-center text-center p-6 cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-purple-100/50 transition-all group"
-              >
-                <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 group-focus:scale-110 transition-transform">
-                  <Wand2 className="w-6 h-6 text-purple-500" />
-                </div>
-                <h4 className="font-semibold text-slate-700">Cole seus dados aqui</h4>
-                <p className="text-sm text-slate-500 mt-1">O sistema irá separar as colunas magicamente.</p>
-              </div>
-
-              {importItems.length > 0 && (
-                <div className="mt-6 border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold">Descrição da Despesa</th>
-                        <th className="px-4 py-3 font-semibold w-32">Valor (R$)</th>
-                        <th className="px-4 py-3 font-semibold w-12 text-center"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
-                      {importItems.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50/50">
-                          <td className="px-4 py-2">
-                            <input 
-                              type="text" 
-                              value={item.descricao} 
-                              onChange={(e) => setImportItems(prev => prev.map(p => p.id === item.id ? { ...p, descricao: e.target.value } : p))}
-                              className="w-full bg-transparent border-0 focus:ring-0 p-0 text-slate-700"
-                            />
-                          </td>
-                          <td className="px-4 py-2 font-mono">
-                            <input 
-                              type="text" 
-                              value={item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
-                              onChange={(e) => {
-                                 const raw = e.target.value.replace(/[^\d,-]/g, '').replace(',', '.');
-                                 const val = parseFloat(raw) || 0;
-                                 setImportItems(prev => prev.map(p => p.id === item.id ? { ...p, valor: val } : p));
-                              }}
-                              className="w-full bg-transparent border-0 focus:ring-0 p-0 text-slate-700 font-medium"
-                            />
-                          </td>
-                          <td className="px-4 py-2 text-center">
-                            <button 
-                              onClick={() => setImportItems(prev => prev.filter(p => p.id !== item.id))}
-                              className="text-slate-400 hover:text-red-500 transition-colors p-1"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-purple-50/50 border-t border-purple-100">
-                      <tr>
-                        <td className="px-4 py-3 font-semibold text-right text-purple-900">Total:</td>
-                        <td className="px-4 py-3 font-semibold font-mono text-purple-700">
-                           {importItems.reduce((acc, item) => acc + item.valor, 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </div>
-            
-            <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 mt-auto">
-              <button 
-                onClick={() => setIsImportModalOpen(false)}
-                className="px-5 py-2.5 rounded-lg text-slate-600 font-semibold hover:bg-slate-200 transition-colors text-sm"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={() => {
-                  handleProcessImport();
-                }}
-                className="px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold shadow-sm transition-all flex items-center gap-2 text-sm"
-              >
-                <Wand2 className="w-4 h-4" /> Processar Dados
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
       {shareModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 animate-in fade-in duration-200">
           <div className="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden p-6 md:p-8 space-y-6 border border-slate-100 animate-in zoom-in-95 duration-200 relative">
