@@ -205,3 +205,26 @@ export function fraseDoPedido(p) {
     default: return '';
   }
 }
+
+/**
+ * Quanto os agentes de IA já gastaram (R$), para o rodapé discreto da caixa de entrada.
+ * Devolve null se a tabela ainda não existir ou se não houver permissão.
+ */
+export async function custoDosAgentes() {
+  const { data, error } = await supabase
+    .from('uso_agentes')
+    .select('custo_brl, criado_em, solicitacao_id')
+    .order('criado_em', { ascending: true })
+    .limit(5000);
+  if (error) return null;
+  const linhas = data || [];
+  const inicioMes = new Date();
+  inicioMes.setDate(1);
+  inicioMes.setHours(0, 0, 0, 0);
+  return {
+    total: linhas.reduce((a, l) => a + Number(l.custo_brl || 0), 0),
+    noMes: linhas.filter((l) => new Date(l.criado_em) >= inicioMes).reduce((a, l) => a + Number(l.custo_brl || 0), 0),
+    pedidos: new Set(linhas.map((l) => l.solicitacao_id).filter(Boolean)).size,
+    desde: linhas[0]?.criado_em || null,
+  };
+}
