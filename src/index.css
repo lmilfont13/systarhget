@@ -195,6 +195,19 @@
 }
 .palavra-marca { animation: surgir 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 1.35s both; }
 
+/* Login: a frase da marca sobe revelada, linha por linha, como uma cortina erguendo */
+@keyframes linha-revela { from { transform: translateY(100%); } to { transform: none; } }
+.linha-marca { display: block; overflow: hidden; }
+.linha-marca > span {
+  display: block;
+  animation: linha-revela 0.85s cubic-bezier(0.22, 0.85, 0.24, 1) both;
+  animation-delay: var(--atraso, 0ms);
+}
+
+/* Login: o botão de entrar se revela por varredura (igual ao selo "carimbando"), não por fade */
+@keyframes botao-revela { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.botao-revela { animation: botao-revela 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
+
 /* Mesa do agente (área do supervisor) */
 .mesa-luz { fill: rgb(253 230 190 / 0.35); }
 .mesa-rotulo { font-size: 7px; fill: var(--color-slate-400); font-family: var(--font-sans); }
