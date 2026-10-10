@@ -35,8 +35,12 @@ async function mensagemDaFuncao(error, padrao) {
   return padrao;
 }
 
-export async function cadastrarSolicitante({ nome, whatsapp, usuario, senha }) {
-  const { data, error } = await supabase.functions.invoke('cadastrar-solicitante', {
+// As funções desta seção são usadas tanto pelo supervisor (/pedir) quanto pelo
+// admin (caixa de entrada). O supervisor usa um cliente Supabase com sessão
+// própria (ver lib/supabase.js), passado explicitamente aqui; o admin usa o
+// cliente padrão, que é o default quando "client" não é informado.
+export async function cadastrarSolicitante({ nome, whatsapp, usuario, senha }, client = supabase) {
+  const { data, error } = await client.functions.invoke('cadastrar-solicitante', {
     body: { nome, whatsapp, usuario, senha },
   });
   if (error) throw new Error(await mensagemDaFuncao(error, 'Não foi possível criar o cadastro. Tente de novo.'));
@@ -44,30 +48,30 @@ export async function cadastrarSolicitante({ nome, whatsapp, usuario, senha }) {
 }
 
 /** Coloca os agentes para trabalhar no pedido (não bloqueia a tela). */
-export async function processarPedido(id) {
-  const { data, error } = await supabase.functions.invoke('processar-solicitacao', { body: { id } });
+export async function processarPedido(id, client = supabase) {
+  const { data, error } = await client.functions.invoke('processar-solicitacao', { body: { id } });
   if (error) throw new Error(await mensagemDaFuncao(error, 'Os agentes não conseguiram processar agora.'));
   return data;
 }
 
-export async function enviarPedido(userId, texto) {
-  const { data, error } = await supabase
+export async function enviarPedido(userId, texto, client = supabase) {
+  const { data, error } = await client
     .from('solicitacoes')
     .insert({ solicitante_id: userId, texto: texto.trim() })
     .select('id')
     .single();
   if (error) throw error;
-  processarPedido(data.id).catch((e) => console.warn('Processamento ficará para o admin:', e));
+  processarPedido(data.id, client).catch((e) => console.warn('Processamento ficará para o admin:', e));
   return data.id;
 }
 
-export async function meuPerfil(userId) {
-  const { data } = await supabase.from('solicitantes').select('nome, usuario, whatsapp, ativo').eq('user_id', userId).maybeSingle();
+export async function meuPerfil(userId, client = supabase) {
+  const { data } = await client.from('solicitantes').select('nome, usuario, whatsapp, ativo').eq('user_id', userId).maybeSingle();
   return data;
 }
 
-export async function meusPedidos(userId) {
-  const { data, error } = await supabase
+export async function meusPedidos(userId, client = supabase) {
+  const { data, error } = await client
     .from('solicitacoes')
     .select('id, texto, status, motivo_recusa, criado_em, atualizado_em, aprovado_em')
     .eq('solicitante_id', userId)
@@ -77,22 +81,22 @@ export async function meusPedidos(userId) {
   return data || [];
 }
 
-export async function cartasDoPedido(id) {
-  const { data, error } = await supabase.rpc('cartas_da_solicitacao', { p_solicitacao: id });
+export async function cartasDoPedido(id, client = supabase) {
+  const { data, error } = await client.rpc('cartas_da_solicitacao', { p_solicitacao: id });
   if (error) throw error;
   return data || [];
 }
 
 /** Assina mudanças em pedidos (todos, ou só os do supervisor). Devolve a função de cancelar. */
-export function acompanharPedidos(aoMudar, userId) {
-  const canal = supabase
+export function acompanharPedidos(aoMudar, userId, client = supabase) {
+  const canal = client
     .channel(`pedidos-${userId || 'todos'}-${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', {
       event: '*', schema: 'public', table: 'solicitacoes',
       ...(userId ? { filter: `solicitante_id=eq.${userId}` } : {}),
     }, aoMudar)
     .subscribe();
-  return () => supabase.removeChannel(canal);
+  return () => client.removeChannel(canal);
 }
 
 // ---------------------------------------------------------------- admin

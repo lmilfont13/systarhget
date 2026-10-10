@@ -38,19 +38,24 @@ export const PORTAL_EMAIL = toLoginEmail(import.meta.env.VITE_PORTAL_EMAIL || 'T
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
+/**
+ * client: qual cliente Supabase usar (admin/portal, por padrão, ou o do supervisor
+ * em /pedir). Cada cliente guarda sua própria sessão, então as duas áreas podem
+ * ficar logadas ao mesmo tempo no mesmo navegador, em abas diferentes.
+ */
+export function AuthProvider({ children, client = supabase }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [recovering, setRecovering] = useState(false);
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
+    client.auth.getSession().then(({ data }) => {
       if (!active) return;
       setSession(data.session);
       setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+    const { data: sub } = client.auth.onAuthStateChange((event, next) => {
       setSession(next);
       if (event === 'PASSWORD_RECOVERY') setRecovering(true);
       if (event === 'SIGNED_OUT') setRecovering(false);
@@ -59,32 +64,32 @@ export function AuthProvider({ children }) {
       active = false;
       sub.subscription.unsubscribe();
     };
-  }, []);
+  }, [client]);
 
   const signIn = useCallback(async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email: toLoginEmail(email), password });
+    const { error } = await client.auth.signInWithPassword({ email: toLoginEmail(email), password });
     if (error) throw error;
-  }, []);
+  }, [client]);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-  }, []);
+    await client.auth.signOut();
+  }, [client]);
 
   const sendPasswordReset = useCallback(async (email) => {
     if (!String(email).includes('@')) {
       throw new Error('Contas por nome de usuário não recebem e-mail. Peça ao administrador para trocar a senha.');
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    const { error } = await client.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/login`,
     });
     if (error) throw error;
-  }, []);
+  }, [client]);
 
   const updatePassword = useCallback(async (password) => {
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await client.auth.updateUser({ password });
     if (error) throw error;
     setRecovering(false);
-  }, []);
+  }, [client]);
 
   const value = useMemo(
     () => ({
@@ -97,8 +102,9 @@ export function AuthProvider({ children }) {
       signOut,
       sendPasswordReset,
       updatePassword,
+      client,
     }),
-    [session, loading, recovering, signIn, signOut, sendPasswordReset, updatePassword],
+    [session, loading, recovering, signIn, signOut, sendPasswordReset, updatePassword, client],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

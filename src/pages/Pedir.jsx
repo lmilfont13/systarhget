@@ -37,7 +37,7 @@ function Campo({ label, id, dica, ...props }) {
 
 // ------------------------------------------------------------- entrar / cadastrar
 function Acesso() {
-  const { signIn } = useAuth();
+  const { signIn, client } = useAuth();
   const [modo, setModo] = useState('entrar');
   const [f, setF] = useState({ nome: '', whatsapp: '', usuario: '', senha: '' });
   const [ocupado, setOcupado] = useState(false);
@@ -51,7 +51,7 @@ function Acesso() {
     try {
       if (modo === 'cadastrar') {
         try {
-          await cadastrarSolicitante(f);
+          await cadastrarSolicitante(f, client);
         } catch (err) {
           setErro(err.message);
           return;
@@ -114,6 +114,7 @@ function MiniProgresso({ pedido }) {
 }
 
 function CartaoPedido({ pedido, aberto, onAlternar, agora }) {
+  const { client } = useAuth();
   const st = STATUS_PEDIDO[pedido.status] || STATUS_PEDIDO.recebida;
   const [cartas, setCartas] = useState(null);
   const idPainel = `pedido-${pedido.id}`;
@@ -121,9 +122,9 @@ function CartaoPedido({ pedido, aberto, onAlternar, agora }) {
   useEffect(() => {
     if (pedido.status !== 'aprovada' || !aberto) return;
     let ativo = true;
-    cartasDoPedido(pedido.id).then((c) => ativo && setCartas(c)).catch(() => ativo && setCartas([]));
+    cartasDoPedido(pedido.id, client).then((c) => ativo && setCartas(c)).catch(() => ativo && setCartas([]));
     return () => { ativo = false; };
-  }, [pedido.id, pedido.status, aberto]);
+  }, [pedido.id, pedido.status, aberto, client]);
 
   return (
     <li className={cn('overflow-hidden rounded-xl border bg-white transition-shadow', aberto ? 'border-line shadow-md' : 'border-line-soft hover:border-line')}>
@@ -212,6 +213,7 @@ function PainelSupervisor({ resumo }) {
 
 // ------------------------------------------------------------- área do supervisor
 function AreaSupervisor({ user }) {
+  const { client } = useAuth();
   const [perfil, setPerfil] = useState(null);
   const [pedidos, setPedidos] = useState(null);
   const [texto, setTexto] = useState('');
@@ -254,21 +256,21 @@ function AreaSupervisor({ user }) {
   }, [pedidos, verTodos, abertoId]);
 
   const recarregar = useCallback(() => {
-    meusPedidos(user.id).then(setPedidos).catch(() => setPedidos([]));
-  }, [user.id]);
+    meusPedidos(user.id, client).then(setPedidos).catch(() => setPedidos([]));
+  }, [user.id, client]);
 
   useEffect(() => {
-    meuPerfil(user.id).then(setPerfil);
+    meuPerfil(user.id, client).then(setPerfil);
     recarregar();
-    return acompanharPedidos(recarregar, user.id);
-  }, [user.id, recarregar]);
+    return acompanharPedidos(recarregar, user.id, client);
+  }, [user.id, client, recarregar]);
 
   const enviar = async (e) => {
     e.preventDefault();
     if (texto.trim().length < 3) return;
     setEnviando(true);
     try {
-      await enviarPedido(user.id, texto);
+      await enviarPedido(user.id, texto, client);
       setTexto('');
       setAbertoId(undefined);   // efeito vai abrir o pedido novo automaticamente
       setVerTodos(false);       // volta para a lista compacta
