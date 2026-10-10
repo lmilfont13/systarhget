@@ -14,6 +14,23 @@ import { cleanFooterText, assetToDataUrl, registrarCarta, avisarFalhaHistorico, 
 
 
 
+/** Prévia do carimbo único: assinatura do responsável por cima do carimbo da empresa. */
+function CarimboUnico({ empresa, className = '' }) {
+  if (!empresa?.carimbo_url) return <Info className="w-4 h-4 text-slate-300" />;
+  return (
+    <span className={`relative inline-flex items-center justify-center ${className}`}>
+      <img src={empresa.carimbo_url} className="h-full w-auto object-contain" alt="Carimbo da empresa" />
+      {empresa.assinatura_responsavel_url && (
+        <img
+          src={empresa.assinatura_responsavel_url}
+          className="absolute left-[2%] top-1/2 h-[90%] w-[85%] -translate-y-1/2 object-contain mix-blend-multiply"
+          alt="Assinatura do responsável"
+        />
+      )}
+    </span>
+  );
+}
+
 export default function Documentos() {
   const location = useLocation();
   const [templates, setTemplates] = useState([]);
@@ -701,7 +718,8 @@ export default function Documentos() {
             carimbo_url: funcCarimboBase64,
             carimbo_responsavel_url: funcCarimboRespBase64,
             assinatura_responsavel_url: funcAssinaturaRespBase64,
-            footer_text: cleanFooterText(funcEmpresaFinal?.rodape)
+            footer_text: cleanFooterText(funcEmpresaFinal?.rodape),
+            modelo_carimbo: funcEmpresaFinal?.modelo_carimbo,
           };
 
           blob = await PDFGenerator.generateFromText(content, assets);
@@ -1236,10 +1254,21 @@ export default function Documentos() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs text-slate-400 font-semibold text-center">Carimbo Responsável</p>
-                  <div className="h-12 w-full bg-white rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
-                    {activeEmpresa.carimbo_funcionario_url ? <img src={activeEmpresa.carimbo_funcionario_url} className="max-h-full max-w-full object-contain" /> : <Info className="w-4 h-4 text-slate-300" />}
-                  </div>
+                  {activeEmpresa.modelo_carimbo === 'separado' ? (
+                    <>
+                      <p className="text-xs text-slate-400 font-semibold text-center">Carimbo Responsável</p>
+                      <div className="h-12 w-full bg-white rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
+                        {activeEmpresa.carimbo_funcionario_url ? <img src={activeEmpresa.carimbo_funcionario_url} className="max-h-full max-w-full object-contain" /> : <Info className="w-4 h-4 text-slate-300" />}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-slate-400 font-semibold text-center">Carimbo único</p>
+                      <div className="h-12 w-full bg-white rounded-lg border border-slate-200/50 flex items-center justify-center p-1.5 overflow-hidden">
+                        <CarimboUnico empresa={activeEmpresa} className="h-full" />
+                      </div>
+                    </>
+                  )}
                 </div>
             </div>
           )}
@@ -1606,7 +1635,15 @@ export default function Documentos() {
                   />
 
                   {/* Live Stamps and Signature Preview inside paper */}
-                  {(activeEmpresa?.carimbo_url || activeEmpresa?.carimbo_funcionario_url) && (
+                  {activeEmpresa?.modelo_carimbo !== 'separado' && activeEmpresa?.carimbo_url && (
+                    <div className="flex justify-end border-t border-slate-100 pt-3 mt-4 pr-2">
+                      <div className="flex flex-col items-center gap-1.5">
+                        <CarimboUnico empresa={activeEmpresa} className="h-16" />
+                        <span className="text-[8px] text-slate-400 font-semibold">Carimbo único</span>
+                      </div>
+                    </div>
+                  )}
+                  {activeEmpresa?.modelo_carimbo === 'separado' && (activeEmpresa?.carimbo_url || activeEmpresa?.carimbo_funcionario_url) && (
                     <div className="flex justify-around items-center border-t border-slate-100 pt-3 mt-4">
                       {activeEmpresa.carimbo_url && (
                         <div className="flex flex-col items-center gap-1.5">

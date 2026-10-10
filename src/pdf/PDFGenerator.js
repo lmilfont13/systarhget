@@ -759,8 +759,10 @@ export class PDFGenerator {
     }
 
     // 3. Inserir Carimbos e Assinatura (Forçado na mesma página se houver espaço)
+    // Modelo "único": assinatura por cima do carimbo da empresa, num bloco só (sem o carimbo do responsável)
+    const carimboUnico = assets.modelo_carimbo === 'unico';
     const stampImg = await embedImage(assets.carimbo_url);
-    const stampRespImg = await embedImage(assets.carimbo_responsavel_url);
+    const stampRespImg = carimboUnico ? null : await embedImage(assets.carimbo_responsavel_url);
     const signatureImg = await embedImage(assets.assinatura_responsavel_url, true); // Passa true para remover fundo
     
     if (stampImg || stampRespImg || signatureImg) {
@@ -790,48 +792,67 @@ export class PDFGenerator {
         baseStampY = 75;
       }
 
-      if (stampRespImg) {
-        const dims = getScaledDims(stampRespImg);
-        page.drawImage(stampRespImg, {
-          x: margin,
-          y: baseStampY,
-          width: dims.width,
-          height: dims.height,
-        });
-      }
-
-      if (stampImg) {
+      if (carimboUnico && stampImg) {
+        // Carimbo da empresa no lugar de sempre (direita) e a assinatura cruzando por cima,
+        // como a rubrica feita à mão sobre o carimbo do CNPJ
         const dims = getScaledDims(stampImg);
-        page.drawImage(stampImg, {
-          x: width - margin - dims.width,
-          y: baseStampY,
-          width: dims.width,
-          height: dims.height,
-        });
-      }
-
-      if (signatureImg) {
-        const dims = getScaledDims(signatureImg);
-        
-        let targetX = (width / 2) - (dims.width / 2); // default center
-        let targetY = baseStampY;
-        
-        // Se existe o carimbo da Vanessa na esquerda, coloca a assinatura SOBRE ele!
-        if (stampRespImg) {
-           targetX = margin + 15; // Joga pra esquerda, no mesmo lugar do carimbo
-           targetY = baseStampY + 5;
-           dims.width = dims.width * 0.9; // Diminui um pouco para caber dentro
-           dims.height = dims.height * 0.9;
+        const stampX = width - margin - dims.width;
+        page.drawImage(stampImg, { x: stampX, y: baseStampY, width: dims.width, height: dims.height });
+        if (signatureImg) {
+          const proporcao = signatureImg.height / signatureImg.width;
+          let sigW = dims.width * 0.85;
+          let sigH = sigW * proporcao;
+          if (sigH > dims.height * 1.1) { sigH = dims.height * 1.1; sigW = sigH / proporcao; }
+          page.drawImage(signatureImg, {
+            x: stampX + (dims.width - sigW) / 2 - dims.width * 0.08,
+            y: baseStampY + (dims.height - sigH) / 2 + dims.height * 0.05,
+            width: sigW,
+            height: sigH,
+          });
         }
-        
-        page.drawImage(signatureImg, {
-          x: targetX,
-          y: targetY,
-          width: dims.width,
-          height: dims.height,
-        });
+      } else {
+        if (stampRespImg) {
+          const dims = getScaledDims(stampRespImg);
+          page.drawImage(stampRespImg, {
+            x: margin,
+            y: baseStampY,
+            width: dims.width,
+            height: dims.height,
+          });
+        }
+
+        if (stampImg) {
+          const dims = getScaledDims(stampImg);
+          page.drawImage(stampImg, {
+            x: width - margin - dims.width,
+            y: baseStampY,
+            width: dims.width,
+            height: dims.height,
+          });
+        }
+
+        if (signatureImg) {
+          const dims = getScaledDims(signatureImg);
+
+          let targetX = (width / 2) - (dims.width / 2); // default center
+          let targetY = baseStampY;
+
+          // Se existe o carimbo da Vanessa na esquerda, coloca a assinatura SOBRE ele!
+          if (stampRespImg) {
+             targetX = margin + 15; // Joga pra esquerda, no mesmo lugar do carimbo
+             targetY = baseStampY + 5;
+             dims.width = dims.width * 0.9; // Diminui um pouco para caber dentro
+             dims.height = dims.height * 0.9;
+          }
+
+          page.drawImage(signatureImg, {
+            x: targetX,
+            y: targetY,
+            width: dims.width,
+            height: dims.height,
+          });
+        }
       }
-      
     }
 
     // 4. Rodapé Dinâmico

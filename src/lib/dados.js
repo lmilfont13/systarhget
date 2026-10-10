@@ -54,7 +54,7 @@ export function listarFuncionarios({ atualizar = false } = {}) {
 // Empresas: lista sem imagens; imagens sob demanda
 // ---------------------------------------------------------------------------
 export const CAMPOS_IMAGEM_EMPRESA = ['logo_url', 'carimbo_url', 'carimbo_funcionario_url', 'assinatura_responsavel_url'];
-const CAMPOS_EMPRESA_LEVES = 'id, nome, email_responsavel, criado_em, ativo, lojas, rodape';
+const CAMPOS_EMPRESA_LEVES = 'id, nome, email_responsavel, criado_em, ativo, lojas, rodape, modelo_carimbo';
 
 export function listarEmpresas({ atualizar = false } = {}) {
   if (atualizar) invalidar('empresas');

@@ -81,13 +81,14 @@ export default function Empresas() {
         logo_url: '',
         carimbo_url: '',
         carimbo_funcionario_url: '',
-        assinatura_responsavel_url: ''
+        assinatura_responsavel_url: '',
+        modelo_carimbo: 'unico'
       }
     });
   };
 
   const saveEmpresa = async () => {
-    const { id, nome, email_responsavel, rodape, logo_url, carimbo_url, carimbo_funcionario_url, assinatura_responsavel_url } = editModal.data;
+    const { id, nome, email_responsavel, rodape, logo_url, carimbo_url, carimbo_funcionario_url, assinatura_responsavel_url, modelo_carimbo } = editModal.data;
     if (!nome) {
       toast.error('O nome da empresa é obrigatório.');
       return;
@@ -102,7 +103,8 @@ export default function Empresas() {
         logo_url, 
         carimbo_url, 
         carimbo_funcionario_url, 
-        assinatura_responsavel_url 
+        assinatura_responsavel_url,
+        modelo_carimbo: modelo_carimbo === 'separado' ? 'separado' : 'unico'
       };
 
       if (id) {
@@ -178,7 +180,12 @@ export default function Empresas() {
                     </div>
                   )}
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900">{empresa.nome}</h3>
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      {empresa.nome}
+                      <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 align-middle text-[11px] font-medium text-slate-500">
+                        {empresa.modelo_carimbo === 'separado' ? 'Carimbos separados' : 'Carimbo único'}
+                      </span>
+                    </h3>
                     <p className="text-xs text-gray-500">{(empresa.email_responsavel && !empresa.email_responsavel.includes('sem-email-')) ? empresa.email_responsavel : 'Sem e-mail'}</p>
                   </div>
                 </div>
@@ -221,6 +228,36 @@ export default function Empresas() {
                   <label className="block text-sm font-medium text-gray-700">Texto do Rodapé</label>
                   <textarea value={editModal.data.rodape || ''} onChange={e => setEditModal(p => ({...p, data: {...p.data, rodape: e.target.value}}))} rows={3} className="mt-1 block w-full rounded-md border-gray-300 py-2 px-3 border focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="Ex: Matriz - Rua Paulista, 1000..."></textarea>
                 </div>
+              <fieldset className="border-t border-gray-100 pt-4">
+                <legend className="text-sm font-medium text-gray-700">Carimbo nas cartas</legend>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {[
+                    ['unico', 'Carimbo único', 'A assinatura do responsável vai por cima do carimbo da empresa, num bloco só.'],
+                    ['separado', 'Imagens separadas', 'Carimbo do responsável (com a assinatura) à esquerda e o da empresa à direita.'],
+                  ].map(([valor, titulo, texto]) => {
+                    const ativo = (editModal.data.modelo_carimbo || 'unico') === valor;
+                    return (
+                      <label key={valor} className={`flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${ativo ? 'border-brand-400 bg-brand-50/60' : 'border-gray-200 hover:border-gray-300'}`}>
+                        <input
+                          type="radio"
+                          name="modelo_carimbo"
+                          value={valor}
+                          checked={ativo}
+                          onChange={() => setEditModal(p => ({ ...p, data: { ...p.data, modelo_carimbo: valor } }))}
+                          className="mt-0.5 accent-brand-600"
+                        />
+                        <span>
+                          <span className="block text-sm font-semibold text-gray-900">{titulo}</span>
+                          <span className="block text-xs text-gray-500">{texto}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {(editModal.data.modelo_carimbo || 'unico') === 'unico' && (
+                  <p className="mt-2 text-xs text-gray-400">No carimbo único, a imagem "Carimbo Resp." não entra na carta.</p>
+                )}
+              </fieldset>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
                 {/* Logo Upload */}
                 <div>
