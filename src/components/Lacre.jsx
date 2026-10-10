@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { EVENTO_CARTA_GERADA } from '../lib/celebrar';
+import { cn } from '../lib/cn';
 
 const T_PATH =
   'M8.6 8.4h14.8v3.1h-.9c-.2-1-.6-1.6-1.6-1.7h-3.3v12.3c0 .8.4 1.1 1.4 1.2l.6.1v.9h-7.2v-.9l.6-.1c1-.1 1.4-.4 1.4-1.2V9.8h-3.3c-1 .1-1.4.7-1.6 1.7h-.9z';
@@ -29,6 +30,38 @@ export function MarcaDesenhada({ className }) {
       <circle cx="16" cy="16" r="15.4" stroke="currentColor" strokeWidth="0.25" opacity="0.35" pathLength="1" className="tracar tracar-lento" />
       <circle cx="16" cy="16" r="14.2" stroke="currentColor" strokeWidth="1.1" pathLength="1" className="tracar" transform="rotate(-90 16 16)" />
       <path d={T_PATH} fill="currentColor" className="carimbar-leve" />
+    </svg>
+  );
+}
+
+/**
+ * Mini vitrine do que o sistema faz, pro login: a carta chega e a IA confere
+ * cada linha — a mesma cena da mesa do agente (ver MesaDoAgente.jsx), só que
+ * compacta, tocando uma vez na abertura, como prova da frase "carta pronta
+ * em minutos".
+ */
+export function CartaConferida({ className }) {
+  return (
+    <svg viewBox="0 0 88 56" fill="none" aria-hidden="true" className={cn('selo-cartao', className)}>
+      <rect x="8" y="7" width="48" height="42" rx="2.5" className="fill-white" />
+      {[
+        { y: 17, w: 26 },
+        { y: 25, w: 32 },
+        { y: 33, w: 20 },
+      ].map((l, i) => (
+        <rect key={i} x="15" y={l.y} width={l.w} height="2.4" rx="1.2" className="fill-slate-300" />
+      ))}
+      {[17, 25, 33].map((y, i) => (
+        <path
+          key={y}
+          d={`M63 ${y + 1.2} l2.6 2.6 l5.4 -5.4`}
+          className="selo-check stroke-emerald-500"
+          style={{ '--atraso': `${1.35 + i * 0.15}s` }}
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
     </svg>
   );
 }

@@ -208,6 +208,12 @@
 @keyframes botao-revela { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 .botao-revela { animation: botao-revela 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
 
+/* Login: mini vitrine da carta sendo conferida (mesmo espírito da mesa do agente) */
+@keyframes selo-entra { from { opacity: 0; transform: translateY(6px) scale(0.97); } to { opacity: 1; transform: none; } }
+.selo-cartao { animation: selo-entra 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 1.15s both; }
+/* .mesa-check / @keyframes mesa-risco (mais abaixo) já fazem o traço do check se desenhar */
+.selo-check { stroke-dasharray: 20; stroke-dashoffset: 20; animation: mesa-risco 0.4s ease-out var(--atraso, 0ms) both; }
+
 /* Mesa do agente (área do supervisor) */
 .mesa-luz { fill: rgb(253 230 190 / 0.35); }
 .mesa-rotulo { font-size: 7px; fill: var(--color-slate-400); font-family: var(--font-sans); }

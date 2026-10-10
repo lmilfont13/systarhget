@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useAuth, authErrorMessage } from '../lib/auth';
 import { Wordmark, Button } from '../components/ui';
-import { MarcaDesenhada } from '../components/Lacre';
+import { MarcaDesenhada, CartaConferida } from '../components/Lacre';
 
 function Field({ label, id, ...props }) {
   return (
@@ -127,6 +127,8 @@ export default function Login() {
           <div className="palavra-marca mt-6 lg:mt-10">
             <Wordmark className="text-2xl tracking-[0.32em] text-white lg:text-[2.6rem]" />
           </div>
+          {/* A carta chegando e sendo conferida — prova visual da frase logo abaixo */}
+          <CartaConferida className="mt-5 hidden h-14 w-auto lg:block" />
           {/* Frase da marca: cada linha sobe revelada, uma depois da outra */}
           <p className="mt-5 hidden text-3xl font-semibold leading-[1.15] tracking-tight text-white lg:block lg:text-[2.65rem]">
             <span className="linha-marca"><span style={{ '--atraso': '1.9s' }}>Carta pronta</span></span>
