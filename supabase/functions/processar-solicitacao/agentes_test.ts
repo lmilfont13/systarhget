@@ -94,3 +94,21 @@ Deno.test('mensagem de WhatsApp resume cada carta com o selo de confiança', asy
   assert(msg.includes('✅ ADAILTON JOSE → Atacadão'));
   assert(msg.includes('🔴 ? (zé) → ?'));
 });
+
+Deno.test('soma os tokens de todas as chamadas e calcula o custo em dólar', async () => {
+  const { novoConsumo, custoUsd } = await import('./agentes.ts');
+  let n = 0;
+  const respostas = [
+    { itens: [{ trecho: 'x', promotor: 'adailton', loja: 'atacadao' }] },
+    { escolhas: [{ caso: 0, id: 'f1', confianca: 'alta' }] },
+    { escolhas: [{ caso: 0, id: 'l1', confianca: 'alta' }] },
+  ];
+  globalThis.fetch = (() => Promise.resolve(new Response(JSON.stringify({
+    content: [{ type: 'text', text: JSON.stringify(respostas[Math.min(n++, 2)]) }],
+    usage: { input_tokens: 1000, output_tokens: 200 },
+  })))) as typeof fetch;
+  const consumo = novoConsumo();
+  await resolverPedido(dbFalso(), 'x', consumo);
+  assertEquals(consumo, { chamadas: 3, entrada: 3000, saida: 600 });
+  assertEquals(custoUsd(consumo), 0.012); // 3000×$2/M + 600×$10/M
+});

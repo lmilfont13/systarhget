@@ -12,7 +12,7 @@ import { celebrarCarta } from '../lib/celebrar';
 import { gerarCartaDoItem, textoDaLoja } from '../lib/gerarCartaPedido';
 import {
   STATUS_ADMIN, listarSolicitacoes, acompanharPedidos, processarPedido, concluirPedido,
-  recusarPedido, definirTemplatePadrao, salvarItens, cartasDoPedido, arquivosDoPedido,
+  recusarPedido, definirTemplatePadrao, salvarItens, cartasDoPedido, arquivosDoPedido, custoDosAgentes,
 } from '../lib/pedidos';
 import { PageHeader, Panel, Button, Skeleton, EmptyState } from '../components/ui';
 import CargoSelect from '../components/CargoSelect';
@@ -25,6 +25,24 @@ import { cn } from '../lib/cn';
 
 const fmtData = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const PENDENTES = ['recebida', 'processando', 'revisao', 'erro'];
+const fmtReal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtDiaMes = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+/** Linha discreta com o gasto dos agentes de IA (aparece ao passar o mouse). */
+function CustoAgentes({ custo, cartas }) {
+  if (!custo) return null;
+  const porCarta = cartas > 0 ? custo.total / cartas : null;
+  return (
+    <p
+      className="mt-10 text-center text-[11px] text-slate-300 transition-colors hover:text-slate-500"
+      title={`Custo da IA dos agentes (tokens × preço do modelo × dólar do dia)${custo.desde ? `, registrado desde ${fmtDiaMes.format(new Date(custo.desde))}` : ''}.`}
+    >
+      Agentes de IA: {fmtReal.format(custo.total)} no total · {fmtReal.format(custo.noMes)} este mês
+      {porCarta != null && ` · ${fmtReal.format(porCarta)} por carta`}
+    </p>
+  );
+}
+
 const ESPERA_LONGA = 60 * 60_000; // acima de 1 h esperando, o pedido fica em destaque
 
 /** Selo de tempo na lista: "há 12min" (aberto) ou "em 14min" (atendido). */
@@ -217,6 +235,7 @@ export default function Solicitacoes() {
   const [recusando, setRecusando] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [agora, setAgora] = useState(() => Date.now());
+  const [custo, setCusto] = useState(null);
 
   // Relógio para liberar "Reprocessar" quando os agentes travarem
   useEffect(() => {
@@ -225,6 +244,7 @@ export default function Solicitacoes() {
   }, []);
 
   const recarregar = useCallback(() => {
+    custoDosAgentes().then(setCusto).catch(() => setCusto(null));
     listarSolicitacoes().then(setPedidos).catch((e) => {
       console.error(e);
       toast.error('Não foi possível carregar os pedidos.');
@@ -242,6 +262,10 @@ export default function Solicitacoes() {
 
   const resumo = useMemo(() => resumoAtendimento(pedidos || [], { agora }), [pedidos, agora]);
 
+  const cartasEmitidas = useMemo(
+    () => (pedidos || []).reduce((a, p) => a + p.itens.filter((i) => i.carta_id).length, 0),
+    [pedidos],
+  );
   const grupos = useMemo(() => porSupervisor(pedidos || [], { agora }), [pedidos, agora]);
   const supervisorAtivo = grupos.find((g) => g.id === supervisorId) || null;
 
@@ -651,6 +675,7 @@ export default function Solicitacoes() {
           </div>
         )}
       </div>
+      <CustoAgentes custo={custo} cartas={cartasEmitidas} />
     </>
   );
 }
