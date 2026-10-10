@@ -27,18 +27,29 @@ const removeWhiteBackground = async (imageSource) => {
           // Caneta = bem escuro (luminância baixa), Fundo = cinza/branco (luminância mais alta)
           const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
           
-          if (luminance > 110) {
+          if (luminance > 200 || data[i+3] === 0) {
             data[i+3] = 0; // Alpha = 0 (Transparente)
           } else {
-            // Caneta escura - mantemos a cor, mas escurecemos um pouco para contraste
-            data[i] = Math.max(0, r - 30);
-            data[i+1] = Math.max(0, g - 30);
-            data[i+2] = Math.max(0, b - 30);
+            // Tinta da caneta: escurece bastante (mantém um fundo do tom azul/preto)
+            // e deixa até os traços mais finos/acinzentados bem opacos
+            const forca = Math.min(1, (200 - luminance) / 120);
+            data[i] = Math.round(r * 0.2);
+            data[i+1] = Math.round(g * 0.2);
+            data[i+2] = Math.round(b * 0.3);
+            data[i+3] = Math.round(data[i+3] * Math.max(0.55, forca));
           }
         }
         
         ctx.putImageData(imgData, 0, 0);
-        const dataUrl = canvas.toDataURL('image/png');
+
+        // Engrossa levemente o traço (a assinatura some quando a imagem é reduzida no PDF)
+        const grossa = document.createElement('canvas');
+        grossa.width = canvas.width;
+        grossa.height = canvas.height;
+        const g2 = grossa.getContext('2d');
+        const passo = Math.max(1, Math.round(Math.min(canvas.width, canvas.height) / 180));
+        for (const [dx, dy] of [[0, 0], [passo, 0], [0, passo], [passo, passo]]) g2.drawImage(canvas, dx, dy);
+        const dataUrl = grossa.toDataURL('image/png');
         
         // Converte o dataUrl para Uint8Array
         const cleanBase64 = dataUrl.split(',')[1];
@@ -793,19 +804,19 @@ export class PDFGenerator {
       }
 
       if (carimboUnico && stampImg) {
-        // Carimbo da empresa no lugar de sempre (direita) e a assinatura cruzando por cima,
+        // Bloco centralizado na página: carimbo da empresa e a assinatura (maior) cruzando por cima,
         // como a rubrica feita à mão sobre o carimbo do CNPJ
         const dims = getScaledDims(stampImg);
-        const stampX = width - margin - dims.width;
+        const stampX = (width - dims.width) / 2;
         page.drawImage(stampImg, { x: stampX, y: baseStampY, width: dims.width, height: dims.height });
         if (signatureImg) {
           const proporcao = signatureImg.height / signatureImg.width;
-          let sigW = dims.width * 0.85;
+          let sigW = dims.width * 1.3;
           let sigH = sigW * proporcao;
-          if (sigH > dims.height * 1.1) { sigH = dims.height * 1.1; sigW = sigH / proporcao; }
+          if (sigH > dims.height * 1.5) { sigH = dims.height * 1.5; sigW = sigH / proporcao; }
           page.drawImage(signatureImg, {
-            x: stampX + (dims.width - sigW) / 2 - dims.width * 0.08,
-            y: baseStampY + (dims.height - sigH) / 2 + dims.height * 0.05,
+            x: (width - sigW) / 2,
+            y: baseStampY + (dims.height - sigH) / 2 + dims.height * 0.1,
             width: sigW,
             height: sigH,
           });
