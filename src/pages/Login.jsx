@@ -65,7 +65,7 @@ export default function Login() {
       <form onSubmit={onNewPassword} className="space-y-4">
         <Field label="Nova senha" id="new-password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
         <ErrorText>{error}</ErrorText>
-        <Button type="submit" className="h-10 w-full" disabled={busy}>
+        <Button type="submit" className="h-10 w-full botao-revela" disabled={busy}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           Salvar nova senha
         </Button>
@@ -78,7 +78,7 @@ export default function Login() {
       <form onSubmit={onForgot} className="space-y-4">
         <Field label="E-mail" id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         <ErrorText>{error}</ErrorText>
-        <Button type="submit" className="h-10 w-full" disabled={busy}>
+        <Button type="submit" className="h-10 w-full botao-revela" disabled={busy}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Mail className="h-4 w-4" aria-hidden="true" />}
           Enviar link
         </Button>
@@ -105,7 +105,7 @@ export default function Login() {
         <Field label="Usuário ou e-mail" id="email" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         <Field label="Senha" id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         <ErrorText>{error}</ErrorText>
-        <Button type="submit" className="h-10 w-full" disabled={busy || loading}>
+        <Button type="submit" className="h-10 w-full botao-revela" disabled={busy || loading}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           Entrar
         </Button>
@@ -126,10 +126,15 @@ export default function Login() {
           <MarcaDesenhada className="h-24 w-24 text-brand-100 sm:h-32 sm:w-32 lg:h-56 lg:w-56" />
           <div className="palavra-marca mt-6 lg:mt-10">
             <Wordmark className="text-2xl tracking-[0.32em] text-white lg:text-[2.6rem]" />
-            <p className="mt-3 hidden max-w-xs text-sm leading-relaxed text-brand-200/80 lg:block">
-              Cartas de apresentação e gestão de promotores, emitidas e registradas num só lugar.
-            </p>
           </div>
+          {/* Frase da marca: cada linha sobe revelada, uma depois da outra */}
+          <p className="mt-5 hidden text-3xl font-semibold leading-[1.15] tracking-tight text-white lg:block lg:text-[2.65rem]">
+            <span className="linha-marca"><span style={{ '--atraso': '1.9s' }}>Carta pronta</span></span>
+            <span className="linha-marca"><span style={{ '--atraso': '2.02s' }}>em minutos.</span></span>
+          </p>
+          <p className="surgir mt-4 hidden max-w-xs text-sm leading-relaxed text-brand-200/80 lg:block" style={{ '--atraso': '2.35s' }}>
+            Cartas de apresentação e gestão de promotores, emitidas e registradas num só lugar.
+          </p>
         </div>
       </section>
 
