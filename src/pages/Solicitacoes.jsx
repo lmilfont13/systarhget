@@ -17,8 +17,9 @@ import {
 import { PageHeader, Panel, Button, Skeleton, EmptyState } from '../components/ui';
 import CargoSelect from '../components/CargoSelect';
 import { CartaoTempoMedio, Indicador, MiniBarras } from '../components/PainelAtendimento';
+import PedidosPorSupervisor from '../components/PedidosPorSupervisor';
 import {
-  resumoAtendimento, duracaoAtendimento, tempoEsperando, fmtDuracao, fmtDuracaoCurta,
+  resumoAtendimento, porSupervisor, duracaoAtendimento, tempoEsperando, fmtDuracao, fmtDuracaoCurta,
 } from '../lib/tempoAtendimento';
 import { cn } from '../lib/cn';
 
@@ -204,6 +205,7 @@ export default function Solicitacoes() {
   const { user } = useAuth();
   const [pedidos, setPedidos] = useState(null);
   const [filtro, setFiltro] = useState('pendentes');
+  const [supervisorId, setSupervisorId] = useState(null);
   const [abertoId, setAbertoId] = useState(() => new URLSearchParams(window.location.search).get('abrir'));
   const [rascunho, setRascunho] = useState([]);
   const [funcionarios, setFuncionarios] = useState([]);
@@ -240,10 +242,23 @@ export default function Solicitacoes() {
 
   const resumo = useMemo(() => resumoAtendimento(pedidos || [], { agora }), [pedidos, agora]);
 
-  const visiveis = useMemo(
-    () => (pedidos || []).filter((p) => (filtro === 'pendentes' ? PENDENTES.includes(p.status) : true)),
-    [pedidos, filtro],
+  const grupos = useMemo(() => porSupervisor(pedidos || [], { agora }), [pedidos, agora]);
+  const supervisorAtivo = grupos.find((g) => g.id === supervisorId) || null;
+
+  const doSupervisor = useMemo(
+    () => (pedidos || []).filter((p) => !supervisorId || p.solicitante_id === supervisorId),
+    [pedidos, supervisorId],
   );
+  const visiveis = useMemo(
+    () => doSupervisor.filter((p) => (filtro === 'pendentes' ? PENDENTES.includes(p.status) : true)),
+    [doSupervisor, filtro],
+  );
+
+  // Ao escolher um supervisor, mostra todos os pedidos dele (não só os pendentes)
+  const escolherSupervisor = (id) => {
+    setSupervisorId(id);
+    if (id) setFiltro('todas');
+  };
   const aberto = (pedidos || []).find((p) => p.id === abertoId) || null;
   const travado = aberto?.status === 'processando' && agora - new Date(aberto.atualizado_em).getTime() > 120_000;
   const editavel = aberto && (['revisao', 'erro', 'recebida'].includes(aberto.status) || travado);
@@ -461,16 +476,29 @@ export default function Solicitacoes() {
         </section>
       )}
 
+      <PedidosPorSupervisor grupos={grupos} selecionado={supervisorId} onSelecionar={escolherSupervisor} />
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_1fr]">
         {/* Lista */}
         <div className="space-y-4">
           <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-sm font-medium">
             {[['pendentes', 'Para revisar'], ['todas', 'Todos']].map(([k, r]) => (
               <button key={k} onClick={() => setFiltro(k)} className={cn('h-8 rounded-md', filtro === k ? 'bg-white text-ink shadow-sm' : 'text-slate-500 hover:text-ink')}>
-                {r}{k === 'pendentes' && pedidos ? ` (${pedidos.filter((p) => PENDENTES.includes(p.status)).length})` : ''}
+                {r}{k === 'pendentes' && pedidos ? ` (${doSupervisor.filter((p) => PENDENTES.includes(p.status)).length})` : ''}
               </button>
             ))}
           </div>
+
+          {supervisorAtivo && (
+            <div className="flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
+              <span className="min-w-0 flex-1 truncate text-brand-800">
+                Pedidos de <strong className="font-semibold">{supervisorAtivo.nome}</strong>
+              </span>
+              <button onClick={() => escolherSupervisor(null)} className="rounded-md p-0.5 text-brand-700 hover:bg-brand-100" aria-label="Ver pedidos de todos os supervisores">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
 
           {pedidos === null ? (
             [0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)

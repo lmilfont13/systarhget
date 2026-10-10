@@ -100,7 +100,7 @@ export function acompanharPedidos(aoMudar, userId) {
 export async function listarSolicitacoes() {
   const { data, error } = await supabase
     .from('solicitacoes')
-    .select('id, texto, status, motivo_recusa, erro, criado_em, atualizado_em, aprovado_em, solicitante:solicitantes(nome, whatsapp, usuario), analise:solicitacoes_analise(itens)')
+    .select('id, solicitante_id, texto, status, motivo_recusa, erro, criado_em, atualizado_em, aprovado_em, solicitante:solicitantes(nome, whatsapp, usuario), analise:solicitacoes_analise(itens)')
     .order('criado_em', { ascending: false })
     .limit(200);
   if (error) throw error;

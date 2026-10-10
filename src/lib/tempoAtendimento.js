@@ -106,3 +106,34 @@ export function resumoAtendimento(pedidos, { agora = Date.now(), dias = 30 } = {
     ultimos7,
   };
 }
+
+/**
+ * Pedidos agrupados por supervisor, para o admin analisar quem pede o quê.
+ * Ordena por quem tem mais pedidos em aberto e, depois, por mais pedidos no total.
+ */
+export function porSupervisor(pedidos, { agora = Date.now() } = {}) {
+  const grupos = new Map();
+  for (const p of Array.isArray(pedidos) ? pedidos : []) {
+    const id = p.solicitante_id || p.solicitante?.usuario || 'sem-id';
+    if (!grupos.has(id)) grupos.set(id, { id, nome: p.solicitante?.nome || 'Supervisor', whatsapp: p.solicitante?.whatsapp || '', pedidos: [] });
+    grupos.get(id).pedidos.push(p);
+  }
+  return [...grupos.values()].map((g) => {
+    const r = resumoAtendimento(g.pedidos, { agora, dias: 3650 });
+    const ultimo = g.pedidos.reduce((a, p) => (!a || p.criado_em > a ? p.criado_em : a), null);
+    return {
+      id: g.id,
+      nome: g.nome,
+      whatsapp: g.whatsapp,
+      total: g.pedidos.length,
+      cartas: g.pedidos.reduce((a, p) => a + (p.itens?.length || 0), 0),
+      prontas: r.prontasTotal,
+      recusadas: r.recusadas,
+      emAberto: r.emAberto,
+      esperaMaisLonga: r.esperaMaisLonga,
+      tempoMedio: r.tempoMedio,
+      taxaRecusa: g.pedidos.length ? r.recusadas / g.pedidos.length : 0,
+      ultimoPedido: ultimo,
+    };
+  }).sort((a, b) => b.emAberto - a.emAberto || b.total - a.total || a.nome.localeCompare(b.nome, 'pt-BR'));
+}
