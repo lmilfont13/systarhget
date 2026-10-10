@@ -50,6 +50,7 @@ export async function gerarCartaDoItem({ template, funcionario, empresas, loja, 
     assinatura_responsavel_url: assinatura,
     footer_text: cleanFooterText(empresa?.rodape),
     data_carta: data,
+    modelo_carimbo: empresa?.modelo_carimbo,
   });
 
   const nome = String(funcionario?.nome || '').trim().toUpperCase();
