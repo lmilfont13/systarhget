@@ -18,9 +18,12 @@ export function listaDeCargos(funcionarios = []) {
     .map(([cargo, total]) => ({ cargo, total }));
 }
 
-/** Cargo que vai para a carta: o escolhido manualmente ou, no automático, o do cadastro. */
+/** Padrão quando nenhum cargo é especificado nem consta no cadastro. */
+export const CARGO_PADRAO = 'PROMOTOR(A)';
+
+/** Cargo que vai para a carta: o escolhido manualmente, o do cadastro, ou o padrão. */
 export function cargoParaCarta(cargoEscolhido, funcionario) {
-  return normalizarCargo(cargoEscolhido) || normalizarCargo(funcionario?.cargo);
+  return normalizarCargo(cargoEscolhido) || normalizarCargo(funcionario?.cargo) || CARGO_PADRAO;
 }
 
 /**

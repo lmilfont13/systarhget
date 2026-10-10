@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizarCargo, listaDeCargos, cargoParaCarta } from './cargos.js';
+import { normalizarCargo, listaDeCargos, cargoParaCarta, CARGO_PADRAO } from './cargos.js';
 
 describe('cargos', () => {
   it('padroniza maiúsculas e espaços', () => {
@@ -25,8 +25,9 @@ describe('cargos', () => {
     expect(cargoParaCarta('repositor(a)', { cargo: 'PROMOTOR' })).toBe('REPOSITOR(A)');
   });
 
-  it('sem cadastro e sem escolha, fica vazio (a tela avisa)', () => {
-    expect(cargoParaCarta('', { cargo: '  ' })).toBe('');
+  it('sem cadastro e sem escolha, usa o cargo padrão PROMOTOR(A)', () => {
+    expect(cargoParaCarta('', { cargo: '  ' })).toBe(CARGO_PADRAO);
+    expect(cargoParaCarta('', null)).toBe(CARGO_PADRAO);
   });
 });
 
