@@ -270,6 +270,8 @@ function AreaSupervisor({ user }) {
     try {
       await enviarPedido(user.id, texto);
       setTexto('');
+      setAbertoId(undefined);   // efeito vai abrir o pedido novo automaticamente
+      setVerTodos(false);       // volta para a lista compacta
       toast.success('Pedido enviado. Você acompanha o andamento aqui embaixo.');
       recarregar();
     } catch (err) {

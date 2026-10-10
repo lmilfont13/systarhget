@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { Wand2 } from 'lucide-react';
-import { listaDeCargos, normalizarCargo } from '../lib/cargos';
+import { listaDeCargos, normalizarCargo, CARGO_PADRAO } from '../lib/cargos';
 import { cn } from '../lib/cn';
 
 const OUTRA = '__outra__';
@@ -22,7 +22,7 @@ export default function CargoSelect({ value, onChange, funcionarios, cargoDoCada
     ? 'Automático: o cargo de cada promotor'
     : cargoDoCadastro
       ? `Automático: ${normalizarCargo(cargoDoCadastro)}`
-      : 'Automático: cargo do cadastro';
+      : `Automático: ${CARGO_PADRAO}`;
 
   const selectValue = digitando ? OUTRA : value || '';
 
@@ -74,7 +74,7 @@ export default function CargoSelect({ value, onChange, funcionarios, cargoDoCada
       <p className="text-xs text-slate-400">
         {value
           ? 'Esta função vale só para esta emissão; o cadastro do promotor não muda.'
-          : 'Usa o cargo salvo no cadastro de cada promotor.'}
+          : `Usa o cargo do cadastro; se não tiver, usa "${CARGO_PADRAO}".`}
       </p>
     </div>
   );
