@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  duracaoAtendimento, fmtDuracao, fmtDuracaoCurta, resumoAtendimento, tempoEsperando,
+  duracaoAtendimento, fmtDuracao, fmtDuracaoCurta, resumoAtendimento, tempoEsperando, porSupervisor,
 } from './tempoAtendimento.js';
 
 const AGORA = new Date('2026-10-10T15:00:00Z').getTime();
@@ -76,5 +76,23 @@ describe('resumoAtendimento', () => {
     expect(r.tempoMedio).toBeNull();
     expect(r.emAberto).toBe(0);
     expect(r.tendencia).toBeNull();
+  });
+});
+
+describe('porSupervisor', () => {
+  it('agrupa por supervisor com totais, tempo médio e último pedido', () => {
+    const ana = { solicitante_id: 'a', solicitante: { nome: 'Ana' } };
+    const bia = { solicitante_id: 'b', solicitante: { nome: 'Bia' } };
+    const g = porSupervisor([
+      { ...ana, ...aprovado(2 * HORA, 10 * MIN), itens: [{}, {}] },
+      { ...ana, ...aprovado(3 * HORA, 30 * MIN), itens: [{}] },
+      { ...ana, status: 'recusada', criado_em: iso(HORA), atualizado_em: iso(0), itens: [] },
+      { ...bia, status: 'revisao', criado_em: iso(20 * MIN), itens: [{}] },
+    ], { agora: AGORA });
+    expect(g.map((x) => x.nome)).toEqual(['Bia', 'Ana']); // quem tem pedido aberto vem primeiro
+    const a = g[1];
+    expect(a).toMatchObject({ total: 3, cartas: 3, prontas: 2, recusadas: 1, emAberto: 0, tempoMedio: 20 * MIN });
+    expect(a.ultimoPedido).toBe(iso(HORA));
+    expect(g[0]).toMatchObject({ emAberto: 1, esperaMaisLonga: 20 * MIN, tempoMedio: null });
   });
 });
