@@ -23,7 +23,7 @@ function CarimboUnico({ empresa, className = '' }) {
       {empresa.assinatura_responsavel_url && (
         <img
           src={empresa.assinatura_responsavel_url}
-          className="absolute left-[2%] top-1/2 h-[90%] w-[85%] -translate-y-1/2 object-contain mix-blend-multiply"
+          className="absolute left-1/2 top-[45%] h-[140%] w-[130%] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain mix-blend-multiply [filter:brightness(0.35)_contrast(1.8)]"
           alt="Assinatura do responsável"
         />
       )}
@@ -1636,7 +1636,7 @@ export default function Documentos() {
 
                   {/* Live Stamps and Signature Preview inside paper */}
                   {activeEmpresa?.modelo_carimbo !== 'separado' && activeEmpresa?.carimbo_url && (
-                    <div className="flex justify-end border-t border-slate-100 pt-3 mt-4 pr-2">
+                    <div className="flex justify-center border-t border-slate-100 pt-4 mt-4">
                       <div className="flex flex-col items-center gap-1.5">
                         <CarimboUnico empresa={activeEmpresa} className="h-16" />
                         <span className="text-[8px] text-slate-400 font-semibold">Carimbo único</span>
