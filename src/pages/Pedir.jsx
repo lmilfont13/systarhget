@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, LogOut, Send, FileText, ExternalLink, ChevronDown } from 'lucide-react';
+import { Loader2, LogOut, Send, FileText, ExternalLink, ChevronDown, EyeOff, Eye, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, authErrorMessage } from '../lib/auth';
 import { Button, Wordmark } from '../components/ui';
@@ -12,6 +12,10 @@ import {
 } from '../lib/pedidos';
 import LinhaEtapas from '../components/LinhaEtapas';
 import MesaDoAgente from '../components/MesaDoAgente';
+import { CartaoTempoMedio, Indicador, MiniBarras } from '../components/PainelAtendimento';
+import { resumoAtendimento, duracaoAtendimento, tempoEsperando, fmtDuracao } from '../lib/tempoAtendimento';
+
+const RECENTES = 3;
 
 const fmtHora = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const fmtDia = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -109,7 +113,7 @@ function MiniProgresso({ pedido }) {
   );
 }
 
-function CartaoPedido({ pedido, aberto, onAlternar }) {
+function CartaoPedido({ pedido, aberto, onAlternar, agora }) {
   const st = STATUS_PEDIDO[pedido.status] || STATUS_PEDIDO.recebida;
   const [cartas, setCartas] = useState(null);
   const idPainel = `pedido-${pedido.id}`;
@@ -146,6 +150,7 @@ function CartaoPedido({ pedido, aberto, onAlternar }) {
               <div className="w-full min-w-0 flex-1">
                 <LinhaEtapas pedido={pedido} />
                 <p className="mt-1 text-center text-xs text-slate-500 sm:text-left sm:pl-2">{fraseDoPedido(pedido)}</p>
+                <TempoDoPedido pedido={pedido} agora={agora} />
               </div>
             </div>
             {pedido.status === 'recusada' && pedido.motivo_recusa && (
@@ -170,6 +175,41 @@ function CartaoPedido({ pedido, aberto, onAlternar }) {
   );
 }
 
+/** "Pronta em 14 min" ou "Aguardando há 6 min". */
+function TempoDoPedido({ pedido, agora }) {
+  const levou = duracaoAtendimento(pedido);
+  const espera = tempoEsperando(pedido, agora);
+  if (pedido.status === 'recusada' || (levou == null && espera == null)) return null;
+  return (
+    <p className="mt-1.5 flex items-center justify-center gap-1 text-xs font-medium tabular-nums text-slate-600 sm:justify-start sm:pl-2">
+      <Timer className="h-3.5 w-3.5 text-brand-600" aria-hidden="true" />
+      {levou != null ? `Pronta em ${fmtDuracao(levou)}` : `Aguardando há ${fmtDuracao(espera)}`}
+    </p>
+  );
+}
+
+/** Painel curto do supervisor: tempo médio de retorno, em andamento e cartas prontas. */
+function PainelSupervisor({ resumo }) {
+  return (
+    <section aria-label="Resumo dos seus pedidos" className="grid grid-cols-2 gap-3 sm:grid-cols-[1.35fr_1fr_1fr]">
+      <CartaoTempoMedio
+        resumo={resumo}
+        className="col-span-2 sm:col-span-1"
+        vazio="Aparece assim que sua primeira carta ficar pronta."
+      />
+      <Indicador
+        ordem={1}
+        rotulo="Em andamento"
+        valor={resumo.emAberto}
+        detalhe={resumo.emAberto ? `esperando há ${fmtDuracao(resumo.esperaMaisLonga)}` : 'nada pendente'}
+      />
+      <Indicador ordem={2} rotulo="Cartas prontas" valor={resumo.prontasTotal}>
+        <MiniBarras dias={resumo.ultimos7} />
+      </Indicador>
+    </section>
+  );
+}
+
 // ------------------------------------------------------------- área do supervisor
 function AreaSupervisor({ user }) {
   const [perfil, setPerfil] = useState(null);
@@ -177,6 +217,8 @@ function AreaSupervisor({ user }) {
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [abertoId, setAbertoId] = useState(undefined);
+  const [verTodos, setVerTodos] = useState(false);
+  const [agora, setAgora] = useState(() => Date.now());
   const [listaVisivel, setListaVisivel] = useState(() => {
     try { return localStorage.getItem('tarhget:pedidos-visiveis') !== 'nao'; } catch { return true; }
   });
@@ -194,12 +236,22 @@ function AreaSupervisor({ user }) {
     setAbertoId((emAndamento || pedidos[0]).id);
   }, [pedidos, abertoId]);
 
-  const resumo = useMemo(() => {
-    if (!pedidos?.length) return '';
-    const andamento = pedidos.filter((p) => !['aprovada', 'recusada'].includes(p.status)).length;
-    const prontas = pedidos.filter((p) => p.status === 'aprovada').length;
-    return [andamento && `${andamento} em andamento`, prontas && `${prontas} ${prontas > 1 ? 'prontas' : 'pronta'}`].filter(Boolean).join(' · ');
-  }, [pedidos]);
+  // Relógio do "aguardando há…"
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const resumo = useMemo(() => resumoAtendimento(pedidos || [], { agora }), [pedidos, agora]);
+
+  // Mostra os mais recentes; o pedido aberto entra mesmo se for mais antigo
+  const exibidos = useMemo(() => {
+    if (!pedidos) return [];
+    if (verTodos) return pedidos;
+    const recentes = pedidos.slice(0, RECENTES);
+    const aberto = pedidos.find((p) => p.id === abertoId);
+    return aberto && !recentes.includes(aberto) ? [...recentes, aberto] : recentes;
+  }, [pedidos, verTodos, abertoId]);
 
   const recarregar = useCallback(() => {
     meusPedidos(user.id).then(setPedidos).catch(() => setPedidos([]));
@@ -229,10 +281,23 @@ function AreaSupervisor({ user }) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">
+          {perfil?.nome ? `Olá, ${perfil.nome.split(' ')[0]}.` : 'Olá.'}
+        </h1>
+        <p className="text-sm text-slate-500">
+          {resumo.emAberto
+            ? `Você tem ${resumo.emAberto} ${resumo.emAberto > 1 ? 'pedidos' : 'pedido'} em andamento.`
+            : 'Tudo em dia por aqui.'}
+        </p>
+      </div>
+
+      {pedidos?.length > 0 && <PainelSupervisor resumo={resumo} />}
+
       <form onSubmit={enviar} className="panel p-5 shadow-lg sm:p-6">
         <label htmlFor="pedido" className="block text-lg font-semibold text-ink">
-          {perfil?.nome ? `Olá, ${perfil.nome.split(' ')[0]}. Qual carta você precisa?` : 'Qual carta você precisa?'}
+          Qual carta você precisa?
         </label>
         <p className="mt-1 text-sm text-slate-500">Escreva do seu jeito o nome do promotor e a loja. Dá para pedir várias de uma vez.</p>
         <textarea
@@ -255,16 +320,16 @@ function AreaSupervisor({ user }) {
       <section aria-labelledby="titulo-pedidos">
         <div className="mb-3 flex items-center gap-3">
           <h2 id="titulo-pedidos" className="text-base font-semibold text-ink">Meus pedidos</h2>
-          {resumo && <span className="text-xs text-slate-400">{resumo}</span>}
+          {pedidos?.length > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs tabular-nums text-slate-500">{pedidos.length}</span>}
           {pedidos?.length > 0 && (
             <button
               onClick={() => alternarLista(!listaVisivel)}
               aria-expanded={listaVisivel}
               aria-controls="lista-pedidos"
-              className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-ink"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-ink"
             >
-              {listaVisivel ? 'Ocultar' : 'Mostrar'}
-              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', listaVisivel && 'rotate-180')} aria-hidden="true" />
+              {listaVisivel ? <EyeOff className="h-3.5 w-3.5" aria-hidden="true" /> : <Eye className="h-3.5 w-3.5" aria-hidden="true" />}
+              {listaVisivel ? 'Esconder pedidos' : 'Mostrar pedidos'}
             </button>
           )}
         </div>
@@ -274,12 +339,31 @@ function AreaSupervisor({ user }) {
           <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-slate-500">
             Seus pedidos aparecem aqui, com o andamento de cada um.
           </p>
-        ) : listaVisivel && (
-          <ul id="lista-pedidos" className="space-y-2">
-            {pedidos.map((p) => (
-              <CartaoPedido key={p.id} pedido={p} aberto={abertoId === p.id} onAlternar={() => setAbertoId((a) => (a === p.id ? null : p.id))} />
-            ))}
-          </ul>
+        ) : !listaVisivel ? (
+          <button
+            onClick={() => alternarLista(true)}
+            className="w-full rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm text-slate-500 hover:border-slate-300 hover:text-ink"
+          >
+            Pedidos escondidos{resumo.emAberto ? ` · ${resumo.emAberto} em andamento` : ''}. Toque para mostrar.
+          </button>
+        ) : (
+          <>
+            <ul id="lista-pedidos" className="space-y-2">
+              {exibidos.map((p) => (
+                <CartaoPedido key={p.id} pedido={p} agora={agora} aberto={abertoId === p.id} onAlternar={() => setAbertoId((a) => (a === p.id ? null : p.id))} />
+              ))}
+            </ul>
+            {pedidos.length > RECENTES && (
+              <button
+                onClick={() => setVerTodos((v) => !v)}
+                aria-expanded={verTodos}
+                className="mx-auto mt-3 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+              >
+                {verTodos ? 'Ver só os recentes' : `Ver todos os ${pedidos.length} pedidos`}
+                <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', verTodos && 'rotate-180')} aria-hidden="true" />
+              </button>
+            )}
+          </>
         )}
       </section>
     </div>

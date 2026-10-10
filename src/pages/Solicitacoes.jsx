@@ -16,10 +16,31 @@ import {
 } from '../lib/pedidos';
 import { PageHeader, Panel, Button, Skeleton, EmptyState } from '../components/ui';
 import CargoSelect from '../components/CargoSelect';
+import { CartaoTempoMedio, Indicador, MiniBarras } from '../components/PainelAtendimento';
+import {
+  resumoAtendimento, duracaoAtendimento, tempoEsperando, fmtDuracao, fmtDuracaoCurta,
+} from '../lib/tempoAtendimento';
 import { cn } from '../lib/cn';
 
 const fmtData = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const PENDENTES = ['recebida', 'processando', 'revisao', 'erro'];
+const ESPERA_LONGA = 60 * 60_000; // acima de 1 h esperando, o pedido fica em destaque
+
+/** Selo de tempo na lista: "há 12min" (aberto) ou "em 14min" (atendido). */
+function SeloTempo({ pedido, agora }) {
+  const levou = duracaoAtendimento(pedido);
+  const espera = tempoEsperando(pedido, agora);
+  if (pedido.status === 'recusada' || (levou == null && espera == null)) return null;
+  const demorando = espera != null && espera > ESPERA_LONGA;
+  return (
+    <span
+      className={cn('ml-auto shrink-0 tabular-nums', demorando ? 'font-medium text-signal-600' : levou != null ? 'text-emerald-700' : 'text-slate-500')}
+      title={levou != null ? 'Tempo até a carta ficar pronta' : 'Esperando desde o envio'}
+    >
+      {levou != null ? `em ${fmtDuracaoCurta(levou)}` : `há ${fmtDuracaoCurta(espera)}`}
+    </span>
+  );
+}
 
 const TOM_STATUS = {
   recebida: 'bg-slate-100 text-slate-600',
@@ -217,6 +238,8 @@ export default function Solicitacoes() {
     return acompanharPedidos(recarregar);
   }, [recarregar]);
 
+  const resumo = useMemo(() => resumoAtendimento(pedidos || [], { agora }), [pedidos, agora]);
+
   const visiveis = useMemo(
     () => (pedidos || []).filter((p) => (filtro === 'pendentes' ? PENDENTES.includes(p.status) : true)),
     [pedidos, filtro],
@@ -411,6 +434,33 @@ export default function Solicitacoes() {
         }
       />
 
+      {pedidos?.length > 0 && (
+        <section aria-label="Tempo de atendimento" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <CartaoTempoMedio
+            resumo={resumo}
+            rotulo="Tempo médio de atendimento"
+            className="col-span-2 lg:col-span-1"
+            vazio="Aparece quando o primeiro pedido for aprovado."
+          />
+          <Indicador
+            ordem={1}
+            rotulo="Aguardando você"
+            valor={resumo.emAberto}
+            alerta={resumo.esperaMaisLonga > ESPERA_LONGA}
+            detalhe={resumo.emAberto ? `o mais antigo há ${fmtDuracao(resumo.esperaMaisLonga)}` : 'caixa em dia'}
+          />
+          <Indicador
+            ordem={2}
+            rotulo="Prontas hoje"
+            valor={resumo.prontasHoje}
+            detalhe={resumo.tempoMediano != null ? `metade sai em até ${fmtDuracao(resumo.tempoMediano)}` : 'nenhuma ainda'}
+          />
+          <Indicador ordem={3} rotulo="Aprovadas em 30 dias" valor={resumo.prontasNoPeriodo} className="col-span-2 lg:col-span-1">
+            <MiniBarras dias={resumo.ultimos7} />
+          </Indicador>
+        </section>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_1fr]">
         {/* Lista */}
         <div className="space-y-4">
@@ -443,9 +493,12 @@ export default function Solicitacoes() {
                       </span>
                     </div>
                     <p className="mt-1 line-clamp-2 text-sm text-slate-600">{p.texto}</p>
-                    <p className="mt-1.5 text-xs text-slate-400">
-                      {fmtData.format(new Date(p.criado_em))}
-                      {p.itens.length > 0 && ` · ${p.itens.length} carta${p.itens.length > 1 ? 's' : ''}`}
+                    <p className="mt-1.5 flex items-center gap-1 text-xs text-slate-400">
+                      <span className="truncate">
+                        {fmtData.format(new Date(p.criado_em))}
+                        {p.itens.length > 0 && ` · ${p.itens.length} carta${p.itens.length > 1 ? 's' : ''}`}
+                      </span>
+                      <SeloTempo pedido={p} agora={agora} />
                     </p>
                   </button>
                 </li>
@@ -471,7 +524,12 @@ export default function Solicitacoes() {
           <div className="min-w-0 space-y-4">
             <Panel
               title={aberto.solicitante?.nome || 'Supervisor'}
-              meta={`${fmtData.format(new Date(aberto.criado_em))}${aberto.solicitante?.whatsapp ? ` · WhatsApp ${aberto.solicitante.whatsapp}` : ''}`}
+              meta={[
+                fmtData.format(new Date(aberto.criado_em)),
+                aberto.solicitante?.whatsapp && `WhatsApp ${aberto.solicitante.whatsapp}`,
+                duracaoAtendimento(aberto) != null && aberto.status === 'aprovada' && `atendido em ${fmtDuracao(duracaoAtendimento(aberto))}`,
+                tempoEsperando(aberto, agora) != null && `esperando há ${fmtDuracao(tempoEsperando(aberto, agora))}`,
+              ].filter(Boolean).join(' · ')}
               bodyClassName="p-5"
             >
               <blockquote className="rounded-lg bg-slate-50 px-4 py-3 text-[0.9375rem] leading-relaxed text-ink">{aberto.texto}</blockquote>
