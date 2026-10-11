@@ -31,12 +31,46 @@ export function juntarDitado(atual, novo) {
 }
 
 const MENSAGEM_ERRO = {
-  'not-allowed': 'Preciso da permissão do microfone. Libere nas configurações do navegador.',
-  'service-not-allowed': 'Preciso da permissão do microfone. Libere nas configurações do navegador.',
+  'not-allowed': 'O microfone está bloqueado para este site. Libere no cadeado da barra de endereço.',
+  // Outra coisa, bem diferente: a permissão está dada, mas o navegador não tem
+  // o serviço de transcrição (acontece em Brave, Opera e Chromium de Linux).
+  'service-not-allowed': 'Este navegador não tem o serviço de transcrição. Abra o sistema no Chrome ou no Edge.',
   'no-speech': 'Não ouvi nada. Toque no microfone e fale de novo.',
   'audio-capture': 'Não achei um microfone neste aparelho.',
   network: 'Sem conexão para transcrever. Confira a internet.',
 };
+
+const MENSAGEM_PERMISSAO = {
+  NotAllowedError: 'O microfone está bloqueado para este site. Libere no cadeado da barra de endereço.',
+  SecurityError: 'O microfone está bloqueado para este site. Libere no cadeado da barra de endereço.',
+  NotFoundError: 'Não achei um microfone neste aparelho.',
+  DevicesNotFoundError: 'Não achei um microfone neste aparelho.',
+  NotReadableError: 'O microfone está em uso por outro programa. Feche o outro e tente de novo.',
+  TrackStartError: 'O microfone está em uso por outro programa. Feche o outro e tente de novo.',
+};
+
+/**
+ * Pede o microfone e ESPERA a resposta, antes de ligar o reconhecedor.
+ *
+ * É isso que conserta o "liberei e não adianta": quando `start()` é quem
+ * dispara o pedido de permissão, o Chrome mata aquela sessão na hora, com
+ * 'not-allowed', sem esperar a pessoa responder. Quem clicou em "permitir
+ * desta vez" caía nessa a cada clique, pra sempre.
+ *
+ * Só queremos a autorização aqui — quem grava de verdade é o reconhecedor —,
+ * então o microfone é desligado em seguida.
+ */
+export async function pedirMicrofone(mediaDevices) {
+  // Navegador sem a API: não dá pra perguntar antes; deixa o reconhecedor tentar.
+  if (!mediaDevices?.getUserMedia) return { ok: true };
+  try {
+    const stream = await mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((faixa) => faixa.stop());
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, erro: MENSAGEM_PERMISSAO[e?.name] || 'Não consegui usar o microfone agora.' };
+  }
+}
 
 /**
  * Microfone do formulário.
@@ -93,9 +127,18 @@ export function useDitado(aoTranscrever) {
     };
   }, []);
 
-  const iniciar = useCallback(() => {
+  const iniciar = useCallback(async () => {
     if (!recRef.current) return;
     setErro('');
+
+    // A permissão vem primeiro e é esperada: se deixarmos o start() disparar o
+    // pedido, o Chrome encerra a sessão antes da pessoa responder.
+    const permissao = await pedirMicrofone(navigator.mediaDevices);
+    if (!permissao.ok) {
+      setErro(permissao.erro);
+      return;
+    }
+
     try {
       recRef.current.start();
       setOuvindo(true);
