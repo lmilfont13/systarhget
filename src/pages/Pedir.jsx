@@ -414,7 +414,7 @@ export default function Pedir() {
                 : 'Esta área é para supervisores. Saia e entre com o seu usuário de supervisor.'}
             </p>
             {role === 'admin' && (
-              <Button as={Link} to="/login" state={{ from: { pathname: '/solicitacoes' } }} className="mt-4">
+              <Button as={Link} to="/login?trocar=1" state={{ from: { pathname: '/solicitacoes' } }} className="mt-4">
                 Entrar no painel
               </Button>
             )}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Loader2, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
-import { useAuth, authErrorMessage } from '../lib/auth';
+import { useAuth, authErrorMessage, displayName } from '../lib/auth';
 import { Wordmark, Button } from '../components/ui';
 import { MarcaDesenhada } from '../components/Lacre';
 
@@ -20,17 +20,23 @@ function ErrorText({ children }) {
 }
 
 export default function Login() {
-  const { session, role, loading, recovering, signIn, sendPasswordReset, updatePassword } = useAuth();
+  const { session, user, role, loading, recovering, signIn, signOut, sendPasswordReset, updatePassword } = useAuth();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  // ?trocar=1: entra direto no formulário mesmo com uma sessão válida aberta.
+  // Sem isso, quem já está logado (às vezes com uma sessão antiga de outro
+  // papel, de antes das áreas terem sessão própria) ficava preso no redirecionamento
+  // automático, sem como trocar de conta por aqui.
+  const trocarConta = searchParams.get('trocar') === '1';
   const [mode, setMode] = useState('login'); // login | forgot | sent
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  if (!loading && session && !recovering) {
+  if (!loading && session && !recovering && !trocarConta) {
     const from = location.state?.from?.pathname;
-    const destino = { promotor: '/promotores', solicitante: '/pedir' }[role] || from || '/dashboard';
+    const destino = from || { promotor: '/promotores', solicitante: '/pedir' }[role] || '/dashboard';
     return <Navigate to={destino} replace />;
   }
 
@@ -53,6 +59,11 @@ export default function Login() {
     if (password.length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
     await updatePassword(password);
   });
+
+  // Com ?trocar=1 e uma sessão ainda aberta, mostra quem está logado agora
+  // e deixa claro que entrar aqui substitui essa sessão (ou dá pra só sair).
+  const papelLabel = { admin: 'administrador', promotor: 'promotor', solicitante: 'supervisor' }[role];
+  const trocandoDeConta = trocarConta && session && !recovering;
 
   let title = 'Entrar';
   let subtitle = 'Use seu usuário ou e-mail e a senha.';
@@ -100,8 +111,18 @@ export default function Login() {
       </div>
     );
   } else {
+    if (trocandoDeConta) subtitle = `Você está entrando como ${papelLabel}${displayName(user) ? ` (${displayName(user)})` : ''}. Entrar aqui substitui essa sessão.`;
     body = (
       <form onSubmit={onLogin} className="space-y-4">
+        {trocandoDeConta && (
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="w-full rounded-lg bg-slate-50 px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-100"
+          >
+            Só quero sair dessa conta, sem entrar com outra.
+          </button>
+        )}
         <Field label="Usuário ou e-mail" id="email" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         <Field label="Senha" id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         <ErrorText>{error}</ErrorText>
