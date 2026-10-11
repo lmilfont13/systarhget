@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, LogOut, Send, FileText, ExternalLink, ChevronDown, EyeOff, Eye, Timer } from 'lucide-react';
+import { Loader2, LogOut, Send, FileText, ExternalLink, ChevronDown, EyeOff, Eye, Timer, Mic, MicOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, authErrorMessage } from '../lib/auth';
 import { Button, Wordmark } from '../components/ui';
 import { MarcaDesenhada } from '../components/Lacre';
 import { cn } from '../lib/cn';
 import {
-  STATUS_PEDIDO, cadastrarSolicitante, enviarPedido, meuPerfil, meusPedidos,
+  STATUS_PEDIDO, cadastrarSolicitante, enviarPedido, conferirPedido, meuPerfil, meusPedidos,
   cartasDoPedido, acompanharPedidos, fraseDoPedido, etapasDoPedido,
 } from '../lib/pedidos';
+import { useDitado, juntarDitado } from '../lib/ditado';
 import LinhaEtapas from '../components/LinhaEtapas';
 import MesaDoAgente from '../components/MesaDoAgente';
 import { CartaoTempoMedio, Indicador, MiniBarras } from '../components/PainelAtendimento';
@@ -218,6 +219,8 @@ function AreaSupervisor({ user }) {
   const [pedidos, setPedidos] = useState(null);
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [conferindo, setConferindo] = useState(false);
+  const [aviso, setAviso] = useState(null); // o que faltou dizer, antes de enviar
   const [abertoId, setAbertoId] = useState(undefined);
   const [verTodos, setVerTodos] = useState(false);
   const [agora, setAgora] = useState(() => Date.now());
@@ -265,13 +268,20 @@ function AreaSupervisor({ user }) {
     return acompanharPedidos(recarregar, user.id, client);
   }, [user.id, client, recarregar]);
 
-  const enviar = async (e) => {
-    e.preventDefault();
-    if (texto.trim().length < 3) return;
+  // O ditado vai somando no campo: dá para falar em várias tacadas e misturar
+  // com o que foi digitado. Qualquer fala nova derruba o aviso anterior.
+  const ouvirTrecho = useCallback((trecho) => {
+    setTexto((atual) => juntarDitado(atual, trecho));
+    setAviso(null);
+  }, []);
+  const voz = useDitado(ouvirTrecho);
+
+  const despachar = async () => {
     setEnviando(true);
     try {
       await enviarPedido(user.id, texto, client);
       setTexto('');
+      setAviso(null);
       setAbertoId(undefined);   // efeito vai abrir o pedido novo automaticamente
       setVerTodos(false);       // volta para a lista compacta
       toast.success('Pedido enviado. Você acompanha o andamento aqui embaixo.');
@@ -282,6 +292,27 @@ function AreaSupervisor({ user }) {
     } finally {
       setEnviando(false);
     }
+  };
+
+  const enviar = async (e) => {
+    e.preventDefault();
+    if (texto.trim().length < 3) return;
+    if (voz.ouvindo) voz.parar();
+
+    // Já avisado e mandou de novo: é um "enviar assim mesmo".
+    if (aviso) {
+      await despachar();
+      return;
+    }
+
+    setConferindo(true);
+    const falta = await conferirPedido(texto, client);
+    setConferindo(false);
+    if (falta) {
+      setAviso(falta);
+      return;
+    }
+    await despachar();
   };
 
   return (
@@ -303,20 +334,66 @@ function AreaSupervisor({ user }) {
         <label htmlFor="pedido" className="block text-lg font-semibold text-ink">
           Qual carta você precisa?
         </label>
-        <p className="mt-1 text-sm text-slate-500">Escreva do seu jeito o nome do promotor e a loja. Dá para pedir várias de uma vez.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          {voz.suportado
+            ? 'Fale ou escreva o nome do promotor e a loja. Dá para pedir várias de uma vez.'
+            : 'Escreva do seu jeito o nome do promotor e a loja. Dá para pedir várias de uma vez.'}
+        </p>
         <textarea
           id="pedido"
           rows={4}
           maxLength={4000}
           value={texto}
-          onChange={(e) => setTexto(e.target.value)}
+          onChange={(e) => { setTexto(e.target.value); setAviso(null); }}
           placeholder="Ex.: carta pro Adailton no Atacadão Messejana e pra Juliana no Assaí Bezerra de Menezes"
           className="mt-4 w-full resize-y border bg-white px-3 py-2.5 text-[0.9375rem] leading-relaxed text-ink"
         />
-        <div className="mt-3 flex justify-end">
-          <Button type="submit" disabled={enviando || texto.trim().length < 3}>
-            {enviando ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
-            Enviar pedido
+
+        {/* O que está sendo falado agora, antes de virar texto no campo */}
+        {voz.ouvindo && (
+          <p className="mt-2 min-h-5 text-sm italic text-slate-400" aria-live="polite">
+            {voz.parcial || 'Ouvindo…'}
+          </p>
+        )}
+        {voz.erro && <p className="mt-2 text-sm text-red-700" role="alert">{voz.erro}</p>}
+
+        {/* Faltou promotor ou loja: cobra aqui, antes de virar pedido */}
+        {aviso && (
+          <div className="mt-3 rounded-xl border border-signal-100 bg-signal-50 px-4 py-3 text-sm text-signal-700" role="alert">
+            <p className="font-medium">{aviso.titulo}</p>
+            <ul className="mt-1 space-y-0.5">
+              {aviso.detalhes.map((linha) => <li key={linha}>{linha}</li>)}
+            </ul>
+            <p className="mt-2">
+              {voz.suportado ? 'Toque no microfone e complete, ou escreva no campo acima.' : 'Complete no campo acima.'}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-3 flex items-center justify-end gap-2">
+          {voz.suportado && (
+            <button
+              type="button"
+              onClick={voz.alternar}
+              aria-pressed={voz.ouvindo}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium',
+                voz.ouvindo
+                  ? 'border-brand-700 bg-brand-700 text-white hover:bg-brand-800'
+                  : 'border-line text-slate-600 hover:border-slate-300 hover:text-ink',
+              )}
+            >
+              {voz.ouvindo
+                ? <MicOff className="h-4 w-4" aria-hidden="true" />
+                : <Mic className="h-4 w-4" aria-hidden="true" />}
+              {voz.ouvindo ? 'Parar' : 'Falar'}
+            </button>
+          )}
+          <Button type="submit" disabled={enviando || conferindo || texto.trim().length < 3}>
+            {enviando || conferindo
+              ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              : <Send className="h-4 w-4" aria-hidden="true" />}
+            {conferindo ? 'Conferindo…' : aviso ? 'Enviar assim mesmo' : 'Enviar pedido'}
           </Button>
         </div>
       </form>

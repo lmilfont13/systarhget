@@ -84,6 +84,36 @@ Deno.test('resposta fora do formato vira erro legível', async () => {
   assert(erro instanceof ErroAgente);
 });
 
+Deno.test('por padrão o item sem promotor é descartado', async () => {
+  const { interprete } = await import('./agentes.ts');
+  respostasIA({ itens: [
+    { trecho: 'carta pro adailton no atacadao', promotor: 'adailton', loja: 'atacadao' },
+    { trecho: 'e uma pro assai', promotor: '', loja: 'assai' },
+  ] });
+  const itens = await interprete('x');
+  assertEquals(itens.length, 1);
+  assertEquals(itens[0].promotor, 'adailton');
+});
+
+Deno.test('a conferência mantém o item sem promotor, para poder cobrar o dado', async () => {
+  const { interprete } = await import('./agentes.ts');
+  respostasIA({ itens: [
+    { trecho: 'carta pro adailton no atacadao', promotor: 'adailton', loja: 'atacadao' },
+    { trecho: 'e uma pro assai', promotor: '', loja: 'assai' },
+  ] });
+  const itens = await interprete('x', new Date(), undefined, { manterSemPromotor: true });
+  assertEquals(itens.length, 2);
+  assertEquals(itens[1].loja, 'assai');
+  assertEquals(itens[1].promotor, '');
+});
+
+Deno.test('mesmo mantendo incompletos, item sem promotor e sem loja não vira pedido', async () => {
+  const { interprete } = await import('./agentes.ts');
+  respostasIA({ itens: [{ trecho: 'bom dia', promotor: '', loja: '' }] });
+  const itens = await interprete('x', new Date(), undefined, { manterSemPromotor: true });
+  assertEquals(itens.length, 0);
+});
+
 Deno.test('mensagem de WhatsApp resume cada carta com o selo de confiança', async () => {
   const { mensagemDoPedido } = await import('./whatsapp.ts');
   const msg = mensagemDoPedido('Marcos Lima', 'carta pro adailton no atacadao', [
