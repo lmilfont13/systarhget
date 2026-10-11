@@ -355,7 +355,22 @@ function AreaSupervisor({ user }) {
             {voz.parcial || 'Ouvindo…'}
           </p>
         )}
-        {voz.erro && <p className="mt-2 text-sm text-red-700" role="alert">{voz.erro}</p>}
+        {/* Bloqueio definitivo: o Chrome não pergunta mais, então o caminho
+            de volta tem que estar escrito aqui. */}
+        {voz.bloqueado ? (
+          <div className="mt-3 rounded-xl border border-signal-100 bg-signal-50 px-4 py-3 text-sm text-signal-700" role="alert">
+            <p className="font-medium">O microfone está bloqueado para este site.</p>
+            <p className="mt-1">O navegador não vai mais perguntar, então é preciso liberar na mão:</p>
+            <ol className="mt-2 list-decimal space-y-0.5 pl-5">
+              <li>Clique no ícone à esquerda do endereço, lá em cima (cadeado ou controles).</li>
+              <li>Abra <strong>Configurações do site</strong>.</li>
+              <li>Em <strong>Microfone</strong>, troque para <strong>Permitir</strong>.</li>
+            </ol>
+            <p className="mt-2">Assim que liberar, o botão volta a funcionar aqui mesmo. Dá para escrever o pedido normalmente enquanto isso.</p>
+          </div>
+        ) : (
+          voz.erro && <p className="mt-2 text-sm text-red-700" role="alert">{voz.erro}</p>
+        )}
 
         {/* Faltou promotor ou loja: cobra aqui, antes de virar pedido */}
         {aviso && (

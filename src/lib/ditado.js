@@ -50,6 +50,25 @@ const MENSAGEM_PERMISSAO = {
 };
 
 /**
+ * Se o navegador já bloqueou o microfone para este site de vez.
+ *
+ * Importa porque, nesse estado, o Chrome **para de perguntar**: a pessoa clica,
+ * recebe o erro na hora e não tem como autorizar, porque a janelinha nunca mais
+ * aparece. Sem detectar isso, ela fica tentando para sempre. Só dá para sair
+ * pelas configurações do site.
+ */
+export async function microfoneBloqueado(permissions) {
+  if (!permissions?.query) return false;
+  try {
+    const status = await permissions.query({ name: 'microphone' });
+    return status.state === 'denied';
+  } catch {
+    // Safari não aceita consultar 'microphone'. Na dúvida, deixa tentar.
+    return false;
+  }
+}
+
+/**
  * Pede o microfone e ESPERA a resposta, antes de ligar o reconhecedor.
  *
  * É isso que conserta o "liberei e não adianta": quando `start()` é quem
@@ -82,6 +101,7 @@ export function useDitado(aoTranscrever) {
   const [ouvindo, setOuvindo] = useState(false);
   const [parcial, setParcial] = useState('');
   const [erro, setErro] = useState('');
+  const [bloqueado, setBloqueado] = useState(false);
   const recRef = useRef(null);
   const callbackRef = useRef(aoTranscrever);
   useEffect(() => { callbackRef.current = aoTranscrever; }, [aoTranscrever]);
@@ -127,6 +147,27 @@ export function useDitado(aoTranscrever) {
     };
   }, []);
 
+  // Já chega sabendo se o site está bloqueado, e percebe sozinho quando a
+  // pessoa liberar nas configurações — sem precisar recarregar a página.
+  useEffect(() => {
+    if (!ditadoSuportado) return undefined;
+    let vivo = true;
+    let status;
+    const sincronizar = () => { if (vivo) setBloqueado(status.state === 'denied'); };
+    navigator.permissions?.query?.({ name: 'microphone' })
+      .then((s) => {
+        if (!vivo) return;
+        status = s;
+        sincronizar();
+        status.addEventListener?.('change', sincronizar);
+      })
+      .catch(() => { /* navegador que não sabe consultar: segue sem o aviso */ });
+    return () => {
+      vivo = false;
+      status?.removeEventListener?.('change', sincronizar);
+    };
+  }, []);
+
   const iniciar = useCallback(async () => {
     if (!recRef.current) return;
     setErro('');
@@ -135,9 +176,13 @@ export function useDitado(aoTranscrever) {
     // pedido, o Chrome encerra a sessão antes da pessoa responder.
     const permissao = await pedirMicrofone(navigator.mediaDevices);
     if (!permissao.ok) {
+      // Confirma se é bloqueio definitivo, para a tela mostrar o passo a passo
+      // em vez de uma linha vermelha que não leva a lugar nenhum.
+      setBloqueado(await microfoneBloqueado(navigator.permissions));
       setErro(permissao.erro);
       return;
     }
+    setBloqueado(false);
 
     try {
       recRef.current.start();
@@ -159,5 +204,5 @@ export function useDitado(aoTranscrever) {
     else iniciar();
   }, [ouvindo, iniciar, parar]);
 
-  return { suportado: ditadoSuportado, ouvindo, parcial, erro, iniciar, parar, alternar };
+  return { suportado: ditadoSuportado, ouvindo, parcial, erro, bloqueado, iniciar, parar, alternar };
 }
