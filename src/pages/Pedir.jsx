@@ -357,7 +357,7 @@ function AreaSupervisor({ user }) {
         )}
         {/* Bloqueio definitivo: o Chrome não pergunta mais, então o caminho
             de volta tem que estar escrito aqui. */}
-        {voz.bloqueado ? (
+        {voz.bloqueio === 'site' ? (
           <div className="mt-3 rounded-xl border border-signal-100 bg-signal-50 px-4 py-3 text-sm text-signal-700" role="alert">
             <p className="font-medium">O microfone está bloqueado para este site.</p>
             <p className="mt-1">O navegador não vai mais perguntar, então é preciso liberar na mão:</p>
@@ -367,6 +367,19 @@ function AreaSupervisor({ user }) {
               <li>Em <strong>Microfone</strong>, troque para <strong>Permitir</strong>.</li>
             </ol>
             <p className="mt-2">Assim que liberar, o botão volta a funcionar aqui mesmo. Dá para escrever o pedido normalmente enquanto isso.</p>
+          </div>
+        ) : voz.bloqueio === 'sistema' ? (
+          <div className="mt-3 rounded-xl border border-signal-100 bg-signal-50 px-4 py-3 text-sm text-signal-700" role="alert">
+            <p className="font-medium">O microfone está liberado neste site, mas algo no computador está barrando.</p>
+            <p className="mt-1">Quando é assim, o bloqueio costuma estar num destes dois lugares:</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>
+                <strong>Windows</strong>: Configurações → Privacidade e segurança → Microfone. Ligue também
+                {' '}<strong>&ldquo;Permitir que aplicativos da área de trabalho acessem seu microfone&rdquo;</strong> — esse costuma ser o esquecido.
+              </li>
+              <li><strong>Antivírus</strong>: procure por proteção de microfone e libere o navegador.</li>
+            </ul>
+            <p className="mt-2">Enquanto isso, dá para escrever o pedido normalmente aqui em cima.</p>
           </div>
         ) : (
           voz.erro && <p className="mt-2 text-sm text-red-700" role="alert">{voz.erro}</p>

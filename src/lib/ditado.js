@@ -50,22 +50,31 @@ const MENSAGEM_PERMISSAO = {
 };
 
 /**
- * Se o navegador já bloqueou o microfone para este site de vez.
- *
- * Importa porque, nesse estado, o Chrome **para de perguntar**: a pessoa clica,
- * recebe o erro na hora e não tem como autorizar, porque a janelinha nunca mais
- * aparece. Sem detectar isso, ela fica tentando para sempre. Só dá para sair
- * pelas configurações do site.
+ * O que o navegador diz da permissão de microfone deste site, ou null quando
+ * não sabe responder (Safari não aceita consultar 'microphone').
  */
-export async function microfoneBloqueado(permissions) {
-  if (!permissions?.query) return false;
+export async function estadoDaPermissao(permissions) {
+  if (!permissions?.query) return null;
   try {
     const status = await permissions.query({ name: 'microphone' });
-    return status.state === 'denied';
+    return status.state;
   } catch {
-    // Safari não aceita consultar 'microphone'. Na dúvida, deixa tentar.
-    return false;
+    return null;
   }
+}
+
+/**
+ * De onde vem o bloqueio, a partir do que o navegador diz da permissão do site.
+ *
+ * Importa porque o caminho de volta é completamente diferente:
+ *  - 'site'    — o navegador negou. Resolve no cadeado da barra de endereço.
+ *  - 'sistema' — a permissão do site está em ordem e mesmo assim o microfone
+ *    foi recusado: é o Windows (com "aplicativos da área de trabalho"
+ *    desligado) ou o antivírus. Nesse caso o cadeado não resolve nada, e
+ *    mandar a pessoa até lá só faz perder tempo.
+ */
+export function origemDoBloqueio(estadoDaPermissao) {
+  return estadoDaPermissao === 'denied' ? 'site' : 'sistema';
 }
 
 /**
@@ -87,7 +96,14 @@ export async function pedirMicrofone(mediaDevices) {
     stream.getTracks().forEach((faixa) => faixa.stop());
     return { ok: true };
   } catch (e) {
-    return { ok: false, erro: MENSAGEM_PERMISSAO[e?.name] || 'Não consegui usar o microfone agora.' };
+    // Separa "foi negado" de "não tem microfone"/"está ocupado": só o primeiro
+    // é caso de mexer em configuração.
+    const negouPermissao = e?.name === 'NotAllowedError' || e?.name === 'SecurityError';
+    return {
+      ok: false,
+      negouPermissao,
+      erro: MENSAGEM_PERMISSAO[e?.name] || 'Não consegui usar o microfone agora.',
+    };
   }
 }
 
@@ -101,7 +117,7 @@ export function useDitado(aoTranscrever) {
   const [ouvindo, setOuvindo] = useState(false);
   const [parcial, setParcial] = useState('');
   const [erro, setErro] = useState('');
-  const [bloqueado, setBloqueado] = useState(false);
+  const [bloqueio, setBloqueio] = useState(null); // null | 'site' | 'sistema'
   const recRef = useRef(null);
   const callbackRef = useRef(aoTranscrever);
   useEffect(() => { callbackRef.current = aoTranscrever; }, [aoTranscrever]);
@@ -153,7 +169,9 @@ export function useDitado(aoTranscrever) {
     if (!ditadoSuportado) return undefined;
     let vivo = true;
     let status;
-    const sincronizar = () => { if (vivo) setBloqueado(status.state === 'denied'); };
+    // Ao abrir, só dá para afirmar o bloqueio do site: um bloqueio do sistema
+    // só aparece quando o microfone é pedido de fato.
+    const sincronizar = () => { if (vivo) setBloqueio(status.state === 'denied' ? 'site' : null); };
     navigator.permissions?.query?.({ name: 'microphone' })
       .then((s) => {
         if (!vivo) return;
@@ -176,13 +194,13 @@ export function useDitado(aoTranscrever) {
     // pedido, o Chrome encerra a sessão antes da pessoa responder.
     const permissao = await pedirMicrofone(navigator.mediaDevices);
     if (!permissao.ok) {
-      // Confirma se é bloqueio definitivo, para a tela mostrar o passo a passo
-      // em vez de uma linha vermelha que não leva a lugar nenhum.
-      setBloqueado(await microfoneBloqueado(navigator.permissions));
+      // Recusado: descobre de onde vem o bloqueio, para a tela mandar a pessoa
+      // ao lugar certo — o cadeado do navegador não resolve bloqueio do sistema.
+      setBloqueio(permissao.negouPermissao ? origemDoBloqueio(await estadoDaPermissao(navigator.permissions)) : null);
       setErro(permissao.erro);
       return;
     }
-    setBloqueado(false);
+    setBloqueio(null);
 
     try {
       recRef.current.start();
@@ -204,5 +222,5 @@ export function useDitado(aoTranscrever) {
     else iniciar();
   }, [ouvindo, iniciar, parar]);
 
-  return { suportado: ditadoSuportado, ouvindo, parcial, erro, bloqueado, iniciar, parar, alternar };
+  return { suportado: ditadoSuportado, ouvindo, parcial, erro, bloqueio, iniciar, parar, alternar };
 }
