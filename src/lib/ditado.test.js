@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { juntarDitado, pedirMicrofone, microfoneBloqueado } from './ditado';
+import { juntarDitado, pedirMicrofone, estadoDaPermissao, origemDoBloqueio } from './ditado';
 
 /** Erro no formato que o navegador devolve (o nome é o que importa). */
 const erroDoNavegador = (name) => Object.assign(new Error(name), { name });
@@ -85,26 +85,53 @@ describe('juntarDitado', () => {
   });
 });
 
-describe('microfoneBloqueado', () => {
+describe('estadoDaPermissao', () => {
   const permissionsFalso = (state) => ({ query: () => Promise.resolve({ state, addEventListener() {} }) });
 
-  it('acusa bloqueio quando o navegador já negou de vez', async () => {
-    // É o caso em que o Chrome nem pergunta mais: sem isso a pessoa fica no escuro.
-    expect(await microfoneBloqueado(permissionsFalso('denied'))).toBe(true);
+  it('devolve o estado que o navegador informa', async () => {
+    expect(await estadoDaPermissao(permissionsFalso('denied'))).toBe('denied');
+    expect(await estadoDaPermissao(permissionsFalso('granted'))).toBe('granted');
+    expect(await estadoDaPermissao(permissionsFalso('prompt'))).toBe('prompt');
   });
 
-  it('não acusa bloqueio quando a permissão está dada', async () => {
-    expect(await microfoneBloqueado(permissionsFalso('granted'))).toBe(false);
+  it('devolve null quando o navegador não sabe responder', async () => {
+    // Safari não aceita consultar 'microphone'.
+    expect(await estadoDaPermissao({ query: () => Promise.reject(new Error('x')) })).toBe(null);
+    expect(await estadoDaPermissao(undefined)).toBe(null);
+  });
+});
+
+describe('origemDoBloqueio', () => {
+  it('aponta o site quando foi o próprio navegador que negou', () => {
+    expect(origemDoBloqueio('denied')).toBe('site');
   });
 
-  it('não acusa bloqueio quando o navegador ainda vai perguntar', async () => {
-    expect(await microfoneBloqueado(permissionsFalso('prompt'))).toBe(false);
+  it('aponta o sistema quando o navegador não é quem está negando', () => {
+    // Windows com "aplicativos da área de trabalho" desligado, ou antivírus
+    // com escudo de microfone: a permissão do site está em ordem e mesmo
+    // assim o getUserMedia é recusado. Mandar a pessoa no cadeado seria
+    // mandá-la para o lugar errado.
+    expect(origemDoBloqueio('granted')).toBe('sistema');
+    expect(origemDoBloqueio('prompt')).toBe('sistema');
   });
 
-  it('não acusa nada quando o navegador não sabe responder', async () => {
-    // Safari não aceita consultar 'microphone': na dúvida, deixa tentar.
-    const quebrado = { query: () => Promise.reject(new Error('TypeError')) };
-    expect(await microfoneBloqueado(quebrado)).toBe(false);
-    expect(await microfoneBloqueado(undefined)).toBe(false);
+  it('aponta o sistema quando não dá para consultar a permissão', () => {
+    expect(origemDoBloqueio(null)).toBe('sistema');
+    expect(origemDoBloqueio(undefined)).toBe('sistema');
+  });
+});
+
+describe('pedirMicrofone: de que tipo foi a recusa', () => {
+  const recusa = (name) => ({ getUserMedia: () => Promise.reject(Object.assign(new Error(name), { name })) });
+
+  it('marca como recusa de permissão quando foi negado', async () => {
+    expect((await pedirMicrofone(recusa('NotAllowedError'))).negouPermissao).toBe(true);
+  });
+
+  it('não marca como permissão quando o problema é outro', async () => {
+    // Sem microfone ou microfone ocupado não têm nada a ver com permissão:
+    // mandar a pessoa mexer em configuração seria desperdiçar o tempo dela.
+    expect((await pedirMicrofone(recusa('NotFoundError'))).negouPermissao).toBe(false);
+    expect((await pedirMicrofone(recusa('NotReadableError'))).negouPermissao).toBe(false);
   });
 });
