@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Navigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Loader2, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Loader2, Mail, ArrowLeft, CheckCircle2, LogOut } from 'lucide-react';
 import { useAuth, authErrorMessage, displayName } from '../lib/auth';
+import { destinoPosLogin, deveRedirecionar } from '../lib/rotaPosLogin';
 import { Wordmark, Button } from '../components/ui';
 import { MarcaDesenhada } from '../components/Lacre';
 
@@ -22,11 +23,13 @@ function ErrorText({ children }) {
 export default function Login() {
   const { session, user, role, loading, recovering, signIn, signOut, sendPasswordReset, updatePassword } = useAuth();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   // ?trocar=1: entra direto no formulário mesmo com uma sessão válida aberta.
   // Sem isso, quem já está logado (às vezes com uma sessão antiga de outro
   // papel, de antes das áreas terem sessão própria) ficava preso no redirecionamento
   // automático, sem como trocar de conta por aqui.
+  // Vale só pra sessão que já estava aberta ao chegar: assim que alguém entra
+  // com outra conta, o parâmetro sai da URL e o redirecionamento volta a valer.
   const trocarConta = searchParams.get('trocar') === '1';
   const [mode, setMode] = useState('login'); // login | forgot | sent
   const [email, setEmail] = useState('');
@@ -34,10 +37,8 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  if (!loading && session && !recovering && !trocarConta) {
-    const from = location.state?.from?.pathname;
-    const destino = from || { promotor: '/promotores', solicitante: '/pedir' }[role] || '/dashboard';
-    return <Navigate to={destino} replace />;
+  if (deveRedirecionar({ loading, session, recovering, trocando: trocarConta })) {
+    return <Navigate to={destinoPosLogin({ role, from: location.state?.from?.pathname })} replace />;
   }
 
   const run = (fn) => async (e) => {
@@ -53,7 +54,12 @@ export default function Login() {
     }
   };
 
-  const onLogin = run(() => signIn(email, password));
+  const onLogin = run(async () => {
+    await signIn(email, password);
+    // Solta o ?trocar=1 (mantendo o destino guardado no state) pra que o
+    // redirecionamento pós-login aconteça em vez de parar no formulário.
+    if (trocarConta) setSearchParams({}, { replace: true, state: location.state });
+  });
   const onForgot = run(async () => { await sendPasswordReset(email); setMode('sent'); });
   const onNewPassword = run(async () => {
     if (password.length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
@@ -118,9 +124,10 @@ export default function Login() {
           <button
             type="button"
             onClick={() => signOut()}
-            className="w-full rounded-lg bg-slate-50 px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-100"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-ink"
           >
-            Só quero sair dessa conta, sem entrar com outra.
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            Só sair dessa conta
           </button>
         )}
         <Field label="Usuário ou e-mail" id="email" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
