@@ -413,7 +413,11 @@ export default function Pedir() {
                 ? 'Você entrou como administrador. Os pedidos dos supervisores chegam na caixa de entrada do painel.'
                 : 'Esta área é para supervisores. Saia e entre com o seu usuário de supervisor.'}
             </p>
-            {role === 'admin' && <Button as={Link} to="/solicitacoes" className="mt-4">Abrir caixa de entrada</Button>}
+            {role === 'admin' && (
+              <Button as={Link} to="/login" state={{ from: { pathname: '/solicitacoes' } }} className="mt-4">
+                Entrar no painel
+              </Button>
+            )}
           </div>
         )}
       </main>
