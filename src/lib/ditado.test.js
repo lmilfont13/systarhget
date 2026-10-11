@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { juntarDitado, pedirMicrofone } from './ditado';
+import { juntarDitado, pedirMicrofone, microfoneBloqueado } from './ditado';
 
 /** Erro no formato que o navegador devolve (o nome é o que importa). */
 const erroDoNavegador = (name) => Object.assign(new Error(name), { name });
@@ -82,5 +82,29 @@ describe('juntarDitado', () => {
 
   it('aguenta campo ausente', () => {
     expect(juntarDitado(undefined, 'carta pro Adailton')).toBe('carta pro Adailton');
+  });
+});
+
+describe('microfoneBloqueado', () => {
+  const permissionsFalso = (state) => ({ query: () => Promise.resolve({ state, addEventListener() {} }) });
+
+  it('acusa bloqueio quando o navegador já negou de vez', async () => {
+    // É o caso em que o Chrome nem pergunta mais: sem isso a pessoa fica no escuro.
+    expect(await microfoneBloqueado(permissionsFalso('denied'))).toBe(true);
+  });
+
+  it('não acusa bloqueio quando a permissão está dada', async () => {
+    expect(await microfoneBloqueado(permissionsFalso('granted'))).toBe(false);
+  });
+
+  it('não acusa bloqueio quando o navegador ainda vai perguntar', async () => {
+    expect(await microfoneBloqueado(permissionsFalso('prompt'))).toBe(false);
+  });
+
+  it('não acusa nada quando o navegador não sabe responder', async () => {
+    // Safari não aceita consultar 'microphone': na dúvida, deixa tentar.
+    const quebrado = { query: () => Promise.reject(new Error('TypeError')) };
+    expect(await microfoneBloqueado(quebrado)).toBe(false);
+    expect(await microfoneBloqueado(undefined)).toBe(false);
   });
 });
