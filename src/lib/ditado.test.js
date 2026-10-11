@@ -1,5 +1,59 @@
 import { describe, it, expect } from 'vitest';
-import { juntarDitado } from './ditado';
+import { juntarDitado, pedirMicrofone } from './ditado';
+
+/** Erro no formato que o navegador devolve (o nome é o que importa). */
+const erroDoNavegador = (name) => Object.assign(new Error(name), { name });
+
+function mediaDevicesFalso(resultado) {
+  const parados = [];
+  const devices = {
+    getUserMedia: () => {
+      if (resultado instanceof Error) return Promise.reject(resultado);
+      return Promise.resolve({ getTracks: () => [{ stop: () => parados.push('parou') }] });
+    },
+  };
+  return { devices, parados };
+}
+
+describe('pedirMicrofone', () => {
+  it('libera quando a pessoa autoriza', async () => {
+    const { devices } = mediaDevicesFalso('ok');
+    expect(await pedirMicrofone(devices)).toEqual({ ok: true });
+  });
+
+  it('desliga o microfone depois de confirmar a permissão', async () => {
+    // Só queríamos a autorização: quem grava de verdade é o reconhecedor de fala.
+    const { devices, parados } = mediaDevicesFalso('ok');
+    await pedirMicrofone(devices);
+    expect(parados).toEqual(['parou']);
+  });
+
+  it('avisa quando a permissão foi negada ou está bloqueada', async () => {
+    const { devices } = mediaDevicesFalso(erroDoNavegador('NotAllowedError'));
+    const r = await pedirMicrofone(devices);
+    expect(r.ok).toBe(false);
+    expect(r.erro).toMatch(/bloqueado/i);
+  });
+
+  it('avisa quando não há microfone no aparelho', async () => {
+    const { devices } = mediaDevicesFalso(erroDoNavegador('NotFoundError'));
+    const r = await pedirMicrofone(devices);
+    expect(r.ok).toBe(false);
+    expect(r.erro).toMatch(/microfone/i);
+  });
+
+  it('avisa quando outro programa está usando o microfone', async () => {
+    const { devices } = mediaDevicesFalso(erroDoNavegador('NotReadableError'));
+    const r = await pedirMicrofone(devices);
+    expect(r.ok).toBe(false);
+    expect(r.erro).toMatch(/outro programa|em uso/i);
+  });
+
+  it('não trava quando o navegador não tem a API de mídia', async () => {
+    // Sem como pedir antes: deixa o reconhecedor tentar e falar por si.
+    expect(await pedirMicrofone(undefined)).toEqual({ ok: true });
+  });
+});
 
 describe('juntarDitado', () => {
   it('começa o texto quando o campo está vazio', () => {
