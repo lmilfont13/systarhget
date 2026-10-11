@@ -109,7 +109,17 @@ function hojeEmSaoPaulo(agora = new Date()) {
 
 const dataValida = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : '');
 
-export async function interprete(texto: string, agora = new Date(), consumo?: Consumo): Promise<PedidoInterpretado[]> {
+/**
+ * `manterSemPromotor`: a conferência feita antes de enviar precisa enxergar o
+ * item que veio só com a loja, para poder cobrar o nome do promotor. No
+ * processamento normal esse item continua sendo descartado, como sempre foi.
+ */
+export async function interprete(
+  texto: string,
+  agora = new Date(),
+  consumo?: Consumo,
+  opcoes: { manterSemPromotor?: boolean } = {},
+): Promise<PedidoInterpretado[]> {
   const sistema = `Hoje é ${hojeEmSaoPaulo(agora)}, no fuso de São Paulo.
 Você é o Intérprete de pedidos de cartas de apresentação de promotores de vendas (trade marketing, Brasil).
 Um supervisor escreveu um pedido em texto livre. Separe CADA carta pedida (uma por promotor).
@@ -130,7 +140,7 @@ Se uma mesma loja vale para vários promotores, repita a loja em cada item. Máx
       data: dataValida(i.data),
       data_texto: txt(i.data_texto, 60),
     }))
-    .filter((i) => i.promotor || i.cpf);
+    .filter((i) => i.promotor || i.cpf || (opcoes.manterSemPromotor && i.loja));
 }
 
 // ---------------------------------------------------------------------------

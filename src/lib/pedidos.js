@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { dataUrlToBlob } from './cartas';
+import { avisoDoQueFalta } from './pedidoCompleto';
 
 /**
  * Pedidos de carta feitos pelos supervisores (área /pedir) e a caixa de entrada do admin.
@@ -52,6 +53,22 @@ export async function processarPedido(id, client = supabase) {
   const { data, error } = await client.functions.invoke('processar-solicitacao', { body: { id } });
   if (error) throw new Error(await mensagemDaFuncao(error, 'Os agentes não conseguiram processar agora.'));
   return data;
+}
+
+/**
+ * Confere o pedido antes de enviar e devolve o aviso do que falta (ou null).
+ *
+ * Nunca lança: conferir é ajuda, não portão. Se a IA estiver fora do ar, devolve
+ * null e o pedido segue normalmente — o pipeline ainda pega os avisos depois.
+ */
+export async function conferirPedido(texto, client = supabase) {
+  try {
+    const { data, error } = await client.functions.invoke('conferir-pedido', { body: { texto } });
+    if (error || !Array.isArray(data?.itens)) return null;
+    return avisoDoQueFalta(data.itens);
+  } catch {
+    return null;
+  }
 }
 
 export async function enviarPedido(userId, texto, client = supabase) {
