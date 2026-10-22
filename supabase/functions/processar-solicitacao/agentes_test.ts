@@ -174,3 +174,15 @@ Deno.test('o prompt do Intérprete é idêntico nas duas cópias', async () => {
   const copia = await Deno.readTextFile(new URL('../conferir-pedido/agentes.ts', import.meta.url));
   assertEquals(prompt(copia), prompt(original));
 });
+
+Deno.test('escolhe o canal de aviso pelo que estiver configurado', async () => {
+  const { canalDeAviso } = await import('./whatsapp.ts');
+  // A Cloud API é oficial: quando está configurada, ela ganha.
+  assertEquals(canalDeAviso({ token: 'x', phoneId: '1', destino: '55', fone: '55', chave: 'k' }), 'cloud');
+  // Só o CallMeBot configurado: usa ele, melhor que silêncio.
+  assertEquals(canalDeAviso({ fone: '55', chave: 'k' }), 'callmebot');
+  // Cloud API pela metade não serve: faltando um pedaço, cai no outro.
+  assertEquals(canalDeAviso({ token: 'x', destino: '55', fone: '55', chave: 'k' }), 'callmebot');
+  // Nada configurado: ninguém é avisado, e isso precisa ser dizível.
+  assertEquals(canalDeAviso({}), 'nenhum');
+});
