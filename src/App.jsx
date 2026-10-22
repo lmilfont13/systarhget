@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
+import Salvaguarda from './components/Salvaguarda';
 import { AuthProvider } from './lib/auth';
 import { supabaseSolicitante } from './lib/supabase';
 import { PageSkeleton } from './components/ui';
@@ -27,6 +28,7 @@ const Auditoria = lazy(telas['/auditoria']);
 const Login = lazy(telas['/login']);
 const Pedir = lazy(telas['/pedir']);
 const Solicitacoes = lazy(telas['/solicitacoes']);
+const Supervisores = lazy(telas['/supervisores']);
 
 function StandaloneFallback() {
   return (
@@ -38,8 +40,9 @@ function StandaloneFallback() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
+    <Salvaguarda>
+      <BrowserRouter>
+        <AuthProvider>
         <Toaster
           position="bottom-right"
           richColors
@@ -54,6 +57,7 @@ export default function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="templates" element={<Templates />} />
             <Route path="solicitacoes" element={<Solicitacoes />} />
+            <Route path="supervisores" element={<Supervisores />} />
             <Route path="documentos" element={<Documentos />} />
             <Route path="funcionarios" element={<Funcionarios />} />
             <Route path="empresas" element={<Empresas />} />
@@ -76,7 +80,8 @@ export default function App() {
           } />
           <Route path="carta/:id" element={<Suspense fallback={<StandaloneFallback />}><VisualizadorCarta /></Suspense>} />
         </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+        </AuthProvider>
+      </BrowserRouter>
+    </Salvaguarda>
   );
 }

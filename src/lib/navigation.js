@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FileText, History, Package, Users, Building2,
-  Store, FileSignature, Download, ShieldCheck, Settings, Inbox,
+  Store, FileSignature, Download, ShieldCheck, Settings, Inbox, UserCheck,
 } from 'lucide-react';
 
 /** Navegação principal, agrupada pelo tipo de trabalho. */
@@ -22,6 +22,7 @@ export const NAV_GROUPS = [
       { href: '/empresas',     name: 'Empresas',     icon: Building2,     keywords: 'agencias clientes cnpj' },
       { href: '/lojas',        name: 'Lojas',        icon: Store,         keywords: 'pdv redes supermercados' },
       { href: '/templates',    name: 'Templates',    icon: FileSignature, keywords: 'modelos layout pdf' },
+      { href: '/supervisores', name: 'Supervisores', icon: UserCheck,     keywords: 'solicitantes acesso desativar excluir contas' },
     ],
   },
   {

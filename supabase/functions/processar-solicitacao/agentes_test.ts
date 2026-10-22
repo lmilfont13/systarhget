@@ -142,3 +142,19 @@ Deno.test('soma os tokens de todas as chamadas e calcula o custo em dólar', asy
   assertEquals(consumo, { chamadas: 3, entrada: 3000, saida: 600 });
   assertEquals(custoUsd(consumo), 0.012); // 3000×$2/M + 600×$10/M
 });
+
+Deno.test('teto diário: libera abaixo do limite e trava ao alcançá-lo', async () => {
+  const { podeGastar } = await import('./teto.ts');
+  assertEquals(podeGastar(0, 5), true);
+  assertEquals(podeGastar(4.99, 5), true);
+  assertEquals(podeGastar(5, 5), false);
+  assertEquals(podeGastar(12, 5), false);
+});
+
+Deno.test('o dia do teto vira às 00h de São Paulo, não de UTC', async () => {
+  const { inicioDoDiaSaoPaulo } = await import('./teto.ts');
+  // 02h UTC do dia 23 ainda é dia 22 em São Paulo: o teto não pode zerar aí.
+  assertEquals(inicioDoDiaSaoPaulo(new Date('2026-10-23T02:00:00Z')), '2026-10-22T03:00:00.000Z');
+  // 04h UTC já é dia 23 em São Paulo: aí sim o teto zera.
+  assertEquals(inicioDoDiaSaoPaulo(new Date('2026-10-23T04:00:00Z')), '2026-10-23T03:00:00.000Z');
+});
