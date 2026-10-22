@@ -33,6 +33,16 @@ jobs:
       - name: Testes
         run: npm test
 
+      # As funções do servidor rodam em Deno, fora do vitest. Sem isto, a
+      # checagem que impede o prompt do Intérprete de divergir entre as duas
+      # cópias só rodaria se alguém lembrasse de chamá-la à mão.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Testes das funções (Deno)
+        run: deno test --allow-env --allow-net --allow-read --no-check --node-modules-dir=auto supabase/functions/processar-solicitacao/agentes_test.ts
+
       - name: Build
         run: npm run build
         env:

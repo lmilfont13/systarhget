@@ -2,6 +2,7 @@
 // Pode ser chamado pelo supervisor dono do pedido (logo após enviar) ou pelo admin (reprocessar).
 import { CORS, clienteServico, papelDe, resposta, usuarioDaRequisicao } from './comum.ts';
 import { ErroAgente, resolverPedido, novoConsumo, custoUsd, type Consumo } from './agentes.ts';
+import { inicioDoDiaSaoPaulo, podeGastar, tetoDiarioUsd } from './teto.ts';
 import { avisarWhatsApp, mensagemDoPedido } from './whatsapp.ts';
 
 // Dólar do dia (AwesomeAPI); se falhar, usa COTACAO_DOLAR ou 5,50
@@ -61,6 +62,21 @@ Deno.serve(async (req) => {
   // Evita dois processamentos ao mesmo tempo (libera depois de 2 minutos)
   const recente = Date.now() - new Date(pedido.atualizado_em).getTime() < 120_000;
   if (pedido.status === 'processando' && recente) return resposta({ ok: true, status: 'processando' });
+
+  // Freio de gasto: conferido antes de tomar o pedido, para não deixá-lo preso
+  // em "processando" quando o teto já estourou.
+  const gastoHoje = await db
+    .from('uso_agentes')
+    .select('custo_usd')
+    .gte('criado_em', inicioDoDiaSaoPaulo())
+    .then(({ data }) => (data ?? []).reduce((s: number, l: { custo_usd: number }) => s + Number(l.custo_usd || 0), 0));
+
+  if (!podeGastar(gastoHoje, tetoDiarioUsd())) {
+    console.warn('teto diário atingido', { gastoHoje, teto: tetoDiarioUsd() });
+    return resposta({
+      erro: 'O limite de processamento de hoje foi atingido. O administrador precisa liberar, ou os pedidos seguem amanhã.',
+    }, 429);
+  }
 
   // Troca para "processando" só se ninguém mudou o pedido desde a leitura (atômico)
   const { data: tomado, error: erroTomar } = await db.from('solicitacoes')

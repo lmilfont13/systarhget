@@ -21,6 +21,7 @@ export const telas = {
   '/login': () => import('../pages/Login'),
   '/pedir': () => import('../pages/Pedir'),
   '/solicitacoes': () => import('../pages/Solicitacoes'),
+  '/supervisores': () => import('../pages/Supervisores'),
 };
 
 /** Dados que cada tela usa, para já virem do cache quando ela abrir. */

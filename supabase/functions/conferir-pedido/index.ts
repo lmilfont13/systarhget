@@ -6,7 +6,7 @@
 // procura promotor no cadastro e não gera carta: devolve apenas o que entendeu
 // de cada pedido, para a tela dizer o que está faltando.
 import { CORS, papelDe, resposta, usuarioDaRequisicao } from './comum.ts';
-import { interprete } from '../processar-solicitacao/agentes.ts';
+import { interprete } from './agentes.ts';
 
 const LIMITE_TEXTO = 4000; // o mesmo maxLength do campo na tela
 

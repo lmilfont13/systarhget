@@ -142,3 +142,35 @@ Deno.test('soma os tokens de todas as chamadas e calcula o custo em dólar', asy
   assertEquals(consumo, { chamadas: 3, entrada: 3000, saida: 600 });
   assertEquals(custoUsd(consumo), 0.012); // 3000×$2/M + 600×$10/M
 });
+
+Deno.test('teto diário: libera abaixo do limite e trava ao alcançá-lo', async () => {
+  const { podeGastar } = await import('./teto.ts');
+  assertEquals(podeGastar(0, 5), true);
+  assertEquals(podeGastar(4.99, 5), true);
+  assertEquals(podeGastar(5, 5), false);
+  assertEquals(podeGastar(12, 5), false);
+});
+
+Deno.test('o dia do teto vira às 00h de São Paulo, não de UTC', async () => {
+  const { inicioDoDiaSaoPaulo } = await import('./teto.ts');
+  // 02h UTC do dia 23 ainda é dia 22 em São Paulo: o teto não pode zerar aí.
+  assertEquals(inicioDoDiaSaoPaulo(new Date('2026-10-23T02:00:00Z')), '2026-10-22T03:00:00.000Z');
+  // 04h UTC já é dia 23 em São Paulo: aí sim o teto zera.
+  assertEquals(inicioDoDiaSaoPaulo(new Date('2026-10-23T04:00:00Z')), '2026-10-23T03:00:00.000Z');
+});
+
+Deno.test('o prompt do Intérprete é idêntico nas duas cópias', async () => {
+  // conferir-pedido carrega uma cópia local do Intérprete, porque a publicação
+  // empacota uma pasta por vez. Se alguém melhorar o prompt de um lado e
+  // esquecer o outro, a conferência passa a entender o pedido de um jeito e o
+  // processamento de outro — e ninguém perceberia. Este teste é o que impede.
+  const prompt = (texto: string) => {
+    const i = texto.indexOf('const sistema = `Hoje é');
+    const f = texto.indexOf('devolva {"itens":[]}.`;', i);
+    if (i < 0 || f < 0) throw new Error('não achei o prompt do Intérprete');
+    return texto.slice(i, f);
+  };
+  const original = await Deno.readTextFile(new URL('./agentes.ts', import.meta.url));
+  const copia = await Deno.readTextFile(new URL('../conferir-pedido/agentes.ts', import.meta.url));
+  assertEquals(prompt(copia), prompt(original));
+});
