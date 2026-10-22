@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, LogOut, Send, FileText, ExternalLink, ChevronDown, EyeOff, Eye, Timer } from 'lucide-react';
+import { Loader2, LogOut, Send, FileText, ExternalLink, ChevronDown, EyeOff, Eye, Timer, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, authErrorMessage } from '../lib/auth';
 import { Button, Wordmark } from '../components/ui';
@@ -10,6 +10,7 @@ import {
   STATUS_PEDIDO, cadastrarSolicitante, enviarPedido, conferirPedido, meuPerfil, meusPedidos,
   cartasDoPedido, acompanharPedidos, fraseDoPedido, etapasDoPedido,
 } from '../lib/pedidos';
+import { linkAvisoEmpresa } from '../lib/avisoEmpresa';
 import LinhaEtapas from '../components/LinhaEtapas';
 import MesaDoAgente from '../components/MesaDoAgente';
 import { CartaoTempoMedio, Indicador, MiniBarras } from '../components/PainelAtendimento';
@@ -263,6 +264,7 @@ function AreaSupervisor({ user }) {
   const [enviando, setEnviando] = useState(false);
   const [conferindo, setConferindo] = useState(false);
   const [aviso, setAviso] = useState(null); // o que faltou dizer, antes de enviar
+  const [avisoEmpresa, setAvisoEmpresa] = useState(null); // link pronto do WhatsApp, depois de enviar
   const [abertoId, setAbertoId] = useState(undefined);
   const [verTodos, setVerTodos] = useState(false);
   const [agora, setAgora] = useState(() => Date.now());
@@ -320,6 +322,12 @@ function AreaSupervisor({ user }) {
     setEnviando(true);
     try {
       await enviarPedido(user.id, texto, client);
+      // Guarda o link antes de limpar o campo: a mensagem é feita do texto.
+      setAvisoEmpresa(linkAvisoEmpresa({
+        supervisor: perfil?.nome,
+        texto,
+        site: window.location.origin,
+      }));
       setTexto('');
       setAviso(null);
       setAbertoId(undefined);   // efeito vai abrir o pedido novo automaticamente
@@ -404,6 +412,33 @@ function AreaSupervisor({ user }) {
           </Button>
         </div>
       </form>
+
+      {/* Logo depois de enviar: um toque e o WhatsApp abre já escrito.
+          Some sozinho quando a pessoa avisa ou dispensa. */}
+      {avisoEmpresa && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <MessageCircle className="h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
+          <p className="min-w-0 flex-1 text-sm text-emerald-900">
+            Pedido registrado. Avise a empresa para alguém já olhar.
+          </p>
+          <a
+            href={avisoEmpresa}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setAvisoEmpresa(null)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+          >
+            <MessageCircle className="h-4 w-4" aria-hidden="true" />
+            Avisar no WhatsApp
+          </a>
+          <button
+            onClick={() => setAvisoEmpresa(null)}
+            className="rounded-lg px-2 py-2 text-sm text-emerald-800/70 hover:text-emerald-900"
+          >
+            Agora não
+          </button>
+        </div>
+      )}
 
       <section aria-labelledby="titulo-pedidos">
         <div className="mb-3 flex items-center gap-3">
