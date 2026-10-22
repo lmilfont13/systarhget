@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, LogOut, Send, FileText, ExternalLink, ChevronDown, EyeOff, Eye, Timer, Mic, MicOff } from 'lucide-react';
+import { Loader2, LogOut, Send, FileText, ExternalLink, ChevronDown, EyeOff, Eye, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, authErrorMessage } from '../lib/auth';
 import { Button, Wordmark } from '../components/ui';
@@ -10,7 +10,6 @@ import {
   STATUS_PEDIDO, cadastrarSolicitante, enviarPedido, conferirPedido, meuPerfil, meusPedidos,
   cartasDoPedido, acompanharPedidos, fraseDoPedido, etapasDoPedido,
 } from '../lib/pedidos';
-import { useDitado, juntarDitado } from '../lib/ditado';
 import LinhaEtapas from '../components/LinhaEtapas';
 import MesaDoAgente from '../components/MesaDoAgente';
 import { CartaoTempoMedio, Indicador, MiniBarras } from '../components/PainelAtendimento';
@@ -114,62 +113,105 @@ function MiniProgresso({ pedido }) {
   );
 }
 
-function CartaoPedido({ pedido, aberto, onAlternar, agora }) {
+/**
+ * O miolo de um pedido: a cena do agente trabalhando, a linha do tempo e, no
+ * fim, as cartas prontas. Mesmo conteúdo nos dois formatos — acordeão no
+ * celular, painel ao lado no computador — para não existirem duas verdades.
+ */
+function DetalhePedido({ pedido, agora, grande = false }) {
   const { client } = useAuth();
-  const st = STATUS_PEDIDO[pedido.status] || STATUS_PEDIDO.recebida;
   const [cartas, setCartas] = useState(null);
-  const idPainel = `pedido-${pedido.id}`;
 
   useEffect(() => {
-    if (pedido.status !== 'aprovada' || !aberto) return;
+    if (pedido.status !== 'aprovada') return undefined;
     let ativo = true;
     cartasDoPedido(pedido.id, client).then((c) => ativo && setCartas(c)).catch(() => ativo && setCartas([]));
     return () => { ativo = false; };
-  }, [pedido.id, pedido.status, aberto, client]);
+  }, [pedido.id, pedido.status, client]);
 
   return (
-    <li className={cn('overflow-hidden rounded-xl border bg-white transition-shadow', aberto ? 'border-line shadow-md' : 'border-line-soft hover:border-line')}>
+    <div>
+      {/* No painel largo a cena ganha espaço: é ela que conta o que está
+          acontecendo enquanto a pessoa espera. */}
+      <div className={cn('flex flex-col items-center gap-3', !grande && 'sm:flex-row sm:items-center sm:gap-5')}>
+        <MesaDoAgente
+          key={pedido.status}
+          status={pedido.status}
+          className={cn('shrink-0', grande ? 'w-full max-w-sm' : 'w-44')}
+        />
+        <div className="w-full min-w-0 flex-1">
+          <LinhaEtapas pedido={pedido} />
+          <p className={cn('mt-1 text-center text-xs text-slate-500', !grande && 'sm:pl-2 sm:text-left')}>
+            {fraseDoPedido(pedido)}
+          </p>
+          <TempoDoPedido pedido={pedido} agora={agora} />
+        </div>
+      </div>
+
+      {pedido.status === 'recusada' && pedido.motivo_recusa && (
+        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Motivo: {pedido.motivo_recusa}</p>
+      )}
+
+      {pedido.status === 'aprovada' && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {cartas === null && <span className="text-xs text-slate-400">Carregando cartas…</span>}
+          {cartas?.map((c) => (
+            <a key={c.id} href={`/carta/${c.id}`} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium text-brand-700 hover:border-brand-300 hover:bg-brand-50">
+              <FileText className="h-4 w-4" aria-hidden="true" /> {c.nome_funcionario || 'Abrir carta'}
+              <ExternalLink className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Uma linha da lista. No computador ela só seleciona (o detalhe vive no painel
+ * ao lado); no celular ela abre e fecha ali mesmo, porque não há espaço para
+ * duas colunas e o telefone é onde o supervisor realmente usa isto.
+ */
+function CartaoPedido({ pedido, aberto, onAlternar, agora }) {
+  const st = STATUS_PEDIDO[pedido.status] || STATUS_PEDIDO.recebida;
+  const idPainel = `pedido-${pedido.id}`;
+
+  return (
+    <li className={cn(
+      'overflow-hidden rounded-xl border bg-white transition-all duration-200',
+      aberto ? 'border-line shadow-md lg:border-brand-200 lg:bg-brand-50/40 lg:shadow-none' : 'border-line-soft hover:border-line',
+    )}>
       <button
         onClick={onAlternar}
         aria-expanded={aberto}
         aria-controls={idPainel}
         className="flex w-full items-center gap-3 px-4 py-3 text-left"
       >
+        {/* Fita de seleção: no painel lado a lado é o que liga a linha ao
+            detalhe da direita. */}
+        <span
+          aria-hidden="true"
+          className={cn('hidden w-0.5 self-stretch rounded-full transition-colors lg:block', aberto ? 'bg-brand-700' : 'bg-transparent')}
+        />
         <MiniProgresso pedido={pedido} />
-        <span className="min-w-0 flex-1 truncate text-sm text-ink">{pedido.texto}</span>
-        <span className={cn('hidden shrink-0 text-xs font-medium sm:inline', st.tom === 'sucesso' ? 'text-emerald-700' : st.tom === 'alerta' ? 'text-red-700' : 'text-slate-500')}>
-          {st.rotulo}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm text-ink">{pedido.texto}</span>
+          <span className="mt-0.5 flex items-center gap-2 text-xs">
+            <span className={cn('font-medium', st.tom === 'sucesso' ? 'text-emerald-700' : st.tom === 'alerta' ? 'text-red-700' : 'text-slate-500')}>
+              {st.rotulo}
+            </span>
+            <span className="tabular-nums text-slate-400">{fmtCurto(pedido.criado_em)}</span>
+          </span>
         </span>
-        <span className="w-12 shrink-0 text-right text-xs tabular-nums text-slate-400">{fmtCurto(pedido.criado_em)}</span>
-        <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200', aberto && 'rotate-180')} aria-hidden="true" />
+        <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 lg:hidden', aberto && 'rotate-180')} aria-hidden="true" />
       </button>
 
-      <div id={idPainel} className={cn('grid transition-[grid-template-rows] duration-300 ease-out', aberto ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+      {/* Só no celular: o detalhe abre aqui dentro. */}
+      <div id={idPainel} className={cn('grid transition-[grid-template-rows] duration-300 ease-out lg:hidden', aberto ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden">
           <div className="border-t border-line-soft px-4 pb-4 pt-3">
-            <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:gap-5">
-              {aberto && <MesaDoAgente key={pedido.status} status={pedido.status} className="w-44 shrink-0" />}
-              <div className="w-full min-w-0 flex-1">
-                <LinhaEtapas pedido={pedido} />
-                <p className="mt-1 text-center text-xs text-slate-500 sm:text-left sm:pl-2">{fraseDoPedido(pedido)}</p>
-                <TempoDoPedido pedido={pedido} agora={agora} />
-              </div>
-            </div>
-            {pedido.status === 'recusada' && pedido.motivo_recusa && (
-              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Motivo: {pedido.motivo_recusa}</p>
-            )}
-            {pedido.status === 'aprovada' && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {cartas === null && <span className="text-xs text-slate-400">Carregando cartas…</span>}
-                {cartas?.map((c) => (
-                  <a key={c.id} href={`/carta/${c.id}`} target="_blank" rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium text-brand-700 hover:border-brand-300 hover:bg-brand-50">
-                    <FileText className="h-4 w-4" aria-hidden="true" /> {c.nome_funcionario || 'Abrir carta'}
-                    <ExternalLink className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
-                  </a>
-                ))}
-              </div>
-            )}
+            {aberto && <DetalhePedido pedido={pedido} agora={agora} />}
           </div>
         </div>
       </div>
@@ -233,12 +275,12 @@ function AreaSupervisor({ user }) {
     try { localStorage.setItem('tarhget:pedidos-visiveis', visivel ? 'sim' : 'nao'); } catch { /* sem armazenamento */ }
   };
 
-  // Abre sozinho o pedido mais recente ainda em andamento (uma vez)
+  // O último pedido já vem aberto: é o que a pessoa acabou de mandar e quer
+  // ver andando. Os outros ficam como linha, a um clique de distância.
   useEffect(() => {
     if (abertoId !== undefined || !pedidos?.length) return;
-    const emAndamento = pedidos.find((p) => !['aprovada', 'recusada'].includes(p.status));
     // eslint-disable-next-line react-hooks/set-state-in-effect -- escolha inicial do pedido aberto
-    setAbertoId((emAndamento || pedidos[0]).id);
+    setAbertoId(pedidos[0].id);
   }, [pedidos, abertoId]);
 
   // Relógio do "aguardando há…"
@@ -258,6 +300,12 @@ function AreaSupervisor({ user }) {
     return aberto && !recentes.includes(aberto) ? [...recentes, aberto] : recentes;
   }, [pedidos, verTodos, abertoId]);
 
+  // O pedido que o painel da direita está mostrando.
+  const selecionado = useMemo(
+    () => (pedidos || []).find((p) => p.id === abertoId) || null,
+    [pedidos, abertoId],
+  );
+
   const recarregar = useCallback(() => {
     meusPedidos(user.id, client).then(setPedidos).catch(() => setPedidos([]));
   }, [user.id, client]);
@@ -267,14 +315,6 @@ function AreaSupervisor({ user }) {
     recarregar();
     return acompanharPedidos(recarregar, user.id, client);
   }, [user.id, client, recarregar]);
-
-  // O ditado vai somando no campo: dá para falar em várias tacadas e misturar
-  // com o que foi digitado. Qualquer fala nova derruba o aviso anterior.
-  const ouvirTrecho = useCallback((trecho) => {
-    setTexto((atual) => juntarDitado(atual, trecho));
-    setAviso(null);
-  }, []);
-  const voz = useDitado(ouvirTrecho);
 
   const despachar = async () => {
     setEnviando(true);
@@ -297,7 +337,6 @@ function AreaSupervisor({ user }) {
   const enviar = async (e) => {
     e.preventDefault();
     if (texto.trim().length < 3) return;
-    if (voz.ouvindo) voz.parar();
 
     // Já avisado e mandou de novo: é um "enviar assim mesmo".
     if (aviso) {
@@ -330,15 +369,11 @@ function AreaSupervisor({ user }) {
 
       {pedidos?.length > 0 && <PainelSupervisor resumo={resumo} />}
 
-      <form onSubmit={enviar} className="panel p-5 shadow-lg sm:p-6">
+      <form onSubmit={enviar} className="panel p-5 shadow-lg sm:p-6 lg:max-w-3xl">
         <label htmlFor="pedido" className="block text-lg font-semibold text-ink">
           Qual carta você precisa?
         </label>
-        <p className="mt-1 text-sm text-slate-500">
-          {voz.suportado
-            ? 'Fale ou escreva o nome do promotor e a loja. Dá para pedir várias de uma vez.'
-            : 'Escreva do seu jeito o nome do promotor e a loja. Dá para pedir várias de uma vez.'}
-        </p>
+        <p className="mt-1 text-sm text-slate-500">Escreva do seu jeito o nome do promotor e a loja. Dá para pedir várias de uma vez.</p>
         <textarea
           id="pedido"
           rows={4}
@@ -349,42 +384,6 @@ function AreaSupervisor({ user }) {
           className="mt-4 w-full resize-y border bg-white px-3 py-2.5 text-[0.9375rem] leading-relaxed text-ink"
         />
 
-        {/* O que está sendo falado agora, antes de virar texto no campo */}
-        {voz.ouvindo && (
-          <p className="mt-2 min-h-5 text-sm italic text-slate-400" aria-live="polite">
-            {voz.parcial || 'Ouvindo…'}
-          </p>
-        )}
-        {/* Bloqueio definitivo: o Chrome não pergunta mais, então o caminho
-            de volta tem que estar escrito aqui. */}
-        {voz.bloqueio === 'site' ? (
-          <div className="mt-3 rounded-xl border border-signal-100 bg-signal-50 px-4 py-3 text-sm text-signal-700" role="alert">
-            <p className="font-medium">O microfone está bloqueado para este site.</p>
-            <p className="mt-1">O navegador não vai mais perguntar, então é preciso liberar na mão:</p>
-            <ol className="mt-2 list-decimal space-y-0.5 pl-5">
-              <li>Clique no ícone à esquerda do endereço, lá em cima (cadeado ou controles).</li>
-              <li>Abra <strong>Configurações do site</strong>.</li>
-              <li>Em <strong>Microfone</strong>, troque para <strong>Permitir</strong>.</li>
-            </ol>
-            <p className="mt-2">Assim que liberar, o botão volta a funcionar aqui mesmo. Dá para escrever o pedido normalmente enquanto isso.</p>
-          </div>
-        ) : voz.bloqueio === 'sistema' ? (
-          <div className="mt-3 rounded-xl border border-signal-100 bg-signal-50 px-4 py-3 text-sm text-signal-700" role="alert">
-            <p className="font-medium">O microfone está liberado neste site, mas algo no computador está barrando.</p>
-            <p className="mt-1">Quando é assim, o bloqueio costuma estar num destes dois lugares:</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>
-                <strong>Windows</strong>: Configurações → Privacidade e segurança → Microfone. Ligue também
-                {' '}<strong>&ldquo;Permitir que aplicativos da área de trabalho acessem seu microfone&rdquo;</strong> — esse costuma ser o esquecido.
-              </li>
-              <li><strong>Antivírus</strong>: procure por proteção de microfone e libere o navegador.</li>
-            </ul>
-            <p className="mt-2">Enquanto isso, dá para escrever o pedido normalmente aqui em cima.</p>
-          </div>
-        ) : (
-          voz.erro && <p className="mt-2 text-sm text-red-700" role="alert">{voz.erro}</p>
-        )}
-
         {/* Faltou promotor ou loja: cobra aqui, antes de virar pedido */}
         {aviso && (
           <div className="mt-3 rounded-xl border border-signal-100 bg-signal-50 px-4 py-3 text-sm text-signal-700" role="alert">
@@ -392,31 +391,11 @@ function AreaSupervisor({ user }) {
             <ul className="mt-1 space-y-0.5">
               {aviso.detalhes.map((linha) => <li key={linha}>{linha}</li>)}
             </ul>
-            <p className="mt-2">
-              {voz.suportado ? 'Toque no microfone e complete, ou escreva no campo acima.' : 'Complete no campo acima.'}
-            </p>
+            <p className="mt-2">Complete no campo acima.</p>
           </div>
         )}
 
         <div className="mt-3 flex items-center justify-end gap-2">
-          {voz.suportado && (
-            <button
-              type="button"
-              onClick={voz.alternar}
-              aria-pressed={voz.ouvindo}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium',
-                voz.ouvindo
-                  ? 'border-brand-700 bg-brand-700 text-white hover:bg-brand-800'
-                  : 'border-line text-slate-600 hover:border-slate-300 hover:text-ink',
-              )}
-            >
-              {voz.ouvindo
-                ? <MicOff className="h-4 w-4" aria-hidden="true" />
-                : <Mic className="h-4 w-4" aria-hidden="true" />}
-              {voz.ouvindo ? 'Parar' : 'Falar'}
-            </button>
-          )}
           <Button type="submit" disabled={enviando || conferindo || texto.trim().length < 3}>
             {enviando || conferindo
               ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -456,23 +435,51 @@ function AreaSupervisor({ user }) {
             Pedidos escondidos{resumo.emAberto ? ` · ${resumo.emAberto} em andamento` : ''}. Toque para mostrar.
           </button>
         ) : (
-          <>
-            <ul id="lista-pedidos" className="space-y-2">
-              {exibidos.map((p) => (
-                <CartaoPedido key={p.id} pedido={p} agora={agora} aberto={abertoId === p.id} onAlternar={() => setAbertoId((a) => (a === p.id ? null : p.id))} />
-              ))}
-            </ul>
-            {pedidos.length > RECENTES && (
-              <button
-                onClick={() => setVerTodos((v) => !v)}
-                aria-expanded={verTodos}
-                className="mx-auto mt-3 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
-              >
-                {verTodos ? 'Ver só os recentes' : `Ver todos os ${pedidos.length} pedidos`}
-                <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', verTodos && 'rotate-180')} aria-hidden="true" />
-              </button>
-            )}
-          </>
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-start lg:gap-5">
+            <div>
+              <ul id="lista-pedidos" className="space-y-2">
+                {exibidos.map((p) => (
+                  <CartaoPedido
+                    key={p.id}
+                    pedido={p}
+                    agora={agora}
+                    aberto={abertoId === p.id}
+                    onAlternar={() => setAbertoId((a) => (a === p.id ? null : p.id))}
+                  />
+                ))}
+              </ul>
+              {pedidos.length > RECENTES && (
+                <button
+                  onClick={() => setVerTodos((v) => !v)}
+                  aria-expanded={verTodos}
+                  className="mx-auto mt-3 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+                >
+                  {verTodos ? 'Ver só os recentes' : `Ver todos os ${pedidos.length} pedidos`}
+                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', verTodos && 'rotate-180')} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {/* Painel do agente, só no computador. Grudado no topo: dá para
+                percorrer a lista sem perder a cena de vista. */}
+            <div className="hidden lg:sticky lg:top-6 lg:block">
+              {selecionado ? (
+                <div className="rounded-xl border border-line bg-white p-5 shadow-sm">
+                  <p className="text-sm leading-relaxed text-ink">{selecionado.texto}</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Pedido de {fmtCurto(selecionado.criado_em)} · {(STATUS_PEDIDO[selecionado.status] || STATUS_PEDIDO.recebida).rotulo}
+                  </p>
+                  <div className="mt-4 border-t border-line-soft pt-4">
+                    <DetalhePedido key={selecionado.id} pedido={selecionado} agora={agora} grande />
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-line px-5 py-12 text-center text-sm text-slate-500">
+                  Escolha um pedido na lista para acompanhar aqui.
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </section>
     </div>
@@ -487,7 +494,7 @@ export default function Pedir() {
     <div className="min-h-dvh bg-paper">
       <header className="relative overflow-hidden bg-brand-950 text-brand-100">
         <span className="luz-vinho left-[-10%] top-[-60%] h-[220%] w-[60%] bg-brand-700/60" aria-hidden="true" />
-        <div className="relative mx-auto flex max-w-2xl items-center gap-3 px-4 py-6 sm:py-8">
+        <div className="relative mx-auto flex max-w-2xl items-center gap-3 px-4 py-6 sm:py-8 lg:max-w-5xl">
           <MarcaDesenhada className="h-11 w-11 text-brand-100 sm:h-12 sm:w-12" />
           <div className="min-w-0">
             <Wordmark className="text-lg tracking-[0.28em] text-white" />
@@ -501,7 +508,7 @@ export default function Pedir() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8 animate-enter">
+      <main className="mx-auto max-w-2xl px-4 py-8 animate-enter lg:max-w-5xl">
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-brand-600" aria-label="Carregando" /></div>
         ) : !session ? (
