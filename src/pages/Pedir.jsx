@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, LogOut, Send, FileText, ExternalLink, ChevronDown, EyeOff, Eye, Timer, MessageCircle } from 'lucide-react';
+import { Loader2, LogOut, Send, FileText, ExternalLink, ChevronDown, EyeOff, Eye, Timer, MessageCircle, WifiOff, Hourglass } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth, authErrorMessage } from '../lib/auth';
-import { Button, Wordmark } from '../components/ui';
+import { Button, Wordmark, Skeleton } from '../components/ui';
 import { MarcaDesenhada } from '../components/Lacre';
 import { cn } from '../lib/cn';
 import {
@@ -15,6 +15,13 @@ import LinhaEtapas from '../components/LinhaEtapas';
 import MesaDoAgente from '../components/MesaDoAgente';
 import { CartaoTempoMedio, Indicador, MiniBarras } from '../components/PainelAtendimento';
 import { resumoAtendimento, duracaoAtendimento, tempoEsperando, fmtDuracao } from '../lib/tempoAtendimento';
+import { previsaoDeEspera, esperaDoPedido, frasePrevisao } from '../lib/previsao';
+import { exemploDePedido } from '../lib/exemploPedido';
+import {
+  lerRascunho, salvarRascunho, limparRascunho,
+  guardarPendente, lerPendente, limparPendente, semSinal, pareceFalhaDeRede,
+} from '../lib/rascunho';
+import { teclaMod } from '../lib/atalhos';
 
 const RECENTES = 3;
 
@@ -115,11 +122,49 @@ function MiniProgresso({ pedido }) {
 }
 
 /**
+ * Quanto falta, em barra e em palavras.
+ *
+ * O número vem do histórico do próprio supervisor (ver lib/previsao.js). Sem
+ * histórico suficiente não aparece nada: um "cerca de 3 min" inventado valeria
+ * menos que o silêncio, porque na segunda vez que errasse ninguém acreditaria
+ * mais na tela.
+ */
+function BarraEspera({ pedido, previsao, agora }) {
+  const espera = esperaDoPedido(pedido, previsao, agora);
+  if (!espera) return null;
+  const frase = frasePrevisao(previsao, espera);
+
+  return (
+    <div className="mt-2 sm:pl-2">
+      <div
+        className="h-1 overflow-hidden rounded-full bg-slate-100"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(espera.fracao * 100)}
+        aria-label="Andamento da espera"
+      >
+        <div
+          className={cn(
+            'h-full rounded-full transition-[width] duration-700 ease-out',
+            espera.passouDoNormal ? 'bg-amber-500' : 'bg-brand-500',
+          )}
+          style={{ width: `${Math.max(3, espera.fracao * 100)}%` }}
+        />
+      </div>
+      <p className={cn('mt-1 text-center text-xs sm:text-left', espera.passouDoNormal ? 'text-amber-700' : 'text-slate-500')}>
+        {frase}
+      </p>
+    </div>
+  );
+}
+
+/**
  * O miolo de um pedido: a cena do agente trabalhando, a linha do tempo e, no
  * fim, as cartas prontas. Mesmo conteúdo nos dois formatos — acordeão no
  * celular, painel ao lado no computador — para não existirem duas verdades.
  */
-function DetalhePedido({ pedido, agora, grande = false }) {
+function DetalhePedido({ pedido, previsao, agora, grande = false }) {
   const { client } = useAuth();
   const [cartas, setCartas] = useState(null);
 
@@ -146,6 +191,7 @@ function DetalhePedido({ pedido, agora, grande = false }) {
             {fraseDoPedido(pedido)}
           </p>
           <TempoDoPedido pedido={pedido} agora={agora} />
+          <BarraEspera pedido={pedido} previsao={previsao} agora={agora} />
         </div>
       </div>
 
@@ -174,7 +220,7 @@ function DetalhePedido({ pedido, agora, grande = false }) {
  * ao lado); no celular ela abre e fecha ali mesmo, porque não há espaço para
  * duas colunas e o telefone é onde o supervisor realmente usa isto.
  */
-function CartaoPedido({ pedido, aberto, onAlternar, agora }) {
+function CartaoPedido({ pedido, aberto, onAlternar, previsao, agora }) {
   const st = STATUS_PEDIDO[pedido.status] || STATUS_PEDIDO.recebida;
   const idPainel = `pedido-${pedido.id}`;
 
@@ -184,6 +230,7 @@ function CartaoPedido({ pedido, aberto, onAlternar, agora }) {
       aberto ? 'border-line shadow-md lg:border-brand-200 lg:bg-brand-50/40 lg:shadow-none' : 'border-line-soft hover:border-line',
     )}>
       <button
+        id={`gatilho-${pedido.id}`}
         onClick={onAlternar}
         aria-expanded={aberto}
         aria-controls={idPainel}
@@ -212,7 +259,7 @@ function CartaoPedido({ pedido, aberto, onAlternar, agora }) {
       <div id={idPainel} className={cn('grid transition-[grid-template-rows] duration-300 ease-out lg:hidden', aberto ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden">
           <div className="border-t border-line-soft px-4 pb-4 pt-3">
-            {aberto && <DetalhePedido pedido={pedido} agora={agora} />}
+            {aberto && <DetalhePedido pedido={pedido} previsao={previsao} agora={agora} />}
           </div>
         </div>
       </div>
@@ -260,7 +307,11 @@ function AreaSupervisor({ user }) {
   const { client } = useAuth();
   const [perfil, setPerfil] = useState(null);
   const [pedidos, setPedidos] = useState(null);
-  const [texto, setTexto] = useState('');
+  // O rascunho volta já na primeira renderização: se a pessoa perdeu a aba no
+  // meio do pedido, ela reabre a tela e o texto está lá, não "quase lá".
+  const [texto, setTexto] = useState(() => lerRascunho(user.id));
+  const [pendente, setPendente] = useState(() => lerPendente(user.id));
+  const [comSinal, setComSinal] = useState(() => !semSinal());
   const [enviando, setEnviando] = useState(false);
   const [conferindo, setConferindo] = useState(false);
   const [aviso, setAviso] = useState(null); // o que faltou dizer, antes de enviar
@@ -271,6 +322,14 @@ function AreaSupervisor({ user }) {
   const [listaVisivel, setListaVisivel] = useState(() => {
     try { return localStorage.getItem('tarhget:pedidos-visiveis') !== 'nao'; } catch { return true; }
   });
+
+  // Cada tecla grava. É barato e evita o pior caso: cinco linhas digitadas
+  // no corredor da loja e perdidas por uma ligação que derrubou a aba.
+  const escrever = (valor) => {
+    setTexto(valor);
+    setAviso(null);
+    salvarRascunho(user.id, valor);
+  };
 
   const alternarLista = (visivel) => {
     setListaVisivel(visivel);
@@ -293,6 +352,12 @@ function AreaSupervisor({ user }) {
 
   const resumo = useMemo(() => resumoAtendimento(pedidos || [], { agora }), [pedidos, agora]);
 
+  // Quanto costuma levar, pelo histórico dele — não por um número no código.
+  const previsao = useMemo(() => previsaoDeEspera(pedidos || []), [pedidos]);
+
+  // O exemplo dentro da caixa sai de um pedido dele que já virou carta.
+  const exemplo = useMemo(() => exemploDePedido(pedidos || []), [pedidos]);
+
   // Mostra os mais recentes; o pedido aberto entra mesmo se for mais antigo
   const exibidos = useMemo(() => {
     if (!pedidos) return [];
@@ -308,6 +373,26 @@ function AreaSupervisor({ user }) {
     [pedidos, abertoId],
   );
 
+  /**
+   * Setas andam pela lista, Esc fecha. No computador a lista é um índice e o
+   * detalhe vive ao lado: dá para percorrer os pedidos sem tirar a mão do
+   * teclado. O foco acompanha a seleção, senão quem usa leitor de tela fica
+   * ouvindo o item antigo enquanto o painel já mostra outro.
+   */
+  const navegarNaLista = (e) => {
+    if (e.key === 'Escape') { setAbertoId(null); return; }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const atual = exibidos.findIndex((p) => p.id === abertoId);
+    const destino = e.key === 'ArrowDown'
+      ? Math.min(exibidos.length - 1, atual + 1)
+      : Math.max(0, atual <= 0 ? 0 : atual - 1);
+    const alvo = exibidos[destino];
+    if (!alvo) return;
+    setAbertoId(alvo.id);
+    document.getElementById(`gatilho-${alvo.id}`)?.focus();
+  };
+
   const recarregar = useCallback(() => {
     meusPedidos(user.id, client).then(setPedidos).catch(() => setPedidos([]));
   }, [user.id, client]);
@@ -317,6 +402,58 @@ function AreaSupervisor({ user }) {
     recarregar();
     return acompanharPedidos(recarregar, user.id, client);
   }, [user.id, client, recarregar]);
+
+  /**
+   * Manda o pedido que ficou guardado por falta de sinal.
+   *
+   * Protegido contra repetição: o evento "online" dispara mais de uma vez em
+   * troca de Wi-Fi para 4G, e cada disparo viraria uma carta igual na mesa da
+   * coordenação. A pendência só é apagada depois que o envio dá certo — se
+   * falhar, continua guardada para a próxima chance.
+   */
+  const enviandoPendente = useRef(false);
+  const enviarPendente = useCallback(async () => {
+    const guardado = lerPendente(user.id);
+    if (!guardado || semSinal() || enviandoPendente.current) return;
+    enviandoPendente.current = true;
+    try {
+      await enviarPedido(user.id, guardado.texto, client);
+      limparPendente(user.id);
+      setPendente(null);
+      toast.success('O pedido que estava guardado acabou de ser enviado.');
+      recarregar();
+    } catch (err) {
+      console.warn('Pedido continua guardado:', err);
+    } finally {
+      enviandoPendente.current = false;
+    }
+  }, [user.id, client, recarregar]);
+
+  // O sinal indo e voltando: atualiza o aviso da tela e aproveita a volta
+  // para despachar o que ficou para trás.
+  useEffect(() => {
+    const voltou = () => { setComSinal(true); enviarPendente(); };
+    const caiu = () => setComSinal(false);
+    window.addEventListener('online', voltou);
+    window.addEventListener('offline', caiu);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- envio para o servidor; o setState é só o retorno, depois do await
+    enviarPendente(); // pendência de uma visita anterior, já com internet
+    return () => {
+      window.removeEventListener('online', voltou);
+      window.removeEventListener('offline', caiu);
+    };
+  }, [enviarPendente]);
+
+  /** Sem rede: guarda em vez de perder, e diz isso sem assustar. */
+  const guardarParaDepois = (conteudo) => {
+    const guardado = guardarPendente(user.id, conteudo);
+    if (!guardado) return;
+    setPendente(guardado);
+    setTexto('');
+    setAviso(null);
+    limparRascunho(user.id);
+    toast('Sem sinal agora. Seu pedido está guardado e sai sozinho quando a internet voltar.');
+  };
 
   const despachar = async () => {
     setEnviando(true);
@@ -329,6 +466,7 @@ function AreaSupervisor({ user }) {
         site: window.location.origin,
       }));
       setTexto('');
+      limparRascunho(user.id);  // saiu do rascunho porque virou pedido
       setAviso(null);
       setAbertoId(undefined);   // efeito vai abrir o pedido novo automaticamente
       setVerTodos(false);       // volta para a lista compacta
@@ -336,6 +474,13 @@ function AreaSupervisor({ user }) {
       recarregar();
     } catch (err) {
       console.error(err);
+      // Rede caiu no meio do envio: guarda em vez de jogar o texto fora.
+      // Acontece com o telefone preso num Wi-Fi da loja que não tem saída —
+      // aí navigator.onLine jura que há internet e o envio morre no fetch.
+      if (pareceFalhaDeRede(err)) {
+        guardarParaDepois(texto);
+        return;
+      }
       toast.error(perfil && !perfil.ativo ? 'Seu acesso está bloqueado. Fale com o administrador.' : 'Não foi possível enviar. Tente de novo.');
     } finally {
       setEnviando(false);
@@ -345,6 +490,13 @@ function AreaSupervisor({ user }) {
   const enviar = async (e) => {
     e.preventDefault();
     if (texto.trim().length < 3) return;
+
+    // Sem rede não dá para conferir nem enviar: guarda e encerra. Tentar
+    // mesmo assim só gastaria dez segundos para terminar em erro.
+    if (semSinal()) {
+      guardarParaDepois(texto);
+      return;
+    }
 
     // Já avisado e mandou de novo: é um "enviar assim mesmo".
     if (aviso) {
@@ -387,8 +539,14 @@ function AreaSupervisor({ user }) {
           rows={4}
           maxLength={4000}
           value={texto}
-          onChange={(e) => { setTexto(e.target.value); setAviso(null); }}
-          placeholder="Ex.: carta pro Adailton no Atacadão Messejana e pra Juliana no Assaí Bezerra de Menezes"
+          onChange={(e) => escrever(e.target.value)}
+          onKeyDown={(e) => {
+            // Quem digita rápido termina a frase e manda sem ir ao mouse.
+            // Enter sozinho continua pulando linha: pedido de várias cartas
+            // vem em linhas, e enviar por engano custa uma carta errada.
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) e.currentTarget.form?.requestSubmit();
+          }}
+          placeholder={exemplo}
           className="mt-4 w-full resize-y border bg-white px-3 py-2.5 text-[0.9375rem] leading-relaxed text-ink"
         />
 
@@ -403,15 +561,58 @@ function AreaSupervisor({ user }) {
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-end gap-2">
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+          {/* Sem sinal, o botão diz a verdade sobre o que vai acontecer. */}
+          {!comSinal && (
+            <p className="mr-auto inline-flex items-center gap-1.5 text-xs font-medium text-amber-700">
+              <WifiOff className="h-3.5 w-3.5" aria-hidden="true" />
+              Sem internet. Seu pedido fica guardado e sai sozinho.
+            </p>
+          )}
+          {comSinal && texto.trim().length >= 3 && (
+            <p className="mr-auto hidden text-xs text-slate-400 sm:block">
+              {teclaMod} + Enter envia
+            </p>
+          )}
           <Button type="submit" disabled={enviando || conferindo || texto.trim().length < 3}>
             {enviando || conferindo
               ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              : <Send className="h-4 w-4" aria-hidden="true" />}
-            {conferindo ? 'Conferindo…' : aviso ? 'Enviar assim mesmo' : 'Enviar pedido'}
+              : !comSinal
+                ? <Hourglass className="h-4 w-4" aria-hidden="true" />
+                : <Send className="h-4 w-4" aria-hidden="true" />}
+            {conferindo
+              ? 'Conferindo…'
+              : !comSinal
+                ? 'Guardar para enviar depois'
+                : aviso ? 'Enviar assim mesmo' : 'Enviar pedido'}
           </Button>
         </div>
       </form>
+
+      {/* Pedido que não saiu por falta de sinal. Fica visível com o texto à
+          mostra: a garantia só serve se a pessoa puder ver o que está salvo. */}
+      {pendente && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <Hourglass className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-amber-900">
+                Pedido guardado, esperando internet.
+              </p>
+              <p className="mt-0.5 line-clamp-2 text-sm text-amber-800/90">“{pendente.texto}”</p>
+              <p className="mt-1 text-xs text-amber-700/80">
+                Sai sozinho quando o sinal voltar. Pode fechar a página.
+              </p>
+            </div>
+            <button
+              onClick={enviarPendente}
+              className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:border-amber-400"
+            >
+              Tentar agora
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Logo depois de enviar: um toque e o WhatsApp abre já escrito.
           Some sozinho quando a pessoa avisa ou dispensa. */}
@@ -457,7 +658,19 @@ function AreaSupervisor({ user }) {
           )}
         </div>
         {pedidos === null ? (
-          <p className="text-sm text-slate-400">Carregando…</p>
+          // Três linhas no formato dos pedidos, em vez de um texto cinza: a
+          // tela já nasce com a forma que vai ter, sem pular quando chega.
+          <ul className="space-y-2" aria-busy="true" aria-label="Carregando seus pedidos">
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="flex items-center gap-3 rounded-xl border border-line-soft bg-white px-4 py-3">
+                <Skeleton className="h-1 w-14 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className={cn('h-3.5 rounded', i === 0 ? 'w-3/4' : i === 1 ? 'w-2/3' : 'w-1/2')} />
+                  <Skeleton className="h-2.5 w-24 rounded" />
+                </div>
+              </li>
+            ))}
+          </ul>
         ) : pedidos.length === 0 ? (
           <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-slate-500">
             Seus pedidos aparecem aqui, com o andamento de cada um.
@@ -472,11 +685,12 @@ function AreaSupervisor({ user }) {
         ) : (
           <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-start lg:gap-5">
             <div>
-              <ul id="lista-pedidos" className="space-y-2">
+              <ul id="lista-pedidos" className="space-y-2" onKeyDown={navegarNaLista}>
                 {exibidos.map((p) => (
                   <CartaoPedido
                     key={p.id}
                     pedido={p}
+                    previsao={previsao}
                     agora={agora}
                     aberto={abertoId === p.id}
                     onAlternar={() => setAbertoId((a) => (a === p.id ? null : p.id))}
@@ -505,12 +719,13 @@ function AreaSupervisor({ user }) {
                     Pedido de {fmtCurto(selecionado.criado_em)} · {(STATUS_PEDIDO[selecionado.status] || STATUS_PEDIDO.recebida).rotulo}
                   </p>
                   <div className="mt-4 border-t border-line-soft pt-4">
-                    <DetalhePedido key={selecionado.id} pedido={selecionado} agora={agora} grande />
+                    <DetalhePedido key={selecionado.id} pedido={selecionado} previsao={previsao} agora={agora} grande />
                   </div>
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-line px-5 py-12 text-center text-sm text-slate-500">
                   Escolha um pedido na lista para acompanhar aqui.
+                  <span className="mt-1 hidden lg:block text-xs text-slate-400">Setas ↑ ↓ andam pela lista; Esc fecha.</span>
                 </div>
               )}
             </div>
