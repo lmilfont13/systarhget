@@ -9,6 +9,7 @@ import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatte
 import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
 import { carregarLojas, cadastrarSeNova } from '../lib/lojas';
 import { lojasDoFuncionario, valorDaLoja, camposDeLoja } from '../lib/lojaDoCadastro';
+import { filtrarPromotores, opcoesDeFiltro, motivoParaPular, montarZip, juntarPdfs, baixar } from '../lib/cartasEmLote';
 import { cargoParaCarta, ehCampoRg, ehCampoCargo } from '../lib/cargos';
 import CargoSelect from '../components/CargoSelect';
 import { cleanFooterText, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
@@ -64,6 +65,10 @@ export default function Documentos() {
   const [showBranding, setShowBranding] = useState(false);
   const [isMultiFuncModalOpen, setIsMultiFuncModalOpen] = useState(false);
   const [multiFuncData, setMultiFuncData] = useState({});
+  // Seleção em massa de promotores e formato do lote
+  const [loteFiltro, setLoteFiltro] = useState({ conta: '', cdc: '' });
+  const [verTodasTags, setVerTodasTags] = useState(false);
+  const [formatoLote, setFormatoLote] = useState('zip');
 
   // Novos estados para validação de formulário (P1)
   const [formErrors, setFormErrors] = useState({});
@@ -482,7 +487,8 @@ export default function Documentos() {
     }
 
     // 1. Validação Cruzada de Promotor (Impede geração se faltar Empresa ou Cargo)
-    if (selectedFuncionarios.length > 0) {
+    // Em lote, quem não tem o necessário fica de fora (ver mais abaixo) em vez de travar tudo.
+    if (selectedFuncionarios.length === 1) {
       for (const funcId of selectedFuncionarios) {
         const f = funcionarios.find(x => String(x.id) === String(funcId));
         if (f) {
@@ -509,16 +515,7 @@ export default function Documentos() {
       
       if (lojaField) {
         if (selectedFuncionarios.length > 1) {
-          // Geração em massa: verifica se cada promotor tem a loja preenchida
-          for (const funcId of selectedFuncionarios) {
-            let lojaVal = String(multiFuncData[funcId]?.[lojaField.name] || formData[lojaField.name] || '').trim();
-            if (!lojaVal) {
-              const func = funcionarios.find(f => String(f.id) === String(funcId));
-              newErrors.loja = `Falta selecionar a loja para ${String(func?.nome || 'Desconhecido').toUpperCase()}.`;
-              setTouched(prev => ({ ...prev, [lojaField.name]: true }));
-              break;
-            }
-          }
+          // Geração em massa: quem estiver sem loja fica de fora (ver mais abaixo)
         } else {
           // Geração única: verifica o formulário global e salva a loja se for nova
           const currentFormData = overrideFormData || formData;
@@ -602,7 +599,36 @@ export default function Documentos() {
       
       const getBase64 = assetToDataUrl;
 
-      const funcsToProcess = selectedFuncionarios.length > 0 ? selectedFuncionarios.map(id => funcionarios.find(f => String(f.id) === String(id))) : [null];
+      // Lote: separa quem tem tudo para a carta de quem fica de fora (e avisa)
+      let idsParaGerar = selectedFuncionarios;
+      if (selectedFuncionarios.length > 1) {
+        const campoLoja = camposDeLoja(activeTemplate)[0];
+        const base = overrideFormData || formData;
+        const pulados = [];
+        idsParaGerar = selectedFuncionarios.filter(id => {
+          const f = funcionarios.find(x => String(x.id) === String(id));
+          const motivo = motivoParaPular(f, {
+            temCargo: !!(f && cargoParaCarta(cargoEscolhido, f)),
+            precisaLoja: !!campoLoja,
+            loja: campoLoja ? (multiFuncData[id]?.[campoLoja] || base[campoLoja]) : '',
+          });
+          if (motivo) pulados.push(`${String(f?.nome || 'Desconhecido').toUpperCase()} (${motivo})`);
+          return !motivo;
+        });
+        if (!idsParaGerar.length) {
+          toast.error(`Nenhuma carta pode sair: ${pulados.slice(0, 5).join('; ')}${pulados.length > 5 ? '…' : ''}`, { duration: 12000 });
+          setIsGenerating(false);
+          return;
+        }
+        if (pulados.length) {
+          toast.warning(`${pulados.length} promotor(es) ficaram de fora: ${pulados.slice(0, 5).join('; ')}${pulados.length > 5 ? ` e mais ${pulados.length - 5}` : ''}. Complete o cadastro deles e gere de novo.`, { duration: 15000 });
+        }
+      }
+
+      const funcsToProcess = idsParaGerar.length > 0 ? idsParaGerar.map(id => funcionarios.find(f => String(f.id) === String(id))) : [null];
+      const emLote = funcsToProcess.length > 1;
+      const arquivosLote = [];
+      const falhasLote = [];
       
       let generatedCount = 0;
       let falhasHistorico = 0;
@@ -611,7 +637,9 @@ export default function Documentos() {
       let lastCartaId = null;
       const generatedBatchFiles = [];
 
-      for (const currentFunc of funcsToProcess) {
+      for (const [indiceLote, currentFunc] of funcsToProcess.entries()) {
+       try {
+        if (emLote) toast.loading(`Gerando carta ${indiceLote + 1} de ${funcsToProcess.length}...`, { id: 'lote-cartas' });
         let blob;
         let finalFormDataForFunc = { ...(overrideFormData || formData) };
         
@@ -866,19 +894,44 @@ export default function Documentos() {
         });
         if (registroError) falhasHistorico++;
 
-        // Trigger download automatically
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Uma carta: baixa na hora. Lote: junta tudo num arquivo só no final.
+        if (emLote) {
+          arquivosLote.push({ nome: baseFileName, blob });
+        } else {
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
 
         generatedCount++;
         lastGeneratedBlobUrl = blobUrl;
         lastGeneratedName = baseFileName.replace('CARTA ', '');
         lastCartaId = cartaId;
         generatedBatchFiles.push(new File([blob], fileName, { type: 'application/pdf' }));
+       } catch (erroItem) {
+        if (!emLote) throw erroItem;
+        console.error('Falha na carta de', currentFunc?.nome, erroItem);
+        falhasLote.push(String(currentFunc?.nome || 'Desconhecido').toUpperCase());
+       }
+      }
+
+      if (emLote) {
+        toast.dismiss('lote-cartas');
+        if (falhasLote.length) {
+          toast.error(`${falhasLote.length} carta(s) deram erro e não entraram: ${falhasLote.slice(0, 5).join(', ')}${falhasLote.length > 5 ? '…' : ''}`, { duration: 15000 });
+        }
+        if (arquivosLote.length) {
+          const hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+          if (formatoLote === 'pdf') {
+            baixar(await juntarPdfs(arquivosLote), `CARTAS (${arquivosLote.length}) - ${hoje}.pdf`);
+          } else {
+            baixar(await montarZip(arquivosLote), `CARTAS (${arquivosLote.length}) - ${hoje}.zip`);
+          }
+          setIsMultiFuncModalOpen(false);
+        }
       }
 
       if (falhasHistorico > 0) avisarFalhaHistorico();
@@ -1097,9 +1150,46 @@ export default function Documentos() {
                   </span>
                 </label>
                 
+                {/* Seleção em massa */}
+                {(() => {
+                  const { contas, cdcs } = opcoesDeFiltro(funcionarios);
+                  const alvo = filtrarPromotores(funcionarios, loteFiltro);
+                  const novos = alvo.filter(f => !selectedFuncionarios.some(id => String(id) === String(f.id)));
+                  return (
+                    <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 text-xs">
+                      <span className="font-semibold text-slate-600 shrink-0">Selecionar em massa:</span>
+                      <select value={loteFiltro.conta} onChange={e => setLoteFiltro(f => ({ ...f, conta: e.target.value }))}
+                        className="rounded-md border border-slate-200 bg-white py-1.5 pl-2 pr-7 text-xs">
+                        <option value="">Todas as contas</option>
+                        {contas.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <select value={loteFiltro.cdc} onChange={e => setLoteFiltro(f => ({ ...f, cdc: e.target.value }))}
+                        className="rounded-md border border-slate-200 bg-white py-1.5 pl-2 pr-7 text-xs">
+                        <option value="">Todos os CDCs</option>
+                        {cdcs.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <button type="button" disabled={!novos.length}
+                        onClick={() => {
+                          setSelectedFuncionarios(prev => [...prev, ...novos.map(f => f.id)]);
+                          setFormErrors(prev => ({ ...prev, promotores: null }));
+                          toast.success(`${novos.length} promotor(es) adicionados.`);
+                        }}
+                        className="rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700 disabled:opacity-40">
+                        {novos.length ? `Adicionar ${novos.length === funcionarios.length ? 'todos ' : ''}(${novos.length})` : 'Todos já adicionados'}
+                      </button>
+                      {selectedFuncionarios.length > 0 && (
+                        <button type="button" onClick={() => { setSelectedFuncionarios([]); setMultiFuncData({}); }}
+                          className="rounded-md px-2 py-1.5 font-semibold text-slate-500 hover:bg-slate-200 sm:ml-auto">
+                          Limpar ({selectedFuncionarios.length})
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Tags Selecionadas */}
                 <div className="mb-2 flex flex-wrap gap-2">
-                  {selectedFuncionarios.map(funcId => {
+                  {(verTodasTags ? selectedFuncionarios : selectedFuncionarios.slice(0, 12)).map(funcId => {
                     const func = funcionarios.find(f => String(f.id) === String(funcId));
                     if (!func) return null;
                     return (
@@ -1115,6 +1205,12 @@ export default function Documentos() {
                       </span>
                     );
                   })}
+                  {selectedFuncionarios.length > 12 && (
+                    <button type="button" onClick={() => setVerTodasTags(v => !v)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 hover:bg-indigo-50">
+                      {verTodasTags ? 'Mostrar menos' : `+ ${selectedFuncionarios.length - 12} promotores`}
+                    </button>
+                  )}
                 </div>
 
                 {/* Combobox Input */}
@@ -1835,6 +1931,18 @@ export default function Documentos() {
               </button>
             </div>
 
+            <div className="px-6 py-3 border-b border-slate-100 flex flex-wrap items-center gap-3 text-xs">
+              <span className="font-semibold text-slate-600">Baixar como:</span>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="formato-lote" checked={formatoLote === 'zip'} onChange={() => setFormatoLote('zip')} />
+                ZIP (um PDF por promotor)
+              </label>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="formato-lote" checked={formatoLote === 'pdf'} onChange={() => setFormatoLote('pdf')} />
+                PDF único (para imprimir)
+              </label>
+            </div>
+
             <div className="p-6 overflow-y-auto space-y-6">
               {selectedFuncionarios.map((funcId) => {
                 const func = funcionarios.find(f => String(f.id) === String(funcId));
@@ -1911,9 +2019,11 @@ export default function Documentos() {
                 onClick={() => {
                   handleGenerate();
                 }}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow-lg shadow-indigo-600/20 transition-all"
+                disabled={isGenerating}
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-60"
               >
-                <CheckCircle2 className="w-4 h-4" /> Continuar e Gerar
+                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {isGenerating ? 'Gerando...' : `Gerar ${selectedFuncionarios.length} cartas`}
               </button>
             </div>
           </div>
