@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { readSheet } from 'read-excel-file/browser';
 import { X, Upload, FileSpreadsheet, Camera, Loader2, Building2, Tag, Hash, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -61,6 +61,7 @@ export default function ImportarFuncionarios({ empresas, funcionarios, onFechar,
   const [aviso, setAviso] = useState('');
   const [origem, setOrigem] = useState('');
   const [assoc, setAssoc] = useState({ empresaId: '', conta: '', cdc: '' });
+  const [arrastando, setArrastando] = useState(false);
 
   const preparar = (cadastros, nomeOrigem, avisoExtra = '') => {
     const marcados = marcarSituacao(cadastros, funcionarios).map((c) => ({ ...c, incluir: c.situacao === 'novo' }));
@@ -114,6 +115,33 @@ export default function ImportarFuncionarios({ empresas, funcionarios, onFechar,
       if (inputFoto.current) inputFoto.current.value = '';
     }
   };
+
+  // Decide pelo tipo: imagem/PDF vai para a IA, o resto é planilha.
+  const abrirArquivo = (arquivo) => {
+    if (!arquivo || lendo) return;
+    const nome = (arquivo.name || '').toLowerCase();
+    if (arquivo.type.startsWith('image/') || arquivo.type === 'application/pdf' || nome.endsWith('.pdf')) abrirFoto(arquivo);
+    else abrirPlanilha(arquivo);
+  };
+
+  const soltar = (e) => {
+    e.preventDefault();
+    setArrastando(false);
+    const arquivo = e.dataTransfer?.files?.[0];
+    if (arquivo) abrirArquivo(arquivo);
+  };
+
+  // Ctrl+V com um print na área de transferência.
+  useEffect(() => {
+    if (linhas) return undefined;
+    const colar = (e) => {
+      const item = [...(e.clipboardData?.items || [])].find((i) => i.kind === 'file');
+      const arquivo = item?.getAsFile();
+      if (arquivo) { e.preventDefault(); abrirArquivo(arquivo); }
+    };
+    window.addEventListener('paste', colar);
+    return () => window.removeEventListener('paste', colar);
+  });
 
   const mudar = (i, campo, valor) =>
     setLinhas((ls) => ls.map((l, j) => {
@@ -201,7 +229,12 @@ export default function ImportarFuncionarios({ empresas, funcionarios, onFechar,
         <input ref={inputFoto} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => abrirFoto(e.target.files?.[0])} />
 
         {!linhas ? (
-          <div className="p-6 sm:p-8 overflow-y-auto">
+          <div
+            className={`m-3 sm:m-4 p-6 sm:p-8 overflow-y-auto rounded-lg border-2 border-dashed transition-colors ${arrastando ? 'border-indigo-500 bg-indigo-50/60' : 'border-transparent'}`}
+            onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
+            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setArrastando(false); }}
+            onDrop={soltar}
+          >
             {lendo ? (
               <div className="py-16 flex flex-col items-center gap-3 text-sm text-slate-500">
                 <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
@@ -209,6 +242,9 @@ export default function ImportarFuncionarios({ empresas, funcionarios, onFechar,
               </div>
             ) : (
               <>
+                <p className="mb-4 text-center text-sm text-slate-600">
+                  <b>Arraste e solte</b> a planilha, a foto ou o PDF aqui, <b>cole um print</b> (Ctrl+V) ou escolha abaixo.
+                </p>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <button onClick={() => inputPlanilha.current?.click()}
                     className="flex flex-col items-center gap-3 p-8 rounded-lg border-2 border-dashed border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 transition-all">

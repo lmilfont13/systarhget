@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
   if (!r.ok) {
     const corpo = await r.text();
     console.error('anthropic', r.status, corpo.slice(0, 500));
+    if (r.status === 401 || r.status === 403) return resposta({ erro: 'A chave da IA foi recusada. Atualize a ANTHROPIC_API_KEY nos secrets das Edge Functions do Supabase.' }, 503);
     if (corpo.includes('credit balance')) return resposta({ erro: 'A conta da IA está sem créditos (console.anthropic.com → Billing).' }, 503);
     if (r.status === 429 || r.status === 529) return resposta({ erro: 'A IA está ocupada agora. Tente em alguns minutos.' }, 503);
     return resposta({ erro: `A IA não conseguiu ler a imagem (erro ${r.status}).` }, 502);

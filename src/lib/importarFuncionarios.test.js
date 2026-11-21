@@ -82,3 +82,16 @@ describe('aplicarAssociacao', () => {
     });
   });
 });
+
+describe('planilha de aprovados', () => {
+  it('aceita a coluna APROVADO como nome e guarda loja/cidade', () => {
+    const { cadastros } = planilhaParaCadastros([
+      ['LOJAS', 'CIDADE', 'APROVADO', 'CPF'],
+      ['ASSAI - MONTESE', 'FORTALEZA-CE', 'ARISCE CASTRO BONIFACIO', '043.639.313-10'],
+    ]);
+    expect(cadastros[0]).toMatchObject({
+      nome: 'ARISCE CASTRO BONIFACIO',
+      dados_extras: { LOJAS: 'ASSAI - MONTESE', CIDADE: 'FORTALEZA-CE', CPF: '043.639.313-10' },
+    });
+  });
+});
