@@ -46,7 +46,8 @@ Deno.serve(async (req) => {
   if (!TIPOS.includes(tipo)) return resposta({ erro: 'Envie uma foto (JPG, PNG) ou um PDF.' }, 400);
   if (!arquivo || arquivo.length > LIMITE_BASE64) return resposta({ erro: 'Arquivo vazio ou grande demais (máx. 5 MB).' }, 400);
 
-  const chave = Deno.env.get('ANTHROPIC_API_KEY');
+  // Tolera espaço, quebra de linha ou aspas coladas junto com a chave.
+  const chave = (Deno.env.get('ANTHROPIC_API_KEY') || '').trim().replace(/^["']+|["']+$/g, '').trim();
   if (!chave) return resposta({ erro: 'A chave da IA (ANTHROPIC_API_KEY) não está configurada no Supabase.' }, 500);
 
   const bloco = tipo === 'application/pdf'
@@ -73,7 +74,7 @@ Deno.serve(async (req) => {
 
   if (!r.ok) {
     const corpo = await r.text();
-    console.error('anthropic', r.status, corpo.slice(0, 500));
+    console.error('anthropic', r.status, corpo.slice(0, 500), `chave: ${chave.slice(0, 10)}… (${chave.length} caracteres)`);
     if (r.status === 401 || r.status === 403) return resposta({ erro: 'A chave da IA foi recusada. Atualize a ANTHROPIC_API_KEY nos secrets das Edge Functions do Supabase.' }, 503);
     if (corpo.includes('credit balance')) return resposta({ erro: 'A conta da IA está sem créditos (console.anthropic.com → Billing).' }, 503);
     if (r.status === 429 || r.status === 529) return resposta({ erro: 'A IA está ocupada agora. Tente em alguns minutos.' }, 503);
