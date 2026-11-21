@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Edit2, Loader2, X, Save, FileText, Copy, Search, Building2, Link2, BarChart3, Tag, Hash } from 'lucide-react';
+import { Plus, Trash2, Edit2, Loader2, X, Save, FileText, Copy, Search, Building2, Link2, BarChart3, Tag, Hash, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { invalidar } from '../lib/dados';
 import { listaDeCargos } from '../lib/cargos';
+import { aplicarAssociacao } from '../lib/importarFuncionarios';
+import ImportarFuncionarios from '../components/ImportarFuncionarios';
 
 // Cores distintas para badges de empresas (empresa vinculada - CDC/POP/SPAR etc.)
 const EMPRESA_COLORS = [
@@ -49,6 +51,13 @@ export default function Funcionarios() {
 
   // Painel Resumo
   const [showResumo, setShowResumo] = useState(false);
+
+  // Importação em massa e associação em massa
+  const [importOpen, setImportOpen] = useState(false);
+  const [selecionados, setSelecionados] = useState(() => new Set());
+  const [massaModal, setMassaModal] = useState(false);
+  const [massa, setMassa] = useState({ empresaId: '', conta: '', cdc: '' });
+  const [salvandoMassa, setSalvandoMassa] = useState(false);
 
   // Busca e filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -244,6 +253,52 @@ export default function Funcionarios() {
     }
   };
 
+  const alternarSelecao = (id) => setSelecionados(prev => {
+    const novo = new Set(prev);
+    if (novo.has(id)) novo.delete(id); else novo.add(id);
+    return novo;
+  });
+
+  const concluirImportacao = async (ids) => {
+    setImportOpen(false);
+    await fetchFuncionarios();
+    setSearchTerm(''); setFilterCdc(''); setShowSemCdc(false);
+    setSelecionados(new Set(ids));
+    if (ids.length) toast.info('Os importados ficaram selecionados. Use "Associar a projeto" para ligá-los a uma conta/CDC.');
+  };
+
+  const salvarMassa = async () => {
+    if (!massa.empresaId && !massa.conta.trim() && !massa.cdc.trim()) {
+      toast.error('Escolha a empresa, a conta ou o CDC.');
+      return;
+    }
+    setSalvandoMassa(true);
+    const alvos = funcionarios.filter(f => selecionados.has(f.id));
+    const atualizados = new Map();
+    try {
+      for (let i = 0; i < alvos.length; i += 20) {
+        const lote = alvos.slice(i, i + 20).map(f => aplicarAssociacao(f, massa));
+        const res = await Promise.all(lote.map(f =>
+          supabase.from('funcionarios').update({ empresa_id: f.empresa_id || null, dados_extras: f.dados_extras }).eq('id', f.id)
+        ));
+        const falha = res.find(r => r.error);
+        lote.forEach((f, j) => { if (!res[j].error) atualizados.set(f.id, f); });
+        if (falha) throw falha.error;
+      }
+      toast.success(`${atualizados.size} funcionário(s) associados.`);
+      setMassaModal(false);
+      setMassa({ empresaId: '', conta: '', cdc: '' });
+      setSelecionados(new Set());
+    } catch (err) {
+      console.error(err);
+      toast.error(`Erro ao associar${atualizados.size ? ` (${atualizados.size} já salvos)` : ''}.`);
+    } finally {
+      invalidar('funcionarios');
+      setFuncionarios(prev => prev.map(f => atualizados.get(f.id) || f));
+      setSalvandoMassa(false);
+    }
+  };
+
   // Resumo por CDC
   const cdcCounts = {};
   let semCdcCount = 0;
@@ -275,7 +330,14 @@ export default function Funcionarios() {
           <h1 className="text-[1.625rem] font-semibold tracking-tight text-ink">Funcionários</h1>
           <p className="mt-1 text-sm text-slate-500">Gerencie promotores, contas e empresas vinculadas.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-all"
+          >
+            <Upload className="w-4 h-4" />
+            Importar em massa
+          </button>
           <button
             onClick={() => setShowResumo(v => !v)}
             className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-semibold shadow-sm transition-all ${showResumo ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
@@ -359,6 +421,30 @@ export default function Funcionarios() {
             </h3>
             <span className="text-xs text-slate-400">{filteredFuncionarios.length} de {funcionarios.length}</span>
           </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <label className="inline-flex items-center gap-2 text-slate-600 cursor-pointer">
+              <input type="checkbox"
+                checked={filteredFuncionarios.length > 0 && filteredFuncionarios.every(f => selecionados.has(f.id))}
+                onChange={e => setSelecionados(prev => {
+                  const novo = new Set(prev);
+                  filteredFuncionarios.forEach(f => { if (e.target.checked) novo.add(f.id); else novo.delete(f.id); });
+                  return novo;
+                })} />
+              Selecionar os {filteredFuncionarios.length} da lista
+            </label>
+            {selecionados.size > 0 && (
+              <>
+                <span className="ml-2 font-semibold text-indigo-700">{selecionados.size} selecionado(s)</span>
+                <button onClick={() => setMassaModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700">
+                  <Link2 className="w-3.5 h-3.5" /> Associar a projeto
+                </button>
+                <button onClick={() => setSelecionados(new Set())} className="rounded-md px-2 py-1.5 text-slate-500 hover:bg-slate-100">
+                  Limpar seleção
+                </button>
+              </>
+            )}
+          </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -414,6 +500,8 @@ export default function Funcionarios() {
                   <div className="flex items-start justify-between gap-3">
                     {/* Avatar + Info */}
                     <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <input type="checkbox" checked={selecionados.has(func.id)} onChange={() => alternarSelecao(func.id)}
+                        aria-label={`Selecionar ${func.nome}`} className="mt-3 shrink-0" />
                       <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 font-semibold uppercase shrink-0 mt-0.5">
                         {String(func.nome || '?').charAt(0).toUpperCase()}
                       </div>
@@ -601,6 +689,76 @@ export default function Funcionarios() {
                 className="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 border border-transparent rounded-lg shadow-md transition-all disabled:opacity-60">
                 {isSavingAssoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 Salvar Associações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {importOpen && (
+        <ImportarFuncionarios
+          empresas={empresas}
+          funcionarios={funcionarios}
+          onFechar={() => setImportOpen(false)}
+          onConcluir={concluirImportacao}
+        />
+      )}
+
+      {/* MODAL: ASSOCIAÇÃO EM MASSA */}
+      {massaModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-slate-50 to-indigo-50/40">
+              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                <Link2 className="w-4 h-4 text-indigo-600" />
+                Associar {selecionados.size} funcionário(s) a um projeto
+              </h3>
+              <button onClick={() => setMassaModal(false)} className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-500">Preencha só o que quer mudar. Campo em branco mantém o que cada funcionário já tem.</p>
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-500" /> Empresa vinculada
+                </label>
+                <select value={massa.empresaId} onChange={e => setMassa(m => ({ ...m, empresaId: e.target.value }))}
+                  className="block w-full rounded-lg border border-slate-200 text-sm py-2.5 px-3 bg-white">
+                  <option value="">Manter a atual</option>
+                  {empresas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
+                  <Tag className="w-3.5 h-3.5 text-amber-500" /> Conta / Cliente
+                </label>
+                <input value={massa.conta} onChange={e => setMassa(m => ({ ...m, conta: e.target.value }))} placeholder="Ex: COLGATE"
+                  list="lista-contas" className="block w-full rounded-lg border border-slate-200 text-sm py-2.5 px-3 uppercase" />
+                <datalist id="lista-contas">
+                  {[...new Set(funcionarios.map(f => getExtraToleranteHelper(f.dados_extras, ['EMPRESA', 'CONTA', 'CLIENTE']).toUpperCase().trim()).filter(Boolean))].sort().map(c => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
+                  <Hash className="w-3.5 h-3.5 text-slate-500" /> CDC / Centro de Custo
+                </label>
+                <input value={massa.cdc} onChange={e => setMassa(m => ({ ...m, cdc: e.target.value }))} placeholder="Ex: 10045"
+                  list="lista-cdcs" className="block w-full rounded-lg border border-slate-200 text-sm py-2.5 px-3 uppercase" />
+                <datalist id="lista-cdcs">
+                  {Object.keys(cdcCounts).sort().map(c => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+              <button onClick={() => setMassaModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">
+                Cancelar
+              </button>
+              <button onClick={salvarMassa} disabled={salvandoMassa}
+                className="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md disabled:opacity-60">
+                {salvandoMassa ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Associar
               </button>
             </div>
           </div>
