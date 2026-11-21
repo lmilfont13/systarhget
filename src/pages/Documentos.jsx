@@ -8,6 +8,7 @@ import { PDFGenerator } from '../pdf/PDFGenerator';
 import { formatExcelDate, formatCpf, capitalizeStoreName } from '../lib/formatters';
 import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
 import { carregarLojas, cadastrarSeNova } from '../lib/lojas';
+import { lojasDoFuncionario, valorDaLoja, camposDeLoja } from '../lib/lojaDoCadastro';
 import { cargoParaCarta, ehCampoRg, ehCampoCargo } from '../lib/cargos';
 import CargoSelect from '../components/CargoSelect';
 import { cleanFooterText, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
@@ -423,6 +424,49 @@ export default function Documentos() {
       }
     }
   }, [selectedTemplate, selectedFuncionarios, selectedEmpresa, optaContinuar, cargoEscolhido]);
+
+  // Loja que já está no cadastro do funcionário: a carta já vem com ela.
+  // Só roda quando troca o funcionário/template (ou a lista de lojas carrega),
+  // para não desfazer uma loja escolhida à mão.
+  const lojasCadastro = lojasDoFuncionario(activeFuncionario);
+  const aplicarLojaDoCadastro = (nome) => {
+    const campos = camposDeLoja(activeTemplate);
+    if (!campos.length || !nome) return;
+    const { valor, conhecida } = valorDaLoja(nome, lojas);
+    setFormData(prev => ({ ...prev, ...Object.fromEntries(campos.map(c => [c, valor])) }));
+    setManualLojas(prev => ({ ...prev, ...Object.fromEntries(campos.map(c => [c, !conhecida])) }));
+    setFormErrors(prev => ({ ...prev, loja: null }));
+  };
+  useEffect(() => {
+    if (!activeTemplate || !activeFuncionario || selectedFuncionarios.length !== 1 || new URLSearchParams(location.search).get('loja')) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- preenchimento inicial a partir do cadastro
+    if (lojasCadastro[0]) aplicarLojaDoCadastro(lojasCadastro[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFuncionario?.id, activeTemplate?.id, lojas]);
+
+  // Vários promotores: cada um já recebe a loja do próprio cadastro (sem apagar o que foi escolhido).
+  useEffect(() => {
+    const campos = camposDeLoja(activeTemplate);
+    if (!campos.length || selectedFuncionarios.length < 2) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- preenchimento inicial a partir do cadastro
+    setMultiFuncData(prev => {
+      let mudou = false;
+      const novo = { ...prev };
+      for (const id of selectedFuncionarios) {
+        const func = funcionarios.find(f => String(f.id) === String(id));
+        const [primeira] = lojasDoFuncionario(func);
+        if (!func || !primeira) continue;
+        const atual = prev[func.id] || {};
+        const faltando = campos.filter(c => !atual[c]);
+        if (!faltando.length) continue;
+        const { valor } = valorDaLoja(primeira, lojas);
+        novo[func.id] = { ...atual, ...Object.fromEntries(faltando.map(c => [c, valor])) };
+        mudou = true;
+      }
+      return mudou ? novo : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFuncionarios, activeTemplate?.id, lojas, funcionarios]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -1379,6 +1423,17 @@ export default function Documentos() {
                         )}
                       </label>
                       
+                      {isLojaField && lojasCadastro.length > 1 && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="text-slate-400">Lojas do cadastro:</span>
+                          {lojasCadastro.map(nome => (
+                            <button key={nome} type="button" onClick={() => aplicarLojaDoCadastro(nome)}
+                              className="rounded-md border border-slate-200 bg-white px-2 py-0.5 font-semibold text-slate-600 hover:border-indigo-400 hover:text-indigo-700">
+                              {nome}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <div className="mt-1 relative">
                         {field.mappedTo === 'funcionario_cargo' ? (
                           <CargoSelect semRotulo id={field.name} value={cargoEscolhido} onChange={setCargoEscolhido} funcionarios={funcionarios} cargoDoCadastro={activeFuncionario?.cargo} variosPromotores={selectedFuncionarios.length > 1} />

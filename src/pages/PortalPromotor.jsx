@@ -5,6 +5,7 @@ import { celebrarCarta } from '../lib/celebrar';
 import { useAuth, PORTAL_EMAIL, authErrorMessage } from '../lib/auth';
 import { listarTemplatesPdf, listarTemplatesTexto, listarFuncionarios, listarEmpresas, imagensEmpresa, empresaCompleta, arquivoTemplatePdf } from '../lib/dados';
 import { carregarLojas, cadastrarSeNova } from '../lib/lojas';
+import { lojasDoFuncionario, valorDaLoja, camposDeLoja } from '../lib/lojaDoCadastro';
 import { cargoParaCarta, ehCampoRg, ehCampoCargo } from '../lib/cargos';
 import CargoSelect from '../components/CargoSelect';
 import { cleanFooterText, assetToDataUrl, registrarCarta, avisarFalhaHistorico, copiarLinkCarta, compartilharCartaWhatsApp } from '../lib/cartas';
@@ -456,6 +457,24 @@ export default function PortalPromotor() {
       }
     }
   }, [selectedFuncionario, selectedTemplate, cargoEscolhido]);
+
+  // Loja que já está no cadastro do promotor: a carta já vem com ela.
+  // Só roda quando troca o promotor/template (ou a lista de lojas carrega),
+  // para não desfazer uma loja escolhida à mão.
+  const lojasCadastro = lojasDoFuncionario(activeFuncionario);
+  const aplicarLojaDoCadastro = (nome) => {
+    const campos = camposDeLoja(activeTemplate);
+    if (!campos.length || !nome) return;
+    const { valor, conhecida } = valorDaLoja(nome, lojas);
+    setFormData(prev => ({ ...prev, ...Object.fromEntries(campos.map(c => [c, valor])) }));
+    setManualLojas(prev => ({ ...prev, ...Object.fromEntries(campos.map(c => [c, !conhecida])) }));
+  };
+  useEffect(() => {
+    if (!activeTemplate || !activeFuncionario) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- preenchimento inicial a partir do cadastro
+    if (lojasCadastro[0]) aplicarLojaDoCadastro(lojasCadastro[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFuncionario?.id, activeTemplate?.id, lojas]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -943,6 +962,17 @@ export default function PortalPromotor() {
                               )}
                             </label>
                             
+                            {isLojaField && lojasCadastro.length > 1 && (
+                              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                <span className="text-slate-400">Lojas do cadastro:</span>
+                                {lojasCadastro.map(nome => (
+                                  <button key={nome} type="button" onClick={() => aplicarLojaDoCadastro(nome)}
+                                    className="rounded-md border border-slate-200 bg-white px-2 py-0.5 font-semibold text-slate-600 hover:border-[#e31b23] hover:text-[#e31b23]">
+                                    {nome}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                             <div className="mt-1">
                               {field.mappedTo === 'funcionario_cargo' ? (
                                 <CargoSelect semRotulo id={field.name} tone="portal" value={cargoEscolhido} onChange={setCargoEscolhido} funcionarios={funcionarios} cargoDoCadastro={activeFuncionario?.cargo} />
